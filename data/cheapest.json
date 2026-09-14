@@ -167,36 +167,8 @@
       ]
     },
     "color": "Midnight",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 13, M5  RAM 16 ГБ, SSD 512 ГБ, Midnight",
-        "url": "https://rifastore.ru/products/macbook-air-13-m5-10c-cpu-8c-gpu-ram-16-gb-ssd-512-gb-midnight-temnaya-noch-angliiskaya-raskladka-kb-us",
-        "price": 135000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 13",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Midnight"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 13, M5  RAM 16 ГБ, SSD 512 ГБ, Midnight",
-      "url": "https://rifastore.ru/products/macbook-air-13-m5-10c-cpu-8c-gpu-ram-16-gb-ssd-512-gb-midnight-temnaya-noch-angliiskaya-raskladka-kb-us",
-      "price": 135000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 13",
-      "chip": "M5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Midnight"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m5|16|512|starlight",
@@ -214,36 +186,8 @@
       ]
     },
     "color": "Starlight",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 13, M5  RAM 16 ГБ, SSD 512 ГБ, Starlight",
-        "url": "https://rifastore.ru/products/macbook-air-13-m5-10c-cpu-8c-gpu-ram-16-gb-ssd-512-gb-starlight-siyaiuschaya-zvezda-angliiskaya-raskladka-kb-us",
-        "price": 135000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 13",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Starlight"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 13, M5  RAM 16 ГБ, SSD 512 ГБ, Starlight",
-      "url": "https://rifastore.ru/products/macbook-air-13-m5-10c-cpu-8c-gpu-ram-16-gb-ssd-512-gb-starlight-siyaiuschaya-zvezda-angliiskaya-raskladka-kb-us",
-      "price": 135000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 13",
-      "chip": "M5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Starlight"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m5|16|512|silver",
@@ -261,36 +205,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 13, M5  RAM 16 ГБ, SSD 512 ГБ, Silver",
-        "url": "https://rifastore.ru/products/macbook-air-13-m5-10c-cpu-8c-gpu-ram-16-gb-ssd-512-gb-silver-serebristyi-angliiskaya-raskladka-kb-us",
-        "price": 135000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 13",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Silver"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 13, M5  RAM 16 ГБ, SSD 512 ГБ, Silver",
-      "url": "https://rifastore.ru/products/macbook-air-13-m5-10c-cpu-8c-gpu-ram-16-gb-ssd-512-gb-silver-serebristyi-angliiskaya-raskladka-kb-us",
-      "price": 135000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 13",
-      "chip": "M5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Silver"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m5|16|512|sky blue",
@@ -308,36 +224,8 @@
       ]
     },
     "color": "Sky Blue",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 13, M5  RAM 16 ГБ, SSD 512 ГБ, Sky Blue",
-        "url": "https://rifastore.ru/products/macbook-air-13-m5-10c-cpu-8c-gpu-ram-16-gb-ssd-512-gb-sky-blue-nebesno-goluboi-angliiskaya-raskladka-kb-us",
-        "price": 135500,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 13",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Sky Blue"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 13, M5  RAM 16 ГБ, SSD 512 ГБ, Sky Blue",
-      "url": "https://rifastore.ru/products/macbook-air-13-m5-10c-cpu-8c-gpu-ram-16-gb-ssd-512-gb-sky-blue-nebesno-goluboi-angliiskaya-raskladka-kb-us",
-      "price": 135500,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 13",
-      "chip": "M5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Sky Blue"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m5|16|256|midnight",
@@ -431,36 +319,8 @@
       ]
     },
     "color": "Midnight",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Midnight",
-        "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-midnight-temnaya-noch-angliiskaya-raskladka-kb-us",
-        "price": 156000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 15",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Midnight"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Midnight",
-      "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-midnight-temnaya-noch-angliiskaya-raskladka-kb-us",
-      "price": 156000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 15",
-      "chip": "M5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Midnight"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m5|16|512|starlight",
@@ -478,50 +338,8 @@
       ]
     },
     "color": "Starlight",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Starlight",
-        "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-starlight-siyaiuschaya-zvezda-angliiskaya-raskladka-kb-us",
-        "price": 156000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 15",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Starlight"
-      },
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Starlight , русская раскладка",
-        "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-starlight-siyaiuschaya-zvezda-russkaya-raskladka-kb-rs",
-        "price": 158000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 15",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Starlight"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Starlight",
-      "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-starlight-siyaiuschaya-zvezda-angliiskaya-raskladka-kb-us",
-      "price": 156000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 15",
-      "chip": "M5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Starlight"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m5|16|512|silver",
@@ -539,50 +357,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Silver , русская раскладка",
-        "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-silver-serebristyi-russkaya-raskladka-kb-rs",
-        "price": 157000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 15",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Silver"
-      },
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Silver",
-        "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-256-gb-silver-serebristyi-angliiskaya-raskladka-kb-us",
-        "price": 160000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 15",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Silver"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Silver , русская раскладка",
-      "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-silver-serebristyi-russkaya-raskladka-kb-rs",
-      "price": 157000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 15",
-      "chip": "M5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Silver"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m5|16|512|sky blue",
@@ -600,36 +376,8 @@
       ]
     },
     "color": "Sky Blue",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Sky Blue",
-        "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-sky-blue-nebesno-goluboi-angliiskaya-raskladka-kb-us",
-        "price": 155000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 15",
-        "chip": "M5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Sky Blue"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 15, M5  RAM 16 ГБ, SSD 512 ГБ, Sky Blue",
-      "url": "https://rifastore.ru/products/macbook-air-15-m5-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-sky-blue-nebesno-goluboi-angliiskaya-raskladka-kb-us",
-      "price": 155000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 15",
-      "chip": "M5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Sky Blue"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m4|16|256|midnight",
@@ -651,7 +399,7 @@
       {
         "retailer": "BigGeek",
         "title": "MacBook Air 13 M4 16/256 Midnight",
-        "url": "https://biggeek.ru/",
+        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw123-m4-10-core-gpu-8-core-16gb-256gb-temnaa-noc-midnight",
         "price": 89990,
         "currency": "RUB",
         "fetchedAt": "2026-09-14T00:00:00.000Z",
@@ -679,7 +427,7 @@
       {
         "retailer": "Айфория",
         "title": "MacBook Air 13 M4 16/256 Midnight",
-        "url": "https://iforiya.ru/",
+        "url": "https://iphoriya.ru/",
         "price": 92990,
         "currency": "RUB",
         "fetchedAt": "2026-09-14T00:00:00.000Z",
@@ -708,7 +456,7 @@
     "best": {
       "retailer": "BigGeek",
       "title": "MacBook Air 13 M4 16/256 Midnight",
-      "url": "https://biggeek.ru/",
+      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw123-m4-10-core-gpu-8-core-16gb-256gb-temnaa-noc-midnight",
       "price": 89990,
       "currency": "RUB",
       "fetchedAt": "2026-09-14T00:00:00.000Z",
@@ -945,36 +693,8 @@
       ]
     },
     "color": "Midnight",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 15, M4  RAM 16 ГБ, SSD 512 ГБ, Midnight",
-        "url": "https://rifastore.ru/products/macbook-air-15-m4-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-midnight-temnaya-noch-angliiskaya-raskladka-kb-us",
-        "price": 144000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 15",
-        "chip": "M4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Midnight"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 15, M4  RAM 16 ГБ, SSD 512 ГБ, Midnight",
-      "url": "https://rifastore.ru/products/macbook-air-15-m4-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-midnight-temnaya-noch-angliiskaya-raskladka-kb-us",
-      "price": 144000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 15",
-      "chip": "M4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Midnight"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m4|16|512|starlight",
@@ -1011,36 +731,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 15, M4  RAM 16 ГБ, SSD 512 ГБ, Silver",
-        "url": "https://rifastore.ru/products/macbook-air-15-m4-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-silver-serebristyi-angliiskaya-raskladka-kb-us",
-        "price": 150000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 15",
-        "chip": "M4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Silver"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 15, M4  RAM 16 ГБ, SSD 512 ГБ, Silver",
-      "url": "https://rifastore.ru/products/macbook-air-15-m4-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-silver-serebristyi-angliiskaya-raskladka-kb-us",
-      "price": 150000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 15",
-      "chip": "M4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Silver"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m4|16|512|sky blue",
@@ -1058,36 +750,8 @@
       ]
     },
     "color": "Sky Blue",
-    "offers": [
-      {
-        "retailer": "RifaStore",
-        "title": "MacBook Air 15, M4  RAM 16 ГБ, SSD 512 ГБ, Sky Blue",
-        "url": "https://rifastore.ru/products/macbook-air-15-m4-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-sky-blue-nebesno-goluboi-angliiskaya-raskladka-kb-us",
-        "price": 146000,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T15:45:06.178Z",
-        "condition": "new",
-        "model": "MacBook Air 15",
-        "chip": "M4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Sky Blue"
-      }
-    ],
-    "best": {
-      "retailer": "RifaStore",
-      "title": "MacBook Air 15, M4  RAM 16 ГБ, SSD 512 ГБ, Sky Blue",
-      "url": "https://rifastore.ru/products/macbook-air-15-m4-10c-cpu-10c-gpu-ram-16-gb-ssd-512-gb-sky-blue-nebesno-goluboi-angliiskaya-raskladka-kb-us",
-      "price": 146000,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T15:45:06.178Z",
-      "condition": "new",
-      "model": "MacBook Air 15",
-      "chip": "M4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Sky Blue"
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook pro 14|m5|16|512|space black",

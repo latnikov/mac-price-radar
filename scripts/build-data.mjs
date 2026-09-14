@@ -37,7 +37,7 @@ async function fetchLive() {
     try{
       for(const path of adapter.paths){
         const html=await (await fetch(adapter.base+path)).text();
-        const links=[...html.matchAll(adapter.link)].map(m=>m[1].startsWith('http')?m[1]:adapter.base+m[1]);
+        const links=[...html.matchAll(adapter.link)].map(m=>m[1].startsWith('http')?m[1]:adapter.base+m[1]).filter(url=>url.includes('/products/'));
         for(const url of [...new Set(links)].slice(0,80)){
           const page=await (await fetch(url)).text();
           const title=(page.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||url;
