@@ -20,7 +20,7 @@ async function fetchLive() {
   return out;
 }
 let live=[]; if(process.env.LIVE==='1'){try{live=await fetchLive();console.log(`Fetched ${live.length} live offers`)}catch(e){console.warn(`Live fetch failed: ${e.message}`)}}
-const allOffers=[...offers,...live];
+const allOffers=[...new Map([...offers,...live].map(o=>[`${o.retailer}|${o.url}|${o.price}`,o])).values()];
 const key = o => [o.model,o.chip,o.ramGb,o.storageGb,o.color].map(x => String(x ?? '').toLowerCase().replace(/[^a-zа-я0-9]+/gi, ' ').trim()).join('|');
 const eligible = allOffers.filter(o => o.price != null && o.condition === 'new' && o.currency === 'RUB');
 const byKey = new Map();
