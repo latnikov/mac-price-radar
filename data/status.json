@@ -1,6 +1,7 @@
 {
-  "state": "running",
-  "progress": 70,
-  "startedAt": "2026-09-14T16:12:13.407Z",
-  "error": null
+  "state": "ready",
+  "progress": 100,
+  "startedAt": "2026-09-14T16:17:27.470Z",
+  "error": null,
+  "updatedAt": "2026-09-14T16:17:28.727Z"
 }

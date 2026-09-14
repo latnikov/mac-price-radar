@@ -21,15 +21,17 @@ function parseProduct(title, url, retailer, amount) {
   if(!ramGb||!storageGb) return null;
   const colorMap=[['Sky Blue','sky blue|sky-blue|небесно-голуб'],['Midnight','midnight|полуноч'],['Starlight','starlight|сияющ'],['Silver','silver|серебрист'],['Space Black','space black|space-black|черн']];
   const color=(colorMap.find(([,pattern])=>new RegExp(pattern,'i').test(combined))||[])[0]||'unknown';
-  const cpuCores=Number((combined.match(/(\d+)[- ]?Core[^,)]*CPU/i)||[])[1])||null;
-  const gpuCores=Number((combined.match(/(\d+)[- ]?Core[^,)]*GPU/i)||[])[1])||null;
+  const corePair=combined.match(/(\d+)[- ]?core[- ]gpu[- ](\d+)[- ]?core/i);
+  const cpuCores=Number((corePair?.[1]||(combined.match(/(\d+)[- ]?Core[^,)]*CPU/i)||[])[1]))||null;
+  const gpuCores=Number((corePair?.[2]||(combined.match(/(\d+)[- ]?Core[^,)]*GPU/i)||[])[1]))||null;
   return {retailer,title:t,url,price:amount,currency:'RUB',fetchedAt:new Date().toISOString(),condition:'new',model,chip:chip.replace(/\s+/g,' '),ramGb,storageGb,color,cpuCores,gpuCores};
 }
 async function fetchLive() {
   const out=[];
+  const target=process.env.RETAILER||'all';
   // Refresh previously discovered product URLs first. This keeps a known SKU
   // current even when a retailer hides its catalogue behind client-side JS.
-  for (const seed of offers.filter(o=>['BigGeek','Айфория'].includes(o.retailer) && o.url.includes('/products/'))) {
+  for (const seed of offers.filter(o=>(!process.env.RETAILER||process.env.RETAILER==='all'?['BigGeek','Айфория'].includes(o.retailer):o.retailer===process.env.RETAILER) && o.url.includes('/products/'))) {
     try {
       const page=await (await fetch(seed.url)).text();
       const title=(page.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||seed.title;
@@ -37,10 +39,13 @@ async function fetchLive() {
       const o=parseProduct(title,seed.url,seed.retailer,price(amount)); if(o) out.push(o);
     } catch(e) { console.warn(`${seed.retailer} product refresh failed: ${e.message}`) }
   }
+  if(target==='BigGeek') return out;
   const rifaHome=await (await fetch('https://rifastore.ru/')).text();
   const rifaPaths=[...new Set([...rifaHome.matchAll(/href="(\/categories\/macbook-[^"]+)"/gi)].map(m=>m[1]))];
   for(const path of rifaPaths){const html=await (await fetch('https://rifastore.ru'+path)).text();const re=/<a[^>]+class="products-view-name-link"[^>]*title="([^"]+)"[^>]*>.*?<div class="price-number">([^<]+)/gis;for(const m of html.matchAll(re)){const href=(m[0].match(/href="(https:\/\/rifastore\.ru\/products\/[^\"]+)/)||[])[1];const o=parseProduct(m[1],href||'https://rifastore.ru'+path,'RifaStore',price(m[2]));if(o)out.push(o)}}
+  if(target==='RifaStore') return out;
   for(const path of ['/catalog/mac/macbook-pro/','/catalog/mac/macbook-air-13-15/','/catalog/mac/macbook-neo/']){const html=await (await fetch('https://nn.technichno.ru'+path)).text();const re=/<a[^>]+href="([^"]+)"[^>]+class="product-card__name[^>]*>[\s\S]*?<p[^>]*>([^<]+)<\/p>[\s\S]*?<span class="product-card-price__current[^"]*">([\s\S]*?)<\/span>/gi;for(const m of html.matchAll(re)){const o=parseProduct(m[2],'https://nn.technichno.ru'+m[1],'Technichno',price(m[3]));if(o)out.push(o)}}
+  if(target==='Technichno') return out;
   // Each retailer has its own adapter. BigGeek and Iphoriya are intentionally
   // isolated here: their catalogue markup changes independently of Technichno.
   const adapters=[
