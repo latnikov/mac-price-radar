@@ -167,40 +167,8 @@
       ]
     },
     "color": "Midnight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MDHE4",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mdhe4-m5-10-core-gpu-8-core-16gb-512gb-temnaa-noc-midnight",
-        "price": 142990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:12.925Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Midnight",
-        "cpuCores": 10,
-        "gpuCores": 8
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MDHE4",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mdhe4-m5-10-core-gpu-8-core-16gb-512gb-temnaa-noc-midnight",
-      "price": 142990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:12.925Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Midnight",
-      "cpuCores": 10,
-      "gpuCores": 8
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m5|16|512|starlight",
@@ -218,40 +186,8 @@
       ]
     },
     "color": "Starlight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MDHA4",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mdha4-m5-10-core-gpu-8-core-16gb-512gb-siausaa-zvezda-starlight",
-        "price": 142990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:12.925Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Starlight",
-        "cpuCores": 10,
-        "gpuCores": 8
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MDHA4",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mdha4-m5-10-core-gpu-8-core-16gb-512gb-siausaa-zvezda-starlight",
-      "price": 142990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:12.925Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Starlight",
-      "cpuCores": 10,
-      "gpuCores": 8
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m5|16|512|silver",
@@ -269,40 +205,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MDH74",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mdh74-m5-10-core-gpu-8-core-16gb-512gb-serebristyj-silver",
-        "price": 143990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:12.925Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Silver",
-        "cpuCores": 10,
-        "gpuCores": 8
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MDH74",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mdh74-m5-10-core-gpu-8-core-16gb-512gb-serebristyj-silver",
-      "price": 143990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:12.925Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Silver",
-      "cpuCores": 10,
-      "gpuCores": 8
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m5|16|512|sky blue",
@@ -320,40 +224,8 @@
       ]
     },
     "color": "Sky Blue",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MDHH4",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mdhh4-m5-10-core-gpu-8-core-16gb-512gb-goluboe-nebo-sky-blue",
-        "price": 142990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:12.925Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Sky Blue",
-        "cpuCores": 10,
-        "gpuCores": 8
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MDHH4",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mdhh4-m5-10-core-gpu-8-core-16gb-512gb-goluboe-nebo-sky-blue",
-      "price": 142990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:12.925Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Sky Blue",
-      "cpuCores": 10,
-      "gpuCores": 8
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m5|16|256|midnight",
@@ -447,40 +319,8 @@
       ]
     },
     "color": "Midnight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MDVH4",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mdvh4-m5-10-core-gpu-10-core-16gb-512gb-temnaa-noc-midnight",
-        "price": 164990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.529Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Midnight",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MDVH4",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mdvh4-m5-10-core-gpu-10-core-16gb-512gb-temnaa-noc-midnight",
-      "price": 164990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.529Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Midnight",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m5|16|512|starlight",
@@ -498,40 +338,8 @@
       ]
     },
     "color": "Starlight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MDVD4",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mdvd4-m5-10-core-gpu-10-core-16gb-512gb-siausaa-zvezda-starlight",
-        "price": 164990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.529Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Starlight",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MDVD4",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mdvd4-m5-10-core-gpu-10-core-16gb-512gb-siausaa-zvezda-starlight",
-      "price": 164990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.529Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Starlight",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m5|16|512|silver",
@@ -549,40 +357,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MDV94",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mdv94-m5-10-core-gpu-10-core-16gb-512gb-serebristyj-silver",
-        "price": 167990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.529Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Silver",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MDV94",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mdv94-m5-10-core-gpu-10-core-16gb-512gb-serebristyj-silver",
-      "price": 167990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.529Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Silver",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m5|16|512|sky blue",
@@ -600,40 +376,8 @@
       ]
     },
     "color": "Sky Blue",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MDVQ4",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mdvq4-m5-10-core-gpu-10-core-16gb-512gb-goluboe-nebo-sky-blue",
-        "price": 164990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.529Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Sky Blue",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MDVQ4",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mdvq4-m5-10-core-gpu-10-core-16gb-512gb-goluboe-nebo-sky-blue",
-      "price": 164990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.529Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Sky Blue",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m4|16|256|midnight",
@@ -696,11 +440,11 @@
       },
       {
         "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MW123",
+        "title": "Ноутбук Apple MacBook Air 13” MW123   купить в Москве или с доставкой по всей России от маркетплейса Big Geek",
         "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw123-m4-10-core-gpu-8-core-16gb-256gb-temnaa-noc-midnight",
         "price": 130990,
         "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:13.370Z",
+        "fetchedAt": "2026-09-14T16:34:33.120Z",
         "condition": "new",
         "model": "MacBook Air 13\"",
         "chip": "m4",
@@ -742,40 +486,8 @@
       ]
     },
     "color": "Starlight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MW0Y3",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw0y3-m4-10-core-gpu-8-core-16gb-256gb-siausaa-zvezda-starlight",
-        "price": 130990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:13.370Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 256,
-        "color": "Starlight",
-        "cpuCores": 10,
-        "gpuCores": 8
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MW0Y3",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw0y3-m4-10-core-gpu-8-core-16gb-256gb-siausaa-zvezda-starlight",
-      "price": 130990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:13.370Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 256,
-      "color": "Starlight",
-      "cpuCores": 10,
-      "gpuCores": 8
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m4|16|256|silver",
@@ -793,40 +505,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MW0W3",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw0w3-m4-10-core-gpu-8-core-16gb-256gb-serebristyj-silver",
-        "price": 133990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:13.370Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 256,
-        "color": "Silver",
-        "cpuCores": 10,
-        "gpuCores": 8
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MW0W3",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw0w3-m4-10-core-gpu-8-core-16gb-256gb-serebristyj-silver",
-      "price": 133990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:13.370Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 256,
-      "color": "Silver",
-      "cpuCores": 10,
-      "gpuCores": 8
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m4|16|256|sky blue",
@@ -844,40 +524,8 @@
       ]
     },
     "color": "Sky Blue",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MC6T4",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mc6t4-m4-10-core-gpu-8-core-16gb-256gb-goluboe-nebo-sky-blue",
-        "price": 130990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:13.370Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 256,
-        "color": "Sky Blue",
-        "cpuCores": 10,
-        "gpuCores": 8
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MC6T4",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mc6t4-m4-10-core-gpu-8-core-16gb-256gb-goluboe-nebo-sky-blue",
-      "price": 130990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:13.370Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 256,
-      "color": "Sky Blue",
-      "cpuCores": 10,
-      "gpuCores": 8
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m4|16|512|midnight",
@@ -895,40 +543,8 @@
       ]
     },
     "color": "Midnight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MW133",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw133-m4-10-core-gpu-10-core-16gb-512gb-temnaa-noc-midnight",
-        "price": 149990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:13.370Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Midnight",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MW133",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw133-m4-10-core-gpu-10-core-16gb-512gb-temnaa-noc-midnight",
-      "price": 149990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:13.370Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Midnight",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m4|16|512|starlight",
@@ -946,40 +562,8 @@
       ]
     },
     "color": "Starlight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MW103",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw103-m4-10-core-gpu-10-core-16gb-512gb-siausaa-zvezda-starlight",
-        "price": 149990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:13.370Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Starlight",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MW103",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw103-m4-10-core-gpu-10-core-16gb-512gb-siausaa-zvezda-starlight",
-      "price": 149990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:13.370Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Starlight",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m4|16|512|silver",
@@ -997,40 +581,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MW0X3",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw0x3-m4-10-core-gpu-10-core-16gb-512gb-serebristyj-silver",
-        "price": 149990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:13.370Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Silver",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MW0X3",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mw0x3-m4-10-core-gpu-10-core-16gb-512gb-serebristyj-silver",
-      "price": 149990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:13.370Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Silver",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 13|m4|16|512|sky blue",
@@ -1048,40 +600,8 @@
       ]
     },
     "color": "Sky Blue",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 13” MC6U4",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mc6u4-m4-10-core-gpu-10-core-16gb-512gb-goluboe-nebo-sky-blue",
-        "price": 153990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:13.370Z",
-        "condition": "new",
-        "model": "MacBook Air 13\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Sky Blue",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 13” MC6U4",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mc6u4-m4-10-core-gpu-10-core-16gb-512gb-goluboe-nebo-sky-blue",
-      "price": 153990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:13.370Z",
-      "condition": "new",
-      "model": "MacBook Air 13\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Sky Blue",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m4|16|256|midnight",
@@ -1099,40 +619,8 @@
       ]
     },
     "color": "Midnight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MW1L3",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1l3-m4-10-core-gpu-10-core-16gb-256gb-temnaa-noc-midnight",
-        "price": 140990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.937Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 256,
-        "color": "Midnight",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MW1L3",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1l3-m4-10-core-gpu-10-core-16gb-256gb-temnaa-noc-midnight",
-      "price": 140990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.937Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 256,
-      "color": "Midnight",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m4|16|256|starlight",
@@ -1150,40 +638,8 @@
       ]
     },
     "color": "Starlight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MW1J3",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1j3-m4-10-core-gpu-10-core-16gb-256gb-siausaa-zvezda-starlight",
-        "price": 140990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.937Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 256,
-        "color": "Starlight",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MW1J3",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1j3-m4-10-core-gpu-10-core-16gb-256gb-siausaa-zvezda-starlight",
-      "price": 140990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.937Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 256,
-      "color": "Starlight",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m4|16|256|silver",
@@ -1201,40 +657,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MW1G3",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1g3-m4-10-core-gpu-10-core-16gb-256gb-serebristyj-silver",
-        "price": 140990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.937Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 256,
-        "color": "Silver",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MW1G3",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1g3-m4-10-core-gpu-10-core-16gb-256gb-serebristyj-silver",
-      "price": 140990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.937Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 256,
-      "color": "Silver",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m4|16|256|sky blue",
@@ -1271,40 +695,8 @@
       ]
     },
     "color": "Midnight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MW1M3",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1m3-m4-10-core-gpu-10-core-16gb-512gb-temnaa-noc-midnight",
-        "price": 152990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.937Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Midnight",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MW1M3",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1m3-m4-10-core-gpu-10-core-16gb-512gb-temnaa-noc-midnight",
-      "price": 152990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.937Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Midnight",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m4|16|512|starlight",
@@ -1322,40 +714,8 @@
       ]
     },
     "color": "Starlight",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MW1K3",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1k3-m4-10-core-gpu-10-core-16gb-512gb-siausaa-zvezda-starlight",
-        "price": 152990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.937Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Starlight",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MW1K3",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1k3-m4-10-core-gpu-10-core-16gb-512gb-siausaa-zvezda-starlight",
-      "price": 152990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.937Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Starlight",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m4|16|512|silver",
@@ -1373,40 +733,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MW1H3",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1h3-m4-10-core-gpu-10-core-16gb-512gb-serebristyj-silver",
-        "price": 152990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.937Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Silver",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MW1H3",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mw1h3-m4-10-core-gpu-10-core-16gb-512gb-serebristyj-silver",
-      "price": 152990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.937Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Silver",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook air 15|m4|16|512|sky blue",
@@ -1424,40 +752,8 @@
       ]
     },
     "color": "Sky Blue",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Air 15” MC7C4",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mc7c4-m4-10-core-gpu-10-core-16gb-512gb-goluboe-nebo-sky-blue",
-        "price": 152990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:14.937Z",
-        "condition": "new",
-        "model": "MacBook Air 15\"",
-        "chip": "m4",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Sky Blue",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Air 15” MC7C4",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-air-15-mc7c4-m4-10-core-gpu-10-core-16gb-512gb-goluboe-nebo-sky-blue",
-      "price": 152990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:14.937Z",
-      "condition": "new",
-      "model": "MacBook Air 15\"",
-      "chip": "m4",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Sky Blue",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook pro 14|m5|16|512|space black",
@@ -1473,40 +769,8 @@
       ]
     },
     "color": "Space Black",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Pro 14\" MDE04",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-pro-14-mde04-m5-10-core-gpu-10-core-16gb-512gb-cernyj-kosmos-space-black",
-        "price": 193990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:16.588Z",
-        "condition": "new",
-        "model": "MacBook Pro 14\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Space Black",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Pro 14\" MDE04",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-pro-14-mde04-m5-10-core-gpu-10-core-16gb-512gb-cernyj-kosmos-space-black",
-      "price": 193990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:16.588Z",
-      "condition": "new",
-      "model": "MacBook Pro 14\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Space Black",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook pro 14|m5|16|512|silver",
@@ -1522,40 +786,8 @@
       ]
     },
     "color": "Silver",
-    "offers": [
-      {
-        "retailer": "BigGeek",
-        "title": "Ноутбук Apple MacBook Pro 14\" MDE44",
-        "url": "https://biggeek.ru/products/noutbuk-apple-macbook-pro-14-mde44-m5-10-core-gpu-10-core-16gb-512gb-serebristyj-silver",
-        "price": 193990,
-        "currency": "RUB",
-        "fetchedAt": "2026-09-14T16:23:16.588Z",
-        "condition": "new",
-        "model": "MacBook Pro 14\"",
-        "chip": "m5",
-        "ramGb": 16,
-        "storageGb": 512,
-        "color": "Silver",
-        "cpuCores": 10,
-        "gpuCores": 10
-      }
-    ],
-    "best": {
-      "retailer": "BigGeek",
-      "title": "Ноутбук Apple MacBook Pro 14\" MDE44",
-      "url": "https://biggeek.ru/products/noutbuk-apple-macbook-pro-14-mde44-m5-10-core-gpu-10-core-16gb-512gb-serebristyj-silver",
-      "price": 193990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T16:23:16.588Z",
-      "condition": "new",
-      "model": "MacBook Pro 14\"",
-      "chip": "m5",
-      "ramGb": 16,
-      "storageGb": 512,
-      "color": "Silver",
-      "cpuCores": 10,
-      "gpuCores": 10
-    }
+    "offers": [],
+    "best": null
   },
   {
     "productKey": "macbook pro 14|m5|24|1000|space black",

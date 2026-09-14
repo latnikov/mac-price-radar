@@ -1,6 +1,8 @@
 import { readFile, writeFile } from 'node:fs/promises';
 const offers = JSON.parse(await readFile('data/offers.json', 'utf8'));
 const catalog = JSON.parse(await readFile('data/catalog.json', 'utf8'));
+const reference=await readFile('apps-script/reference.gs','utf8').catch(()=> '');
+const bigGeekSlugs=Object.fromEntries([...reference.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(m=>[m[1],m[2]]));
 const decode = s => s.replace(/&nbsp;|&#160;/g,' ').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&#8381;|₽|руб\.?/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
 const price = s => { const n=decode(s).replace(/\s/g,'').match(/\d[\d,.]*/); return n ? Number(n[0].replace(/,/g,'')) : null; };
 const get=async url=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),10000);try{return await fetch(url,{signal:c.signal,headers:{'user-agent':'MacPriceRadar/1.0'}})}finally{clearTimeout(t)}};
@@ -19,7 +21,7 @@ function parseProduct(title, url, retailer, amount) {
   const ramGb=ramMatch ? Number(ramMatch[1]) : null;
   const storageGb=storage ? storage.n*(storage.tb?1024:1) : null;
   if(!ramGb||!storageGb) return null;
-  const colorMap=[['Sky Blue','sky blue|sky-blue|небесно-голуб'],['Midnight','midnight|полуноч'],['Starlight','starlight|сияющ'],['Silver','silver|серебрист'],['Space Black','space black|space-black|черн']];
+  const colorMap=[['Sky Blue','sky blue|sky-blue|небесно-голуб|goluboe'],['Midnight','midnight|полуноч|temnaa-noc'],['Starlight','starlight|сияющ|zvezda'],['Silver','silver|серебрист|serebr'],['Space Black','space black|space-black|черн|cernyj|kosmos']];
   const color=(colorMap.find(([,pattern])=>new RegExp(pattern,'i').test(combined))||[])[0]||'unknown';
   const corePair=combined.match(/(\d+)[- ]?core[- ]gpu[- ](\d+)[- ]?core/i);
   const cpuCores=Number((corePair?.[1]||(combined.match(/(\d+)[- ]?Core[^,)]*CPU/i)||[])[1]))||null;
@@ -40,9 +42,9 @@ async function fetchLive() {
     } catch(e) { console.warn(`${seed.retailer} product refresh failed: ${e.message}`) }
   }
   if(target==='BigGeek') {
-    const home=await (await fetch('https://biggeek.ru/')).text();
-    const paths=[...new Set([...home.matchAll(/href="(\/catalog\/macbook-[^"]+)"/gi)].map(m=>m[1]))];
-    for(const path of paths){const html=await (await fetch('https://biggeek.ru'+path)).text();const re=/<a href="(\/products\/[^\"]+)" class="catalog-card__title[^>]*>([\s\S]*?)<\/a>[\s\S]*?catalog-card__price[^>]*>[\s\S]*?cart-modal-count[^>]*>([\s\S]*?)<\//gi;for(const m of html.matchAll(re)){const o=parseProduct(m[2],'https://biggeek.ru'+m[1],'BigGeek',price(m[3]));if(o)out.push(o)}}
+    const entries=Object.entries(bigGeekSlugs);
+    const queue=entries.slice();
+    const worker=async()=>{while(queue.length){const [,slug]=queue.shift();const url='https://biggeek.ru/products/'+slug;try{let html='',response;for(let attempt=0;attempt<3;attempt++){response=await fetch(url);if(response.ok){html=await response.text();break}await new Promise(r=>setTimeout(r,500*(attempt+1)))}if(!html)continue;const json=[...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];let amount=price((html.match(/data-price="(\d+)"/i)||[])[1]);for(const m of json){try{const data=JSON.parse(m[1]);for(const item of (Array.isArray(data)?data:[data])){const n=Number(item?.offers?.price);if(n>1000&&n<1000000)amount=n}}catch{}}const title=(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||slug;const o=parseProduct(title,url,'BigGeek',amount)||parseProduct(slug,url,'BigGeek',amount);if(o)out.push(o)}catch{}}};await Promise.all(Array.from({length:3},worker));
     return out;
   }
   const rifaHome=await (await fetch('https://rifastore.ru/')).text();
