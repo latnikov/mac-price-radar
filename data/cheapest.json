@@ -1,0 +1,77 @@
+[
+  {
+    "productKey": "macbook air 13|m4|16|256|13",
+    "best": {
+      "retailer": "BigGeek",
+      "title": "MacBook Air 13 M4 16/256 Midnight",
+      "url": "https://biggeek.ru/",
+      "price": 89990,
+      "currency": "RUB",
+      "fetchedAt": "2026-09-14T00:00:00.000Z",
+      "condition": "new",
+      "model": "MacBook Air 13",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 256,
+      "screenIn": 13
+    },
+    "offers": [
+      {
+        "retailer": "BigGeek",
+        "title": "MacBook Air 13 M4 16/256 Midnight",
+        "url": "https://biggeek.ru/",
+        "price": 89990,
+        "currency": "RUB",
+        "fetchedAt": "2026-09-14T00:00:00.000Z",
+        "condition": "new",
+        "model": "MacBook Air 13",
+        "chip": "M4",
+        "ramGb": 16,
+        "storageGb": 256,
+        "screenIn": 13
+      },
+      {
+        "retailer": "Technichno",
+        "title": "MacBook Air 13 M4 16/256",
+        "url": "https://nn.technichno.ru/",
+        "price": 91990,
+        "currency": "RUB",
+        "fetchedAt": "2026-09-14T00:00:00.000Z",
+        "condition": "new",
+        "model": "MacBook Air 13",
+        "chip": "M4",
+        "ramGb": 16,
+        "storageGb": 256,
+        "screenIn": 13
+      },
+      {
+        "retailer": "Айфория",
+        "title": "MacBook Air 13 M4 16/256 Midnight",
+        "url": "https://iforiya.ru/",
+        "price": 92990,
+        "currency": "RUB",
+        "fetchedAt": "2026-09-14T00:00:00.000Z",
+        "condition": "new",
+        "model": "MacBook Air 13",
+        "chip": "M4",
+        "ramGb": 16,
+        "storageGb": 256,
+        "screenIn": 13
+      },
+      {
+        "retailer": "RifaStore",
+        "title": "MacBook Air 13 M4 16/256",
+        "url": "https://rifastore.ru/",
+        "price": 93990,
+        "currency": "RUB",
+        "fetchedAt": "2026-09-14T00:00:00.000Z",
+        "condition": "new",
+        "model": "MacBook Air 13",
+        "chip": "M4",
+        "ramGb": 16,
+        "storageGb": 256,
+        "screenIn": 13
+      }
+    ]
+  }
+]

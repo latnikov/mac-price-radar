@@ -5,8 +5,13 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test --import tsx test/*.test.ts",
-    "build:data": "tsx src/cli.ts",
+    "build:data": "node scripts/build-data.mjs",
+    "sync:sheet": "node scripts/sync-sheet.mjs",
     "dev": "python3 -m http.server 4173 -d ."
   },
-  "devDependencies": { "tsx": "^4.19.2", "typescript": "^5.7.2" }
+  "devDependencies": {
+    "@types/node": "^26.5.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
 }
