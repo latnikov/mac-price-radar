@@ -23,6 +23,16 @@ function parseProduct(title, url, retailer, amount) {
 }
 async function fetchLive() {
   const out=[];
+  // Refresh previously discovered product URLs first. This keeps a known SKU
+  // current even when a retailer hides its catalogue behind client-side JS.
+  for (const seed of offers.filter(o=>['BigGeek','Айфория'].includes(o.retailer) && o.url.includes('/products/'))) {
+    try {
+      const page=await (await fetch(seed.url)).text();
+      const title=(page.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||seed.title;
+      const amount=(page.match(/(?:data-price|data-card-price)="(\d+)"/i)||[])[1];
+      const o=parseProduct(title,seed.url,seed.retailer,price(amount)); if(o) out.push(o);
+    } catch(e) { console.warn(`${seed.retailer} product refresh failed: ${e.message}`) }
+  }
   const rifaHome=await (await fetch('https://rifastore.ru/')).text();
   const rifaPaths=[...new Set([...rifaHome.matchAll(/href="(\/categories\/macbook-[^"]+)"/gi)].map(m=>m[1]))];
   for(const path of rifaPaths){const html=await (await fetch('https://rifastore.ru'+path)).text();const re=/<a[^>]+class="products-view-name-link"[^>]*title="([^"]+)"[^>]*>.*?<div class="price-number">([^<]+)/gis;for(const m of html.matchAll(re)){const href=(m[0].match(/href="(https:\/\/rifastore\.ru\/products\/[^\"]+)/)||[])[1];const o=parseProduct(m[1],href||'https://rifastore.ru'+path,'RifaStore',price(m[2]));if(o)out.push(o)}}
@@ -30,18 +40,19 @@ async function fetchLive() {
   // Each retailer has its own adapter. BigGeek and Iphoriya are intentionally
   // isolated here: their catalogue markup changes independently of Technichno.
   const adapters=[
-    {retailer:'BigGeek',base:'https://biggeek.ru',paths:['/'],link:/href="([^"]*macbook[^"]*)"/gi,price:/((?:\d[\s]?){4,7})\s*(?:₽|руб)/gi},
+    {retailer:'BigGeek',base:'https://biggeek.ru',paths:['/'],category:/href="(\/catalog\/macbook-[^"]+)"/gi,link:/href="([^"]*\/products\/[^\"]+)"/gi,price:/(?:data-price|data-card-price)="(\d+)"|((?:\d[\s]?){4,7})\s*(?:₽|руб)/gi},
     {retailer:'Айфория',base:'https://iphoriya.ru',paths:['/'],link:/href="([^"]*(?:macbook|mac-book)[^"]*)"/gi,price:/((?:\d[\s]?){4,7})\s*(?:₽|руб)/gi}
   ];
   for(const adapter of adapters){
     try{
       for(const path of adapter.paths){
         const html=await (await fetch(adapter.base+path)).text();
+        if(adapter.category) adapter.paths.push(...[...html.matchAll(adapter.category)].map(m=>m[1]));
         const links=[...html.matchAll(adapter.link)].map(m=>m[1].startsWith('http')?m[1]:adapter.base+m[1]).filter(url=>url.includes('/products/'));
         for(const url of [...new Set(links)].slice(0,80)){
           const page=await (await fetch(url)).text();
           const title=(page.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||url;
-          const amounts=[...page.matchAll(adapter.price)].map(m=>price(m[1])).filter(Boolean);
+          const amounts=[...page.matchAll(adapter.price)].map(m=>price(m[1]||m[2])).filter(Boolean);
           const o=parseProduct(title,url,adapter.retailer,amounts[0]); if(o) out.push(o);
         }
       }
@@ -50,7 +61,9 @@ async function fetchLive() {
   return out;
 }
 let live=[]; if(process.env.LIVE==='1'){try{live=await fetchLive();console.log(`Fetched ${live.length} live offers`)}catch(e){console.warn(`Live fetch failed: ${e.message}`)}}
-const allOffers=[...new Map([...offers,...live].map(o=>[`${o.retailer}|${o.url}|${o.price}`,o])).values()];
+const liveRetailers=new Set(live.map(o=>o.retailer));
+const baseOffers=liveRetailers.size?[...offers.filter(o=>!liveRetailers.has(o.retailer)),...live]:[...offers,...live];
+const allOffers=[...new Map(baseOffers.map(o=>[`${o.retailer}|${o.url}|${o.price}`,o])).values()];
 const key = o => [o.model,o.chip,o.ramGb,o.storageGb,o.color].map(x => String(x ?? '').toLowerCase().replace(/[^a-zа-я0-9]+/gi, ' ').trim()).join('|');
 const eligible = allOffers.filter(o => o.price != null && o.condition === 'new' && o.currency === 'RUB');
 const byKey = new Map();
