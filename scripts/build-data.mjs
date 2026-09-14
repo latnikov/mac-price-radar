@@ -27,6 +27,26 @@ async function fetchLive() {
   const rifaPaths=[...new Set([...rifaHome.matchAll(/href="(\/categories\/macbook-[^"]+)"/gi)].map(m=>m[1]))];
   for(const path of rifaPaths){const html=await (await fetch('https://rifastore.ru'+path)).text();const re=/<a[^>]+class="products-view-name-link"[^>]*title="([^"]+)"[^>]*>.*?<div class="price-number">([^<]+)/gis;for(const m of html.matchAll(re)){const href=(m[0].match(/href="(https:\/\/rifastore\.ru\/products\/[^\"]+)/)||[])[1];const o=parseProduct(m[1],href||'https://rifastore.ru'+path,'RifaStore',price(m[2]));if(o)out.push(o)}}
   for(const path of ['/catalog/mac/macbook-pro/','/catalog/mac/macbook-air-13-15/','/catalog/mac/macbook-neo/']){const html=await (await fetch('https://nn.technichno.ru'+path)).text();const re=/<a[^>]+href="([^"]+)"[^>]+class="product-card__name[^>]*>[\s\S]*?<p[^>]*>([^<]+)<\/p>[\s\S]*?<span class="product-card-price__current[^"]*">([\s\S]*?)<\/span>/gi;for(const m of html.matchAll(re)){const o=parseProduct(m[2],'https://nn.technichno.ru'+m[1],'Technichno',price(m[3]));if(o)out.push(o)}}
+  // Each retailer has its own adapter. BigGeek and Iphoriya are intentionally
+  // isolated here: their catalogue markup changes independently of Technichno.
+  const adapters=[
+    {retailer:'BigGeek',base:'https://biggeek.ru',paths:['/'],link:/href="([^"]*macbook[^"]*)"/gi,price:/((?:\d[\s]?){4,7})\s*(?:₽|руб)/gi},
+    {retailer:'Айфория',base:'https://iphoriya.ru',paths:['/'],link:/href="([^"]*(?:macbook|mac-book)[^"]*)"/gi,price:/((?:\d[\s]?){4,7})\s*(?:₽|руб)/gi}
+  ];
+  for(const adapter of adapters){
+    try{
+      for(const path of adapter.paths){
+        const html=await (await fetch(adapter.base+path)).text();
+        const links=[...html.matchAll(adapter.link)].map(m=>m[1].startsWith('http')?m[1]:adapter.base+m[1]);
+        for(const url of [...new Set(links)].slice(0,80)){
+          const page=await (await fetch(url)).text();
+          const title=(page.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||url;
+          const amounts=[...page.matchAll(adapter.price)].map(m=>price(m[1])).filter(Boolean);
+          const o=parseProduct(title,url,adapter.retailer,amounts[0]); if(o) out.push(o);
+        }
+      }
+    }catch(e){console.warn(`${adapter.retailer} live fetch failed: ${e.message}`)}
+  }
   return out;
 }
 let live=[]; if(process.env.LIVE==='1'){try{live=await fetchLive();console.log(`Fetched ${live.length} live offers`)}catch(e){console.warn(`Live fetch failed: ${e.message}`)}}
