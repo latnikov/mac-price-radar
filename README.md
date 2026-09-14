@@ -10,7 +10,7 @@ npm run build:data
 npm run dev
 ```
 
-Откройте `http://localhost:4173/web/`. Перед этим выполните `npm run build:data`, чтобы создать `data/cheapest.json`. Для живого сбора: `LIVE=1 npm run build:data`.
+Откройте `http://localhost:4173/web/`. Перед этим выполните `npm run build:data`, чтобы создать `data/cheapest.json`. Кнопка «Обновить ценники» пересобирает каталог; актуальные цены появятся после подключения рабочих селекторов карточек магазинов. До этого `data/offers.json` содержит только seed-примеры и не должен считаться live-источником.
 
 ## Как добавить поставщика
 
