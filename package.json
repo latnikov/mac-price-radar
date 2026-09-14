@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:parser": "node --test test/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --import tsx test/*.test.ts",
+    "test": "node --test --import tsx test/*.test.ts test/*.test.mjs",
     "build:data": "node scripts/build-data.mjs",
     "sync:sheet": "node scripts/sync-sheet.mjs",
     "dev": "node scripts/server.mjs"
