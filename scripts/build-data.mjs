@@ -3,6 +3,8 @@ const offers = JSON.parse(await readFile('data/offers.json', 'utf8'));
 const catalog = JSON.parse(await readFile('data/catalog.json', 'utf8'));
 const decode = s => s.replace(/&nbsp;|&#160;/g,' ').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&#8381;|₽|руб\.?/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
 const price = s => { const n=decode(s).replace(/\s/g,'').match(/\d[\d,.]*/); return n ? Number(n[0].replace(/,/g,'')) : null; };
+const get=async url=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),10000);try{return await fetch(url,{signal:c.signal,headers:{'user-agent':'MacPriceRadar/1.0'}})}finally{clearTimeout(t)}};
+const rawFetch=fetch;globalThis.fetch=async(url,options={})=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),10000);try{return await rawFetch(url,{...options,signal:c.signal,headers:{'user-agent':'MacPriceRadar/1.0',...(options.headers||{})}})}finally{clearTimeout(t)}};
 function parseProduct(title, url, retailer, amount) {
   const t=decode(title).replace(/\([^)]*\)/g,'').replace(/, английская раскладка.*$/i,'').trim();
   if(!amount) return null;
