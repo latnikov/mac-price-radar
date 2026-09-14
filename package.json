@@ -7,7 +7,7 @@
     "test": "node --test --import tsx test/*.test.ts",
     "build:data": "node scripts/build-data.mjs",
     "sync:sheet": "node scripts/sync-sheet.mjs",
-    "dev": "python3 -m http.server 4173 -d ."
+    "dev": "node scripts/server.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",

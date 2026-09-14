@@ -1,0 +1,19 @@
+[
+  {"id":"neo-256","name":"MacBook Neo","chip":"A18 Pro","ramGb":8,"storageGb":256,"colors":["Silver","Blush","Blue","Yellow"]},
+  {"id":"air-m5-13-16-256","name":"MacBook Air 13\"","chip":"M5","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
+  {"id":"air-m5-13-16-512","name":"MacBook Air 13\"","chip":"M5","ramGb":16,"storageGb":512,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
+  {"id":"air-m5-15-16-256","name":"MacBook Air 15\"","chip":"M5","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
+  {"id":"air-m5-15-16-512","name":"MacBook Air 15\"","chip":"M5","ramGb":16,"storageGb":512,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
+  {"id":"air-m4-13-16-256","name":"MacBook Air 13\"","chip":"M4","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
+  {"id":"air-m4-13-16-512","name":"MacBook Air 13\"","chip":"M4","ramGb":16,"storageGb":512,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
+  {"id":"air-m4-15-16-256","name":"MacBook Air 15\"","chip":"M4","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
+  {"id":"air-m4-15-16-512","name":"MacBook Air 15\"","chip":"M4","ramGb":16,"storageGb":512,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
+  {"id":"pro-m5-14-16-512","name":"MacBook Pro 14\"","chip":"M5","ramGb":16,"storageGb":512,"colors":["Space Black","Silver"]},
+  {"id":"pro-m5-14-24-1000","name":"MacBook Pro 14\"","chip":"M5","ramGb":24,"storageGb":1000,"colors":["Space Black","Silver"]},
+  {"id":"pro-m5pro-14-24-512","name":"MacBook Pro 14\"","chip":"M5 Pro","ramGb":24,"storageGb":512,"colors":["Space Black","Silver"]},
+  {"id":"pro-m5max-14-36-1000","name":"MacBook Pro 14\"","chip":"M5 Max","ramGb":36,"storageGb":1000,"colors":["Space Black","Silver"]},
+  {"id":"pro-m5pro-16-24-512","name":"MacBook Pro 16\"","chip":"M5 Pro","ramGb":24,"storageGb":512,"colors":["Space Black","Silver"]},
+  {"id":"pro-m5max-16-48-1000","name":"MacBook Pro 16\"","chip":"M5 Max","ramGb":48,"storageGb":1000,"colors":["Space Black","Silver"]},
+  {"id":"pro-m4pro-16-24-512","name":"MacBook Pro 16\"","chip":"M4 Pro","ramGb":24,"storageGb":512,"colors":["Space Black","Silver"]},
+  {"id":"pro-m4max-16-48-1000","name":"MacBook Pro 16\"","chip":"M4 Max","ramGb":48,"storageGb":1000,"colors":["Space Black","Silver"]}
+]

@@ -1,20 +1,400 @@
 [
   {
-    "productKey": "macbook air 13|m4|16|256|13",
-    "best": {
-      "retailer": "BigGeek",
-      "title": "MacBook Air 13 M4 16/256 Midnight",
-      "url": "https://biggeek.ru/",
-      "price": 89990,
-      "currency": "RUB",
-      "fetchedAt": "2026-09-14T00:00:00.000Z",
-      "condition": "new",
-      "model": "MacBook Air 13",
+    "productKey": "macbook neo|a18 pro|8|256|silver",
+    "product": {
+      "id": "neo-256",
+      "name": "MacBook Neo",
+      "chip": "A18 Pro",
+      "ramGb": 8,
+      "storageGb": 256,
+      "colors": [
+        "Silver",
+        "Blush",
+        "Blue",
+        "Yellow"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook neo|a18 pro|8|256|blush",
+    "product": {
+      "id": "neo-256",
+      "name": "MacBook Neo",
+      "chip": "A18 Pro",
+      "ramGb": 8,
+      "storageGb": 256,
+      "colors": [
+        "Silver",
+        "Blush",
+        "Blue",
+        "Yellow"
+      ]
+    },
+    "color": "Blush",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook neo|a18 pro|8|256|blue",
+    "product": {
+      "id": "neo-256",
+      "name": "MacBook Neo",
+      "chip": "A18 Pro",
+      "ramGb": 8,
+      "storageGb": 256,
+      "colors": [
+        "Silver",
+        "Blush",
+        "Blue",
+        "Yellow"
+      ]
+    },
+    "color": "Blue",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook neo|a18 pro|8|256|yellow",
+    "product": {
+      "id": "neo-256",
+      "name": "MacBook Neo",
+      "chip": "A18 Pro",
+      "ramGb": 8,
+      "storageGb": 256,
+      "colors": [
+        "Silver",
+        "Blush",
+        "Blue",
+        "Yellow"
+      ]
+    },
+    "color": "Yellow",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m5|16|256|midnight",
+    "product": {
+      "id": "air-m5-13-16-256",
+      "name": "MacBook Air 13\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Midnight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m5|16|256|starlight",
+    "product": {
+      "id": "air-m5-13-16-256",
+      "name": "MacBook Air 13\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Starlight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m5|16|256|silver",
+    "product": {
+      "id": "air-m5-13-16-256",
+      "name": "MacBook Air 13\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m5|16|256|sky blue",
+    "product": {
+      "id": "air-m5-13-16-256",
+      "name": "MacBook Air 13\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Sky Blue",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m5|16|512|midnight",
+    "product": {
+      "id": "air-m5-13-16-512",
+      "name": "MacBook Air 13\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Midnight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m5|16|512|starlight",
+    "product": {
+      "id": "air-m5-13-16-512",
+      "name": "MacBook Air 13\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Starlight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m5|16|512|silver",
+    "product": {
+      "id": "air-m5-13-16-512",
+      "name": "MacBook Air 13\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m5|16|512|sky blue",
+    "product": {
+      "id": "air-m5-13-16-512",
+      "name": "MacBook Air 13\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Sky Blue",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m5|16|256|midnight",
+    "product": {
+      "id": "air-m5-15-16-256",
+      "name": "MacBook Air 15\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Midnight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m5|16|256|starlight",
+    "product": {
+      "id": "air-m5-15-16-256",
+      "name": "MacBook Air 15\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Starlight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m5|16|256|silver",
+    "product": {
+      "id": "air-m5-15-16-256",
+      "name": "MacBook Air 15\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m5|16|256|sky blue",
+    "product": {
+      "id": "air-m5-15-16-256",
+      "name": "MacBook Air 15\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Sky Blue",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m5|16|512|midnight",
+    "product": {
+      "id": "air-m5-15-16-512",
+      "name": "MacBook Air 15\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Midnight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m5|16|512|starlight",
+    "product": {
+      "id": "air-m5-15-16-512",
+      "name": "MacBook Air 15\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Starlight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m5|16|512|silver",
+    "product": {
+      "id": "air-m5-15-16-512",
+      "name": "MacBook Air 15\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m5|16|512|sky blue",
+    "product": {
+      "id": "air-m5-15-16-512",
+      "name": "MacBook Air 15\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Sky Blue",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m4|16|256|midnight",
+    "product": {
+      "id": "air-m4-13-16-256",
+      "name": "MacBook Air 13\"",
       "chip": "M4",
       "ramGb": 16,
       "storageGb": 256,
-      "screenIn": 13
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
     },
+    "color": "Midnight",
     "offers": [
       {
         "retailer": "BigGeek",
@@ -24,25 +404,25 @@
         "currency": "RUB",
         "fetchedAt": "2026-09-14T00:00:00.000Z",
         "condition": "new",
-        "model": "MacBook Air 13",
+        "model": "MacBook Air 13\"",
         "chip": "M4",
         "ramGb": 16,
         "storageGb": 256,
-        "screenIn": 13
+        "color": "Midnight"
       },
       {
         "retailer": "Technichno",
-        "title": "MacBook Air 13 M4 16/256",
+        "title": "MacBook Air 13 M4 16/256 Midnight",
         "url": "https://nn.technichno.ru/",
         "price": 91990,
         "currency": "RUB",
         "fetchedAt": "2026-09-14T00:00:00.000Z",
         "condition": "new",
-        "model": "MacBook Air 13",
+        "model": "MacBook Air 13\"",
         "chip": "M4",
         "ramGb": 16,
         "storageGb": 256,
-        "screenIn": 13
+        "color": "Midnight"
       },
       {
         "retailer": "Айфория",
@@ -52,26 +432,597 @@
         "currency": "RUB",
         "fetchedAt": "2026-09-14T00:00:00.000Z",
         "condition": "new",
-        "model": "MacBook Air 13",
+        "model": "MacBook Air 13\"",
         "chip": "M4",
         "ramGb": 16,
         "storageGb": 256,
-        "screenIn": 13
+        "color": "Midnight"
       },
       {
         "retailer": "RifaStore",
-        "title": "MacBook Air 13 M4 16/256",
+        "title": "MacBook Air 13 M4 16/256 Midnight",
         "url": "https://rifastore.ru/",
         "price": 93990,
         "currency": "RUB",
         "fetchedAt": "2026-09-14T00:00:00.000Z",
         "condition": "new",
-        "model": "MacBook Air 13",
+        "model": "MacBook Air 13\"",
         "chip": "M4",
         "ramGb": 16,
         "storageGb": 256,
-        "screenIn": 13
+        "color": "Midnight"
       }
-    ]
+    ],
+    "best": {
+      "retailer": "BigGeek",
+      "title": "MacBook Air 13 M4 16/256 Midnight",
+      "url": "https://biggeek.ru/",
+      "price": 89990,
+      "currency": "RUB",
+      "fetchedAt": "2026-09-14T00:00:00.000Z",
+      "condition": "new",
+      "model": "MacBook Air 13\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 256,
+      "color": "Midnight"
+    }
+  },
+  {
+    "productKey": "macbook air 13|m4|16|256|starlight",
+    "product": {
+      "id": "air-m4-13-16-256",
+      "name": "MacBook Air 13\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Starlight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m4|16|256|silver",
+    "product": {
+      "id": "air-m4-13-16-256",
+      "name": "MacBook Air 13\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m4|16|256|sky blue",
+    "product": {
+      "id": "air-m4-13-16-256",
+      "name": "MacBook Air 13\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Sky Blue",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m4|16|512|midnight",
+    "product": {
+      "id": "air-m4-13-16-512",
+      "name": "MacBook Air 13\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Midnight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m4|16|512|starlight",
+    "product": {
+      "id": "air-m4-13-16-512",
+      "name": "MacBook Air 13\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Starlight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m4|16|512|silver",
+    "product": {
+      "id": "air-m4-13-16-512",
+      "name": "MacBook Air 13\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 13|m4|16|512|sky blue",
+    "product": {
+      "id": "air-m4-13-16-512",
+      "name": "MacBook Air 13\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Sky Blue",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m4|16|256|midnight",
+    "product": {
+      "id": "air-m4-15-16-256",
+      "name": "MacBook Air 15\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Midnight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m4|16|256|starlight",
+    "product": {
+      "id": "air-m4-15-16-256",
+      "name": "MacBook Air 15\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Starlight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m4|16|256|silver",
+    "product": {
+      "id": "air-m4-15-16-256",
+      "name": "MacBook Air 15\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m4|16|256|sky blue",
+    "product": {
+      "id": "air-m4-15-16-256",
+      "name": "MacBook Air 15\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 256,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Sky Blue",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m4|16|512|midnight",
+    "product": {
+      "id": "air-m4-15-16-512",
+      "name": "MacBook Air 15\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Midnight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m4|16|512|starlight",
+    "product": {
+      "id": "air-m4-15-16-512",
+      "name": "MacBook Air 15\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Starlight",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m4|16|512|silver",
+    "product": {
+      "id": "air-m4-15-16-512",
+      "name": "MacBook Air 15\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook air 15|m4|16|512|sky blue",
+    "product": {
+      "id": "air-m4-15-16-512",
+      "name": "MacBook Air 15\"",
+      "chip": "M4",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Midnight",
+        "Starlight",
+        "Silver",
+        "Sky Blue"
+      ]
+    },
+    "color": "Sky Blue",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 14|m5|16|512|space black",
+    "product": {
+      "id": "pro-m5-14-16-512",
+      "name": "MacBook Pro 14\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Space Black",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 14|m5|16|512|silver",
+    "product": {
+      "id": "pro-m5-14-16-512",
+      "name": "MacBook Pro 14\"",
+      "chip": "M5",
+      "ramGb": 16,
+      "storageGb": 512,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 14|m5|24|1000|space black",
+    "product": {
+      "id": "pro-m5-14-24-1000",
+      "name": "MacBook Pro 14\"",
+      "chip": "M5",
+      "ramGb": 24,
+      "storageGb": 1000,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Space Black",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 14|m5|24|1000|silver",
+    "product": {
+      "id": "pro-m5-14-24-1000",
+      "name": "MacBook Pro 14\"",
+      "chip": "M5",
+      "ramGb": 24,
+      "storageGb": 1000,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 14|m5 pro|24|512|space black",
+    "product": {
+      "id": "pro-m5pro-14-24-512",
+      "name": "MacBook Pro 14\"",
+      "chip": "M5 Pro",
+      "ramGb": 24,
+      "storageGb": 512,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Space Black",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 14|m5 pro|24|512|silver",
+    "product": {
+      "id": "pro-m5pro-14-24-512",
+      "name": "MacBook Pro 14\"",
+      "chip": "M5 Pro",
+      "ramGb": 24,
+      "storageGb": 512,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 14|m5 max|36|1000|space black",
+    "product": {
+      "id": "pro-m5max-14-36-1000",
+      "name": "MacBook Pro 14\"",
+      "chip": "M5 Max",
+      "ramGb": 36,
+      "storageGb": 1000,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Space Black",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 14|m5 max|36|1000|silver",
+    "product": {
+      "id": "pro-m5max-14-36-1000",
+      "name": "MacBook Pro 14\"",
+      "chip": "M5 Max",
+      "ramGb": 36,
+      "storageGb": 1000,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 16|m5 pro|24|512|space black",
+    "product": {
+      "id": "pro-m5pro-16-24-512",
+      "name": "MacBook Pro 16\"",
+      "chip": "M5 Pro",
+      "ramGb": 24,
+      "storageGb": 512,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Space Black",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 16|m5 pro|24|512|silver",
+    "product": {
+      "id": "pro-m5pro-16-24-512",
+      "name": "MacBook Pro 16\"",
+      "chip": "M5 Pro",
+      "ramGb": 24,
+      "storageGb": 512,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 16|m5 max|48|1000|space black",
+    "product": {
+      "id": "pro-m5max-16-48-1000",
+      "name": "MacBook Pro 16\"",
+      "chip": "M5 Max",
+      "ramGb": 48,
+      "storageGb": 1000,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Space Black",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 16|m5 max|48|1000|silver",
+    "product": {
+      "id": "pro-m5max-16-48-1000",
+      "name": "MacBook Pro 16\"",
+      "chip": "M5 Max",
+      "ramGb": 48,
+      "storageGb": 1000,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 16|m4 pro|24|512|space black",
+    "product": {
+      "id": "pro-m4pro-16-24-512",
+      "name": "MacBook Pro 16\"",
+      "chip": "M4 Pro",
+      "ramGb": 24,
+      "storageGb": 512,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Space Black",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 16|m4 pro|24|512|silver",
+    "product": {
+      "id": "pro-m4pro-16-24-512",
+      "name": "MacBook Pro 16\"",
+      "chip": "M4 Pro",
+      "ramGb": 24,
+      "storageGb": 512,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 16|m4 max|48|1000|space black",
+    "product": {
+      "id": "pro-m4max-16-48-1000",
+      "name": "MacBook Pro 16\"",
+      "chip": "M4 Max",
+      "ramGb": 48,
+      "storageGb": 1000,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Space Black",
+    "offers": [],
+    "best": null
+  },
+  {
+    "productKey": "macbook pro 16|m4 max|48|1000|silver",
+    "product": {
+      "id": "pro-m4max-16-48-1000",
+      "name": "MacBook Pro 16\"",
+      "chip": "M4 Max",
+      "ramGb": 48,
+      "storageGb": 1000,
+      "colors": [
+        "Space Black",
+        "Silver"
+      ]
+    },
+    "color": "Silver",
+    "offers": [],
+    "best": null
   }
 ]
