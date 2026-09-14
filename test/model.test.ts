@@ -1,0 +1,2 @@
+import test from 'node:test'; import assert from 'node:assert/strict'; import { cheapest, key } from '../src/model.js';
+test('groups identical configurations and picks lowest Russian new price',()=>{const a={retailer:'a',title:'',url:'',price:10,currency:'RUB' as const,fetchedAt:'',condition:'new' as const,model:'Air',chip:'M4',ramGb:16,storageGb:256};const b={...a,retailer:'b',price:9};const c={...a,retailer:'c',condition:'used' as const,price:1};const x=cheapest([a,b,c]);assert.equal(x.length,1);assert.equal(x[0].best.retailer,'b');assert.equal(key(a),key(b));});

@@ -1,0 +1,12 @@
+{
+  "name": "mac-price-radar",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --import tsx test/*.test.ts",
+    "build:data": "tsx src/cli.ts",
+    "dev": "python3 -m http.server 4173 -d ."
+  },
+  "devDependencies": { "tsx": "^4.19.2", "typescript": "^5.7.2" }
+}
