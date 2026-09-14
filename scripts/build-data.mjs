@@ -5,11 +5,21 @@ const decode = s => s.replace(/&nbsp;|&#160;/g,' ').replace(/&quot;/g,'"').repla
 const price = s => { const n=decode(s).replace(/\s/g,'').match(/\d[\d,.]*/); return n ? Number(n[0].replace(/,/g,'')) : null; };
 function parseProduct(title, url, retailer, amount) {
   const t=decode(title).replace(/\([^)]*\)/g,'').replace(/, английская раскладка.*$/i,'').trim();
-  const m=t.match(/(MacBook (?:Air|Pro|Neo)[^,]*).*?\b(M[45](?: Pro| Max)?)\b.*?RAM\s*(\d+)\s*ГБ.*?SSD\s*(\d+)\s*(?:ГБ|ТБ)/i);
-  if(!m||!amount) return null;
-  const model=m[1].replace(/,?\s*$/,'').replace(/\s+/g,' '); const gb=m[4].toLowerCase().includes('тб')?Number(m[4])*1024:Number(m[4]);
-  const color=(t.match(/,\s*(Midnight|Starlight|Silver|Sky Blue|Space Black|небесно-голубой|полуночный черный|сияющая звезда|серебристый)/i)||[])[1]||'unknown';
-  return {retailer,title:t,url,price:amount,currency:'RUB',fetchedAt:new Date().toISOString(),condition:'new',model,chip:m[2],ramGb:Number(m[3]),storageGb:gb,color};
+  if(!amount) return null;
+  const combined=`${t} ${url}`;
+  const chip=(combined.match(/\b(A18 Pro|M[45](?:\s+(?:Pro|Max))?)\b/i)||[])[1];
+  const modelMatch=t.match(/(MacBook\s+(?:Air|Pro|Neo)(?:\s+(?:13|14|15|16)\s*(?:["”]|дюйм)?|\s*\d{2}\s*Early\s*\d{4})?)/i);
+  if(!chip||!modelMatch) return null;
+  const model=modelMatch[1].replace(/Early\s*\d{4}/i,'').replace(/\s*дюйм/i,'').replace(/\s*["”]/,'"').replace(/\s+/g,' ').trim();
+  const ramMatch=combined.match(/(?:RAM\s*)?(\d+)\s*(?:ГБ|GB|gb)/i);
+  const storageMatches=[...combined.matchAll(/(\d+)\s*(?:ТБ|TB|тб|tb|ГБ|GB|гб|gb)/gi)].map(m=>({n:Number(m[1]),tb:/тб|tb/i.test(m[0])}));
+  const storage=storageMatches.length ? storageMatches.at(-1) : null;
+  const ramGb=ramMatch ? Number(ramMatch[1]) : null;
+  const storageGb=storage ? storage.n*(storage.tb?1024:1) : null;
+  if(!ramGb||!storageGb) return null;
+  const colorMap=[['Sky Blue','sky blue|sky-blue|небесно-голуб'],['Midnight','midnight|полуноч'],['Starlight','starlight|сияющ'],['Silver','silver|серебрист'],['Space Black','space black|space-black|черн']];
+  const color=(colorMap.find(([,pattern])=>new RegExp(pattern,'i').test(combined))||[])[0]||'unknown';
+  return {retailer,title:t,url,price:amount,currency:'RUB',fetchedAt:new Date().toISOString(),condition:'new',model,chip:chip.replace(/\s+/g,' '),ramGb,storageGb,color};
 }
 async function fetchLive() {
   const out=[];
