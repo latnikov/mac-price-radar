@@ -19,7 +19,9 @@ function parseProduct(title, url, retailer, amount) {
   if(!ramGb||!storageGb) return null;
   const colorMap=[['Sky Blue','sky blue|sky-blue|небесно-голуб'],['Midnight','midnight|полуноч'],['Starlight','starlight|сияющ'],['Silver','silver|серебрист'],['Space Black','space black|space-black|черн']];
   const color=(colorMap.find(([,pattern])=>new RegExp(pattern,'i').test(combined))||[])[0]||'unknown';
-  return {retailer,title:t,url,price:amount,currency:'RUB',fetchedAt:new Date().toISOString(),condition:'new',model,chip:chip.replace(/\s+/g,' '),ramGb,storageGb,color};
+  const cpuCores=Number((combined.match(/(\d+)[- ]?Core[^,)]*CPU/i)||[])[1])||null;
+  const gpuCores=Number((combined.match(/(\d+)[- ]?Core[^,)]*GPU/i)||[])[1])||null;
+  return {retailer,title:t,url,price:amount,currency:'RUB',fetchedAt:new Date().toISOString(),condition:'new',model,chip:chip.replace(/\s+/g,' '),ramGb,storageGb,color,cpuCores,gpuCores};
 }
 async function fetchLive() {
   const out=[];
