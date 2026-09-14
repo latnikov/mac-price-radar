@@ -39,7 +39,12 @@ async function fetchLive() {
       const o=parseProduct(title,seed.url,seed.retailer,price(amount)); if(o) out.push(o);
     } catch(e) { console.warn(`${seed.retailer} product refresh failed: ${e.message}`) }
   }
-  if(target==='BigGeek') return out;
+  if(target==='BigGeek') {
+    const home=await (await fetch('https://biggeek.ru/')).text();
+    const paths=[...new Set([...home.matchAll(/href="(\/catalog\/macbook-[^"]+)"/gi)].map(m=>m[1]))];
+    for(const path of paths){const html=await (await fetch('https://biggeek.ru'+path)).text();const re=/<a href="(\/products\/[^\"]+)" class="catalog-card__title[^>]*>([\s\S]*?)<\/a>[\s\S]*?catalog-card__price[^>]*>[\s\S]*?cart-modal-count[^>]*>([\s\S]*?)<\//gi;for(const m of html.matchAll(re)){const o=parseProduct(m[2],'https://biggeek.ru'+m[1],'BigGeek',price(m[3]));if(o)out.push(o)}}
+    return out;
+  }
   const rifaHome=await (await fetch('https://rifastore.ru/')).text();
   const rifaPaths=[...new Set([...rifaHome.matchAll(/href="(\/categories\/macbook-[^"]+)"/gi)].map(m=>m[1]))];
   for(const path of rifaPaths){const html=await (await fetch('https://rifastore.ru'+path)).text();const re=/<a[^>]+class="products-view-name-link"[^>]*title="([^"]+)"[^>]*>.*?<div class="price-number">([^<]+)/gis;for(const m of html.matchAll(re)){const href=(m[0].match(/href="(https:\/\/rifastore\.ru\/products\/[^\"]+)/)||[])[1];const o=parseProduct(m[1],href||'https://rifastore.ru'+path,'RifaStore',price(m[2]));if(o)out.push(o)}}
