@@ -3,6 +3,7 @@ const offers = JSON.parse(await readFile('data/offers.json', 'utf8'));
 const catalog = JSON.parse(await readFile('data/catalog.json', 'utf8'));
 const reference=await readFile('apps-script/reference.gs','utf8').catch(()=> '');
 const bigGeekSlugs=Object.fromEntries([...reference.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(m=>[m[1],m[2]]));
+const iphoriyaSlugs=Object.fromEntries([...reference.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(m=>[m[1],m[2]]));
 const decode = s => s.replace(/&nbsp;|&#160;/g,' ').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&#8381;|₽|руб\.?/gi,'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
 const price = s => { const n=decode(s).replace(/\s/g,'').match(/\d[\d,.]*/); return n ? Number(n[0].replace(/,/g,'')) : null; };
 const get=async url=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),10000);try{return await fetch(url,{signal:c.signal,headers:{'user-agent':'MacPriceRadar/1.0'}})}finally{clearTimeout(t)}};
@@ -41,7 +42,12 @@ async function fetchLive() {
       const o=parseProduct(title,seed.url,seed.retailer,price(amount)); if(o) out.push(o);
     } catch(e) { console.warn(`${seed.retailer} product refresh failed: ${e.message}`) }
   }
-  if(target==='BigGeek') {
+  if(target.includes('Айфория')||target.includes('Iphoriya')) {
+    const entries=Object.entries(iphoriyaSlugs).filter(([,slug])=>slug.startsWith('apple-macbook'));
+    const queue=entries.slice();
+    const worker=async()=>{while(queue.length){const [,slug]=queue.shift();const url='https://iphoriya.ru/product/'+slug;try{const html=await (await fetch(url)).text();const json=[...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];let amount=null;for(const m of json){try{const data=JSON.parse(m[1]);for(const item of (Array.isArray(data)?data:[data])){const n=Number(item?.offers?.price);if(n>1000&&n<1000000)amount=n}}catch{}}const title=(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||slug;const o=parseProduct(title,url,'Айфория',amount)||parseProduct(slug,url,'Айфория',amount);if(o)out.push(o)}catch{}}};await Promise.all(Array.from({length:4},worker));if(!target.includes('BigGeek'))return [...new Map(out.map(o=>[o.url,o])).values()];
+  }
+  if(target.includes('BigGeek')) {
     const entries=Object.entries(bigGeekSlugs);
     const queue=entries.slice();
     const worker=async()=>{while(queue.length){const [,slug]=queue.shift();const url='https://biggeek.ru/products/'+slug;try{let html='',response;for(let attempt=0;attempt<3;attempt++){response=await fetch(url);if(response.ok){html=await response.text();break}await new Promise(r=>setTimeout(r,500*(attempt+1)))}if(!html)continue;const json=[...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];let amount=price((html.match(/data-price="(\d+)"/i)||[])[1]);for(const m of json){try{const data=JSON.parse(m[1]);for(const item of (Array.isArray(data)?data:[data])){const n=Number(item?.offers?.price);if(n>1000&&n<1000000)amount=n}}catch{}}const title=(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||slug;const o=parseProduct(title,url,'BigGeek',amount)||parseProduct(slug,url,'BigGeek',amount);if(o)out.push(o)}catch{}}};await Promise.all(Array.from({length:3},worker));
