@@ -19,6 +19,16 @@ export function findRifaNextPage(html, pageUrl) {
   return href ? absoluteUrl(href, pageUrl) : null;
 }
 
+export function findRifaPageUrls(html, pageUrl) {
+  const current = new URL(pageUrl);
+  const values = [...String(html).matchAll(/(?:href|data-ng-href)=["']([^"']*[?&]page=\d+[^"']*)["']/gi)]
+    .map(match => absoluteUrl(match[1], pageUrl))
+    .filter(value => value && new URL(value).pathname === current.pathname);
+  const next = findRifaNextPage(html, pageUrl);
+  if (next) values.push(next);
+  return [...new Set(values)];
+}
+
 export function parseRifaCategory(html, pageUrl) {
   const source = String(html);
   const anchors = [...source.matchAll(productAnchor)];

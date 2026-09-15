@@ -1,12 +1,29 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { parseProduct, price } from './offer-normalization.mjs';
-import { findRifaCategoryUrls, findRifaNextPage, parseRifaCategory } from './rifastore.mjs';
+import { findRifaCategoryUrls, findRifaPageUrls, parseRifaCategory } from './rifastore.mjs';
 const offers = JSON.parse(await readFile('data/offers.json', 'utf8'));
 const catalog = JSON.parse(await readFile('data/catalog.json', 'utf8'));
 const reference=await readFile('apps-script/reference.gs','utf8').catch(()=> '');
-const bigGeekSlugs=Object.fromEntries([...reference.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(m=>[m[1],m[2]]));
-const iphoriyaSlugs=Object.fromEntries([...reference.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(m=>[m[1],m[2]]));
-const rawFetch=fetch;globalThis.fetch=async(url,options={})=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),10000);try{return await rawFetch(url,{...options,signal:c.signal,headers:{'user-agent':'MacPriceRadar/1.0',...(options.headers||{})}})}finally{clearTimeout(t)}};
+const slugs = name => {
+  const block=(reference.match(new RegExp(`var\\s+${name}\\s*=\\s*\\{([\\s\\S]*?)\\n\\};`))||[])[1]||'';
+  return Object.fromEntries([...block.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(m=>[m[1],m[2]]));
+};
+const bigGeekSlugs=slugs('SLUGS_BIGGEEK');
+const iphoriyaSlugs=slugs('SLUGS_IPHORIYA');
+const rawFetch=fetch;globalThis.fetch=async(url,options={})=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),10000);try{return await rawFetch(url,{...options,signal:c.signal,headers:{'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140.0 Safari/537.36',...(options.headers||{})}})}finally{clearTimeout(t)}};
+const jsonLdPrice = html => {
+  const values=[];
+  const visit=(value,inOffers=false)=>{
+    if(Array.isArray(value)){for(const item of value)visit(item,inOffers);return}
+    if(!value||typeof value!=='object')return;
+    const isOffer=inOffers||value['@type']==='Offer';
+    const amount=isOffer?Number(value.price):null;
+    if(amount>1000&&amount<1000000)values.push(amount);
+    for(const [key,child] of Object.entries(value))visit(child,isOffer||key==='offers');
+  };
+  for(const match of html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)){try{visit(JSON.parse(match[1]))}catch{}}
+  return values.length?Math.min(...values):null;
+};
 async function fetchLive() {
   const out=[];
   const target=process.env.RETAILER||'all';
@@ -23,14 +40,20 @@ async function fetchLive() {
     } catch(e) { console.warn(`${seed.retailer} product refresh failed: ${e.message}`) }
   }
   if(wants('Айфория')) {
-    const entries=Object.entries(iphoriyaSlugs).filter(([,slug])=>slug.startsWith('apple-macbook'));
-    const queue=entries.slice();
-    const worker=async()=>{while(queue.length){const [,slug]=queue.shift();const url='https://iphoriya.ru/product/'+slug;try{const html=await (await fetch(url)).text();const json=[...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];let amount=null;for(const m of json){try{const data=JSON.parse(m[1]);for(const item of (Array.isArray(data)?data:[data])){const n=Number(item?.offers?.price);if(n>1000&&n<1000000)amount=n}}catch{}}const title=(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||slug;const o=parseProduct(title,url,'Айфория',amount)||parseProduct(slug,url,'Айфория',amount);if(o)out.push(o)}catch{}}};await Promise.all(Array.from({length:4},worker));
+    const productUrls=Object.values(iphoriyaSlugs)
+      .filter(slug=>slug.startsWith('apple-macbook'))
+      .map(slug=>'https://iphoriya.ru/product/'+slug);
+    try {
+      const neoCategory=await (await fetch('https://iphoriya.ru/product-category/mac/macbook-neo/')).text();
+      productUrls.push(...[...neoCategory.matchAll(/href=["'](https:\/\/iphoriya\.ru\/product\/[^"']*macbook-neo[^"']*)["']/gi)].map(match=>match[1]));
+    } catch(e) { console.warn(`Айфория Neo category failed: ${e.message}`) }
+    const queue=[...new Set(productUrls)];
+    const worker=async()=>{while(queue.length){const url=queue.shift();const slug=url.split('/').filter(Boolean).at(-1);try{const html=await (await fetch(url)).text();const amount=jsonLdPrice(html);const title=(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||slug;const o=parseProduct(title,url,'Айфория',amount)||parseProduct(slug,url,'Айфория',amount);if(o)out.push(o)}catch{}}};await Promise.all(Array.from({length:4},worker));
   }
   if(wants('BigGeek')) {
     const entries=Object.entries(bigGeekSlugs);
     const queue=entries.slice();
-    const worker=async()=>{while(queue.length){const [,slug]=queue.shift();const url='https://biggeek.ru/products/'+slug;try{let html='',response;for(let attempt=0;attempt<3;attempt++){response=await fetch(url);if(response.ok){html=await response.text();break}await new Promise(r=>setTimeout(r,500*(attempt+1)))}if(!html)continue;const json=[...html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];let amount=price((html.match(/data-price="(\d+)"/i)||[])[1]);for(const m of json){try{const data=JSON.parse(m[1]);for(const item of (Array.isArray(data)?data:[data])){const n=Number(item?.offers?.price);if(n>1000&&n<1000000)amount=n}}catch{}}const title=(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||slug;const o=parseProduct(title,url,'BigGeek',amount)||parseProduct(slug,url,'BigGeek',amount);if(o)out.push(o)}catch{}}};await Promise.all(Array.from({length:3},worker));
+    const worker=async()=>{while(queue.length){const [,slug]=queue.shift();const url='https://biggeek.ru/products/'+slug;try{let html='',response;for(let attempt=0;attempt<3;attempt++){response=await fetch(url);if(response.ok){html=await response.text();break}await new Promise(r=>setTimeout(r,500*(attempt+1)))}if(!html)continue;const amount=jsonLdPrice(html)||price((html.match(/data-price="(\d+)"/i)||[])[1]);const title=(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||slug;const o=parseProduct(title,url,'BigGeek',amount)||parseProduct(slug,url,'BigGeek',amount);if(o)out.push(o)}catch{}}};await Promise.all(Array.from({length:3},worker));
     const home=await (await fetch('https://biggeek.ru/')).text();
     const paths=[...new Set([...home.matchAll(/href="(\/catalog\/macbook-[^"]+)"/gi)].map(m=>m[1]))];
     for(const path of paths){const html=await (await fetch('https://biggeek.ru'+path)).text();const re=/<a href="(\/products\/[^\"]+)" class="catalog-card__title[^>]*>([\s\S]*?)<\/a>[\s\S]*?catalog-card__price[^>]*>[\s\S]*?cart-modal-count[^>]*>([\s\S]*?)<\//gi;for(const m of html.matchAll(re)){const o=parseProduct(m[2],'https://biggeek.ru'+m[1],'BigGeek',price(m[3]));if(o)out.push(o)}}
@@ -49,8 +72,7 @@ async function fetchLive() {
         const offer=parseProduct(item.title,item.url,'RifaStore',price(item.priceText));
         if(offer)out.push(offer);
       }
-      const next=findRifaNextPage(html,url);
-      if(next&&!seen.has(next))queue.push(next);
+      for(const pageUrl of findRifaPageUrls(html,url)) if(!seen.has(pageUrl)) queue.push(pageUrl);
     }
   }
   if(wants('Technichno')) {
@@ -95,12 +117,16 @@ if(process.env.LIVE==='1'){
 const liveRetailers=new Set(live.map(o=>o.retailer));
 const baseOffers=liveRetailers.size?[...offers.filter(o=>!liveRetailers.has(o.retailer)),...live]:[...offers,...live];
 const allOffers=[...new Map(baseOffers.map(o=>[`${o.retailer}|${o.url}|${o.price}`,o])).values()];
-const key = o => [o.model,o.chip,o.ramGb,o.storageGb,o.color].map(x => String(x ?? '').toLowerCase().replace(/[^a-zа-я0-9]+/gi, ' ').trim()).join('|');
+const key = o => {
+  const fields=[o.model,o.chip,o.ramGb,o.storageGb,o.color];
+  if (/macbook\s+neo/i.test(o.model || '')) fields.push(o.cpuCores,o.gpuCores);
+  return fields.map(x => String(x ?? '').toLowerCase().replace(/[^a-zа-я0-9]+/gi, ' ').trim()).join('|');
+};
 const eligible = allOffers.filter(o => o.price != null && o.condition === 'new' && o.currency === 'RUB');
 const byKey = new Map();
 for (const offer of eligible) { const k=key(offer); byKey.set(k, [...(byKey.get(k)||[]), offer]); }
 const result = catalog.flatMap(item => item.colors.map(color => {
-  const productKey = key({model:item.name,chip:item.chip,ramGb:item.ramGb,storageGb:item.storageGb,color});
+  const productKey = key({model:item.name,chip:item.chip,ramGb:item.ramGb,storageGb:item.storageGb,color,cpuCores:item.cpuCores,gpuCores:item.gpuCores});
   const items = [...(byKey.get(productKey)||[])].sort((a,b)=>a.price-b.price);
   return {productKey, product:item, color, offers:items, best:items[0]||null};
 }));

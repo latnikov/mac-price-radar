@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProduct, price } from '../scripts/offer-normalization.mjs';
-import { findRifaCategoryUrls, findRifaNextPage, parseRifaCategory } from '../scripts/rifastore.mjs';
+import { findRifaCategoryUrls, findRifaNextPage, findRifaPageUrls, parseRifaCategory } from '../scripts/rifastore.mjs';
 
 const title = 'MacBook Air 13, M4 (10c CPU, 10c GPU) RAM 24 ГБ, SSD 1 ТБ, Starlight (Сияющая звезда), английская раскладка (KB-US)';
 const productUrl = 'https://rifastore.ru/products/macbook-air-13-m4-10c-cpu-10c-gpu-ram-24-gb-ssd-1-tb-starlight';
@@ -15,6 +15,10 @@ const categoryHtml = `
 test('discovers RifaStore categories and pagination', () => {
   assert.deepEqual(findRifaCategoryUrls('<a href="/categories/macbook-air-13-m4">Air</a>'), ['https://rifastore.ru/categories/macbook-air-13-m4']);
   assert.equal(findRifaNextPage(categoryHtml, 'https://rifastore.ru/categories/macbook-air-13-m4'), 'https://rifastore.ru/categories/macbook-air-13-m4?page=2');
+  assert.deepEqual(findRifaPageUrls('<a data-ng-href="?page=2">2</a><a href="?page=3">3</a>', 'https://rifastore.ru/categories/macbook-neo'), [
+    'https://rifastore.ru/categories/macbook-neo?page=2',
+    'https://rifastore.ru/categories/macbook-neo?page=3',
+  ]);
 });
 
 test('parses an Angular RifaStore card into the catalog format', () => {

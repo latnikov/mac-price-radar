@@ -1,5 +1,6 @@
 [
-  {"id":"neo-256","name":"MacBook Neo","chip":"A18 Pro","ramGb":8,"storageGb":256,"colors":["Silver","Blush","Blue","Yellow"]},
+  {"id":"neo-256","name":"MacBook Neo 13\"","chip":"A18 Pro","cpuCores":6,"gpuCores":5,"ramGb":8,"storageGb":256,"colors":["Silver","Blush","Indigo","Citrus"]},
+  {"id":"neo-512","name":"MacBook Neo 13\"","chip":"A18 Pro","cpuCores":6,"gpuCores":5,"ramGb":8,"storageGb":512,"colors":["Silver","Blush","Indigo","Citrus"]},
   {"id":"air-m5-13-16-256","name":"MacBook Air 13\"","chip":"M5","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
   {"id":"air-m5-13-16-512","name":"MacBook Air 13\"","chip":"M5","ramGb":16,"storageGb":512,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
   {"id":"air-m5-15-16-256","name":"MacBook Air 15\"","chip":"M5","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
