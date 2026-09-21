@@ -30,15 +30,14 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      - name: Refresh RifaStore prices
-        continue-on-error: true
-        run: LIVE=1 RETAILER=RifaStore npm run build:data
-      - name: Build static site
+      - name: Build public artifact
         run: |
+          npm run export:public
           mkdir -p dist/web dist/data
-          cp web/index.html dist/web/index.html
-          cp data/cheapest.json dist/data/cheapest.json
-          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=web/"><title>Mac Price Radar</title><a href="web/">Открыть Mac Price Radar</a>' > dist/index.html
+          cp web/index.html web/app.js web/styles.css dist/web/
+          cp data/public-prices.json dist/data/public-prices.json
+          printf '{"mode":"public"}' > dist/web/public-config.json
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=web/"><title>Каталог</title><a href="web/">Открыть каталог</a>' > dist/index.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

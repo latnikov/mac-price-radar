@@ -11,7 +11,7 @@ export function textOffers(retailer: string, html: string, baseUrl: string): Off
   const re = /(?:MacBook[^<]{0,180})/gi;
   for (const m of html.match(re) ?? []) {
     const price = rub(m);
-    if (price && price > 10000) out.push({ retailer, title: m.replace(/\s+/g,' ').trim(), url: baseUrl, price, currency:'RUB', fetchedAt:now(), condition:'new' });
+    if (price && price > 10000) out.push({ retailer, title: m.replace(/\s+/g,' ').trim(), url: baseUrl, price, currency:'RUB', fetchedAt:now(), condition:'unknown' });
   }
   return out;
 }

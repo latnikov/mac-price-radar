@@ -8,11 +8,16 @@
     "test": "node --test --import tsx test/*.test.ts test/*.test.mjs",
     "build:data": "node scripts/build-data.mjs",
     "sync:sheet": "node scripts/sync-sheet.mjs",
-    "dev": "node scripts/server.mjs"
+    "dev": "node scripts/server.mjs",
+    "export:public": "node scripts/export-public.mjs",
+    "backup": "node scripts/backup.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

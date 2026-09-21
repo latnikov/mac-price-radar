@@ -1,6 +1,12 @@
-const endpoint=process.env.SHEET_WEBHOOK;
-if(!endpoint){console.log('SHEET_WEBHOOK is not set; nothing to sync.');process.exit(0)}
-const data=await (await fetch(new URL('../data/cheapest.json',import.meta.url))).json();
-const r=await fetch(endpoint,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(data)});
-if(!r.ok) throw new Error(`Sheet sync failed: ${r.status} ${await r.text()}`);
-console.log('Sheet sync completed');
+import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+const endpoint = process.env.SHEET_WEBHOOK;
+if (!endpoint) throw new Error('Set SHEET_WEBHOOK to the authorized destination');
+if (new URL(endpoint).protocol !== 'https:') throw new Error('SHEET_WEBHOOK must use HTTPS');
+const snapshot = JSON.parse(await readFile('data/public-prices.json', 'utf8'));
+const operationId = createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+const response = await fetch(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', 'idempotency-key': operationId }, body: JSON.stringify({ ...snapshot, operationId }), signal: AbortSignal.timeout(30000) });
+if (!response.ok) throw new Error(`Sheet sync failed: HTTP ${response.status}`);
+const receipt = await response.json();
+if (receipt.operationId !== operationId || receipt.applied !== true) throw new Error('Sheet endpoint did not confirm application of this operation');
+console.log(`Sheet sync confirmed: ${operationId}`);

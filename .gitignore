@@ -1,3 +1,17 @@
 node_modules/
 .tools/
 .DS_Store
+
+# Master database, closed supplier files and private exports
+data/private/
+data/incoming/
+data/cheapest.json
+data/status.json
+data/public-prices.json
+dist/
+.env
+.env.*
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.tmp

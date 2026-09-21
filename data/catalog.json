@@ -1,20 +1,284 @@
 [
-  {"id":"neo-256","name":"MacBook Neo 13\"","chip":"A18 Pro","cpuCores":6,"gpuCores":5,"ramGb":8,"storageGb":256,"colors":["Silver","Blush","Indigo","Citrus"]},
-  {"id":"neo-512","name":"MacBook Neo 13\"","chip":"A18 Pro","cpuCores":6,"gpuCores":5,"ramGb":8,"storageGb":512,"colors":["Silver","Blush","Indigo","Citrus"]},
-  {"id":"air-m5-13-16-256","name":"MacBook Air 13\"","chip":"M5","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
-  {"id":"air-m5-13-16-512","name":"MacBook Air 13\"","chip":"M5","ramGb":16,"storageGb":512,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
-  {"id":"air-m5-15-16-256","name":"MacBook Air 15\"","chip":"M5","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
-  {"id":"air-m5-15-16-512","name":"MacBook Air 15\"","chip":"M5","ramGb":16,"storageGb":512,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
-  {"id":"air-m4-13-16-256","name":"MacBook Air 13\"","chip":"M4","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
-  {"id":"air-m4-13-16-512","name":"MacBook Air 13\"","chip":"M4","ramGb":16,"storageGb":512,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
-  {"id":"air-m4-15-16-256","name":"MacBook Air 15\"","chip":"M4","ramGb":16,"storageGb":256,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
-  {"id":"air-m4-15-16-512","name":"MacBook Air 15\"","chip":"M4","ramGb":16,"storageGb":512,"colors":["Midnight","Starlight","Silver","Sky Blue"]},
-  {"id":"pro-m5-14-16-512","name":"MacBook Pro 14\"","chip":"M5","ramGb":16,"storageGb":512,"colors":["Space Black","Silver"]},
-  {"id":"pro-m5-14-24-1000","name":"MacBook Pro 14\"","chip":"M5","ramGb":24,"storageGb":1000,"colors":["Space Black","Silver"]},
-  {"id":"pro-m5pro-14-24-512","name":"MacBook Pro 14\"","chip":"M5 Pro","ramGb":24,"storageGb":512,"colors":["Space Black","Silver"]},
-  {"id":"pro-m5max-14-36-1000","name":"MacBook Pro 14\"","chip":"M5 Max","ramGb":36,"storageGb":1000,"colors":["Space Black","Silver"]},
-  {"id":"pro-m5pro-16-24-512","name":"MacBook Pro 16\"","chip":"M5 Pro","ramGb":24,"storageGb":512,"colors":["Space Black","Silver"]},
-  {"id":"pro-m5max-16-48-1000","name":"MacBook Pro 16\"","chip":"M5 Max","ramGb":48,"storageGb":1000,"colors":["Space Black","Silver"]},
-  {"id":"pro-m4pro-16-24-512","name":"MacBook Pro 16\"","chip":"M4 Pro","ramGb":24,"storageGb":512,"colors":["Space Black","Silver"]},
-  {"id":"pro-m4max-16-48-1000","name":"MacBook Pro 16\"","chip":"M4 Max","ramGb":48,"storageGb":1000,"colors":["Space Black","Silver"]}
+  {
+    "id": "neo-256",
+    "name": "MacBook Neo 13\"",
+    "chip": "A18 Pro",
+    "cpuCores": 6,
+    "gpuCores": 5,
+    "ramGb": 8,
+    "storageGb": 256,
+    "colors": [
+      "Silver",
+      "Blush",
+      "Indigo",
+      "Citrus"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  },
+  {
+    "id": "neo-512",
+    "name": "MacBook Neo 13\"",
+    "chip": "A18 Pro",
+    "cpuCores": 6,
+    "gpuCores": 5,
+    "ramGb": 8,
+    "storageGb": 512,
+    "colors": [
+      "Silver",
+      "Blush",
+      "Indigo",
+      "Citrus"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  },
+  {
+    "id": "air-m5-13-16-256",
+    "name": "MacBook Air 13\"",
+    "chip": "M5",
+    "ramGb": 16,
+    "storageGb": 256,
+    "colors": [
+      "Midnight",
+      "Starlight",
+      "Silver",
+      "Sky Blue"
+    ],
+    "reviewStatus": "conflict",
+    "verificationNote": "SSD конфликтует с опубликованной спецификацией Apple; требуется проверка артикула",
+    "specificationSource": "https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/",
+    "specificationCheckedAt": "2026-09-16"
+  },
+  {
+    "id": "air-m5-13-16-512",
+    "name": "MacBook Air 13\"",
+    "chip": "M5",
+    "ramGb": 16,
+    "storageGb": 512,
+    "colors": [
+      "Midnight",
+      "Starlight",
+      "Silver",
+      "Sky Blue"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": "https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/"
+  },
+  {
+    "id": "air-m5-15-16-256",
+    "name": "MacBook Air 15\"",
+    "chip": "M5",
+    "ramGb": 16,
+    "storageGb": 256,
+    "colors": [
+      "Midnight",
+      "Starlight",
+      "Silver",
+      "Sky Blue"
+    ],
+    "reviewStatus": "conflict",
+    "verificationNote": "SSD конфликтует с опубликованной спецификацией Apple; требуется проверка артикула",
+    "specificationSource": "https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/",
+    "specificationCheckedAt": "2026-09-16"
+  },
+  {
+    "id": "air-m5-15-16-512",
+    "name": "MacBook Air 15\"",
+    "chip": "M5",
+    "ramGb": 16,
+    "storageGb": 512,
+    "colors": [
+      "Midnight",
+      "Starlight",
+      "Silver",
+      "Sky Blue"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": "https://www.apple.com/newsroom/2026/03/apple-introduces-the-new-macbook-air-with-m5/"
+  },
+  {
+    "id": "air-m4-13-16-256",
+    "name": "MacBook Air 13\"",
+    "chip": "M4",
+    "ramGb": 16,
+    "storageGb": 256,
+    "colors": [
+      "Midnight",
+      "Starlight",
+      "Silver",
+      "Sky Blue"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  },
+  {
+    "id": "air-m4-13-16-512",
+    "name": "MacBook Air 13\"",
+    "chip": "M4",
+    "ramGb": 16,
+    "storageGb": 512,
+    "colors": [
+      "Midnight",
+      "Starlight",
+      "Silver",
+      "Sky Blue"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  },
+  {
+    "id": "air-m4-15-16-256",
+    "name": "MacBook Air 15\"",
+    "chip": "M4",
+    "ramGb": 16,
+    "storageGb": 256,
+    "colors": [
+      "Midnight",
+      "Starlight",
+      "Silver",
+      "Sky Blue"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  },
+  {
+    "id": "air-m4-15-16-512",
+    "name": "MacBook Air 15\"",
+    "chip": "M4",
+    "ramGb": 16,
+    "storageGb": 512,
+    "colors": [
+      "Midnight",
+      "Starlight",
+      "Silver",
+      "Sky Blue"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  },
+  {
+    "id": "pro-m5-14-16-512",
+    "name": "MacBook Pro 14\"",
+    "chip": "M5",
+    "ramGb": 16,
+    "storageGb": 512,
+    "colors": [
+      "Space Black",
+      "Silver"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  },
+  {
+    "id": "pro-m5-14-24-1000",
+    "name": "MacBook Pro 14\"",
+    "chip": "M5",
+    "ramGb": 24,
+    "storageGb": 1000,
+    "colors": [
+      "Space Black",
+      "Silver"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  },
+  {
+    "id": "pro-m5pro-14-24-512",
+    "name": "MacBook Pro 14\"",
+    "chip": "M5 Pro",
+    "ramGb": 24,
+    "storageGb": 512,
+    "colors": [
+      "Space Black",
+      "Silver"
+    ],
+    "reviewStatus": "conflict",
+    "verificationNote": "SSD конфликтует с опубликованной спецификацией Apple; требуется проверка артикула",
+    "specificationSource": "https://support.apple.com/en-gb/126318",
+    "specificationCheckedAt": "2026-09-16"
+  },
+  {
+    "id": "pro-m5max-14-36-1000",
+    "name": "MacBook Pro 14\"",
+    "chip": "M5 Max",
+    "ramGb": 36,
+    "storageGb": 1000,
+    "colors": [
+      "Space Black",
+      "Silver"
+    ],
+    "reviewStatus": "conflict",
+    "verificationNote": "SSD конфликтует с опубликованной спецификацией Apple; требуется проверка артикула",
+    "specificationSource": "https://support.apple.com/en-gb/126318",
+    "specificationCheckedAt": "2026-09-16"
+  },
+  {
+    "id": "pro-m5pro-16-24-512",
+    "name": "MacBook Pro 16\"",
+    "chip": "M5 Pro",
+    "ramGb": 24,
+    "storageGb": 512,
+    "colors": [
+      "Space Black",
+      "Silver"
+    ],
+    "reviewStatus": "conflict",
+    "verificationNote": "SSD конфликтует с опубликованной спецификацией Apple; требуется проверка артикула",
+    "specificationSource": "https://support.apple.com/en-ie/126319",
+    "specificationCheckedAt": "2026-09-16"
+  },
+  {
+    "id": "pro-m5max-16-48-1000",
+    "name": "MacBook Pro 16\"",
+    "chip": "M5 Max",
+    "ramGb": 48,
+    "storageGb": 1000,
+    "colors": [
+      "Space Black",
+      "Silver"
+    ],
+    "reviewStatus": "conflict",
+    "verificationNote": "SSD конфликтует с опубликованной спецификацией Apple; требуется проверка артикула",
+    "specificationSource": "https://support.apple.com/en-ie/126319",
+    "specificationCheckedAt": "2026-09-16"
+  },
+  {
+    "id": "pro-m4pro-16-24-512",
+    "name": "MacBook Pro 16\"",
+    "chip": "M4 Pro",
+    "ramGb": 24,
+    "storageGb": 512,
+    "colors": [
+      "Space Black",
+      "Silver"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  },
+  {
+    "id": "pro-m4max-16-48-1000",
+    "name": "MacBook Pro 16\"",
+    "chip": "M4 Max",
+    "ramGb": 48,
+    "storageGb": 1000,
+    "colors": [
+      "Space Black",
+      "Silver"
+    ],
+    "reviewStatus": "needs_review",
+    "verificationNote": "Требуется подтверждение точного варианта и артикула",
+    "specificationSource": null
+  }
 ]

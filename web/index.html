@@ -1,5 +1,46 @@
-<!doctype html><html lang="ru"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mac Price Radar</title><style>body{font:14px system-ui;margin:24px;color:#17202a}h1{margin:0 0 8px}.toolbar{display:flex;gap:12px;align-items:center;margin:12px 0 8px}button{padding:9px 14px;background:#17202a;color:#fff;border-radius:7px}#status{color:#66717c}.progress{height:6px;background:#e8edf1;max-width:520px;margin:0 0 18px}.progress i{display:block;height:100%;width:0;background:#087f5b;transition:width .3s}table{border-collapse:separate;border-spacing:0;width:100%;min-width:1400px}th,td{padding:9px 10px;border-right:1px solid #dfe3e8;border-bottom:1px solid #dfe3e8;vertical-align:middle}th{background:#f3f5f7;position:sticky;top:0}.model{font-weight:600;min-width:300px}.store{text-align:center;min-width:120px}.price a{color:#087f5b;font-weight:700;text-decoration:none}.lowest{background:#e9f8ef}.empty{color:#9aa3ad}.ours{background:#fff8df}.scroll{overflow:auto;border:1px solid #dfe3e8}small{display:block;color:#66717c;font-weight:400}</style><h1>Цены на MacBook</h1><div class="toolbar"><button id="refresh">Обновить ценники</button><span id="status">Запускаю сбор…</span></div><div class="progress"><i id="bar"></i></div><div class="scroll"><table><thead><tr><th>Модель / конфигурация</th><th>Цвет</th><th class="store lowest">Лучшая цена<small>магазин</small></th><th class="store">BigGeek<small>цена</small></th><th class="store">Айфория<small>цена</small></th><th class="store">Technichno<small>цена</small></th><th class="store">RifaStore<small>цена</small></th><th class="store ours">Наши поставщики<small>цена</small></th></tr></thead><tbody id="rows"></tbody></table></div><script>
-const statusText=document.getElementById('status'),stores=['BigGeek','Айфория','Technichno','RifaStore','Наши поставщики'],fmt=n=>n==null?'—':n.toLocaleString('ru-RU')+' ₽',cell=o=>o&&o.price!=null?'<a href="'+o.url+'" target="_blank" rel="noreferrer">'+fmt(o.price)+'</a>':'<span class="empty">—</span>';
-function render(xs){rows.innerHTML=xs.map(function(x){var p=x.product,offer=function(s){return x.offers.find(function(o){return o.retailer===s})},best=x.offers[0],core=(p.cpuCores||p.gpuCores)?' · '+(p.cpuCores?p.cpuCores+'C CPU':'')+(p.gpuCores?' · '+p.gpuCores+'C GPU':''):'';return '<tr><td class="model">'+(p.name||'MacBook')+'<small>'+[p.chip,p.ramGb&&p.ramGb+' GB',p.storageGb&&p.storageGb+' GB'].filter(Boolean).join(' · ')+core+'</small></td><td>'+ (x.color||'—') +'</td><td class="price lowest">'+(best?cell(best)+'<small>'+best.retailer+'</small>':'<span class="empty">—</span>')+'</td>'+stores.map(function(s){return '<td class="price '+(s==='Наши поставщики'?'ours':'')+'">'+cell(offer(s))+'</td>'}).join('')+'</tr>'}).join('')}
-async function load(){render(await (await fetch('../data/cheapest.json?ts='+Date.now())).json())}async function poll(){var s=await (await fetch('../status?ts='+Date.now())).json();bar.style.width=(s.progress||0)+'%';if(s.state==='running'){statusText.textContent='Обновляем ценники… '+(s.progress||0)+'%';refresh.disabled=true}else if(s.state==='ready'){statusText.textContent='Обновили в '+new Date(s.updatedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})+' · '+new Date(s.updatedAt).toLocaleDateString('ru-RU');refresh.disabled=false;await load()}else if(s.state==='error'){statusText.textContent='Ошибка обновления: '+s.error;refresh.disabled=false}setTimeout(poll,1000)}refresh.onclick=function(){fetch('../refresh',{method:'POST'})};load();poll()
-</script>
+<!doctype html>
+<html lang="ru">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mac Price Radar — цены по магазинам</title><link rel="stylesheet" href="./styles.css"><script type="module" src="./app.js"></script></head>
+<body>
+<header><div><h1>Mac Price Radar</h1><p>Цены по российским магазинам</p></div><div class="header-actions"><span id="status">Загружаем цены…</span><button id="refresh">Обновить цены</button></div></header>
+<section class="filters" id="filters">
+  <div class="filter-top">
+    <label class="search">Поиск<input id="search" type="search" placeholder="Модель, чип, цвет или магазин…"></label>
+    <button id="reset" class="secondary">Сбросить выбор</button>
+  </div>
+  <div class="filter-step">
+    <div class="step-label"><strong>1. Модель</strong><span>Выберите линейку ноутбуков</span></div>
+    <div class="choice-group" id="family-options" aria-label="Линейка MacBook">
+      <button type="button" class="choice" data-filter="family" data-value="air">MacBook Air</button>
+      <button type="button" class="choice" data-filter="family" data-value="pro">MacBook Pro</button>
+      <button type="button" class="choice" data-filter="family" data-value="neo">MacBook Neo</button>
+      <button type="button" class="choice history" data-filter="family" data-value="*">Все модели и поколения</button>
+    </div>
+  </div>
+  <div class="filter-step" id="chip-step" hidden>
+    <div class="step-label"><strong>2. Процессор</strong><span>Актуальные чипы показаны первыми</span></div>
+    <div class="choice-stack">
+      <div class="choice-group" id="chip-current"></div>
+      <details id="chip-history" class="chip-history" hidden><summary>Предыдущие поколения</summary><div class="choice-group" id="chip-older"></div></details>
+    </div>
+  </div>
+  <div id="spec-step" class="spec-step" hidden>
+    <div class="spec-group"><span>Размер</span><div class="choice-group compact" id="screen-options"></div></div>
+    <div class="spec-group"><span>RAM</span><div class="choice-group compact" id="ram-options"></div></div>
+    <div class="spec-group"><span>SSD</span><div class="choice-group compact" id="ssd-options"></div></div>
+    <div class="spec-group wide"><span>Цвет</span><div class="choice-group compact" id="color-options"></div></div>
+    <div class="spec-group"><span>Наличие</span><div class="choice-group compact" id="stock-options">
+      <button type="button" class="choice" data-filter="stock" data-value="">Любое</button>
+      <button type="button" class="choice" data-filter="stock" data-value="in">В наличии</button>
+      <button type="button" class="choice" data-filter="stock" data-value="out">Нет</button>
+    </div></div>
+    <div class="price-range"><label>Цена от<input id="min-price" type="number" min="0" placeholder="₽"></label><label>Цена до<input id="max-price" type="number" min="0" placeholder="₽"></label></div>
+  </div>
+</section>
+<div class="table-meta"><span id="count"></span><div><label>Сортировать <select id="sort"><option value="model">По модели</option><option value="price-up">Сначала дешевле</option><option value="price-down">Сначала дороже</option><option value="fresh">Сначала свежие</option></select></label><button id="export" class="secondary">Скачать срез JSON</button></div></div>
+<p id="message" role="alert" hidden></p>
+<p id="selection-prompt" class="selection-prompt">Выберите модель, затем процессор — после этого покажем подходящие цены.</p>
+<main class="table-wrap" id="table-wrap" hidden><table><thead id="head"></thead><tbody id="rows"></tbody></table></main>
+<p id="empty" hidden>По этим фильтрам предложений нет.</p>
+<footer>В ячейке — цена на сайте магазина. Раскройте ячейку, чтобы увидеть все варианты, наличие и время проверки.</footer>
+</body></html>

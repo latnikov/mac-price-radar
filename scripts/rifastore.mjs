@@ -1,7 +1,7 @@
 const productAnchor = /<a\b(?=[^>]*\bclass=["'][^"']*\bproducts-view-name-link\b[^"']*["'])(?=[^>]*\btitle=["']([^"']+)["'])[^>]*>/gi;
 
 const absoluteUrl = (value, baseUrl) => {
-  try { return new URL(value, baseUrl).href; } catch { return null; }
+  try { const url = new URL(value, baseUrl); return url.origin === new URL(baseUrl).origin && !url.username && !url.password ? url.href : null; } catch { return null; }
 };
 
 export function findRifaCategoryUrls(html, baseUrl = 'https://rifastore.ru/') {

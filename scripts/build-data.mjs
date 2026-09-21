@@ -1,134 +1,139 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, writeFile, rename, mkdir, open, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { parseProduct, price } from './offer-normalization.mjs';
 import { findRifaCategoryUrls, findRifaPageUrls, parseRifaCategory } from './rifastore.mjs';
-const offers = JSON.parse(await readFile('data/offers.json', 'utf8'));
-const catalog = JSON.parse(await readFile('data/catalog.json', 'utf8'));
-const reference=await readFile('apps-script/reference.gs','utf8').catch(()=> '');
-const slugs = name => {
-  const block=(reference.match(new RegExp(`var\\s+${name}\\s*=\\s*\\{([\\s\\S]*?)\\n\\};`))||[])[1]||'';
-  return Object.fromEntries([...block.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(m=>[m[1],m[2]]));
-};
-const bigGeekSlugs=slugs('SLUGS_BIGGEEK');
-const iphoriyaSlugs=slugs('SLUGS_IPHORIYA');
-const rawFetch=fetch;globalThis.fetch=async(url,options={})=>{const c=new AbortController();const t=setTimeout(()=>c.abort(),10000);try{return await rawFetch(url,{...options,signal:c.signal,headers:{'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140.0 Safari/537.36',...(options.headers||{})}})}finally{clearTimeout(t)}};
-const jsonLdPrice = html => {
-  const values=[];
-  const visit=(value,inOffers=false)=>{
-    if(Array.isArray(value)){for(const item of value)visit(item,inOffers);return}
-    if(!value||typeof value!=='object')return;
-    const isOffer=inOffers||value['@type']==='Offer';
-    const amount=isOffer?Number(value.price):null;
-    if(amount>1000&&amount<1000000)values.push(amount);
-    for(const [key,child] of Object.entries(value))visit(child,isOffer||key==='offers');
-  };
-  for(const match of html.matchAll(/<script[^>]+type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)){try{visit(JSON.parse(match[1]))}catch{}}
-  return values.length?Math.min(...values):null;
-};
-async function fetchLive() {
-  const out=[];
-  const target=process.env.RETAILER||'all';
-  const selected=new Set(target.split(',').map(value=>value.trim()).filter(Boolean));
-  const wants=retailer=>target==='all'||selected.has(retailer)||(retailer==='Айфория'&&selected.has('Iphoriya'));
-  // Refresh previously discovered product URLs first. This keeps a known SKU
-  // current even when a retailer hides its catalogue behind client-side JS.
-  for (const seed of offers.filter(o=>wants(o.retailer) && o.url.includes('/products/'))) {
-    try {
-      const page=await (await fetch(seed.url)).text();
-      const title=(page.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||seed.title;
-      const amount=(page.match(/(?:data-price|data-card-price)="(\d+)"/i)||[])[1];
-      const o=parseProduct(title,seed.url,seed.retailer,price(amount)); if(o) out.push(o);
-    } catch(e) { console.warn(`${seed.retailer} product refresh failed: ${e.message}`) }
-  }
-  if(wants('Айфория')) {
-    const productUrls=Object.values(iphoriyaSlugs)
-      .filter(slug=>slug.startsWith('apple-macbook'))
-      .map(slug=>'https://iphoriya.ru/product/'+slug);
-    try {
-      const neoCategory=await (await fetch('https://iphoriya.ru/product-category/mac/macbook-neo/')).text();
-      productUrls.push(...[...neoCategory.matchAll(/href=["'](https:\/\/iphoriya\.ru\/product\/[^"']*macbook-neo[^"']*)["']/gi)].map(match=>match[1]));
-    } catch(e) { console.warn(`Айфория Neo category failed: ${e.message}`) }
-    const queue=[...new Set(productUrls)];
-    const worker=async()=>{while(queue.length){const url=queue.shift();const slug=url.split('/').filter(Boolean).at(-1);try{const html=await (await fetch(url)).text();const amount=jsonLdPrice(html);const title=(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||slug;const o=parseProduct(title,url,'Айфория',amount)||parseProduct(slug,url,'Айфория',amount);if(o)out.push(o)}catch{}}};await Promise.all(Array.from({length:4},worker));
-  }
-  if(wants('BigGeek')) {
-    const entries=Object.entries(bigGeekSlugs);
-    const queue=entries.slice();
-    const worker=async()=>{while(queue.length){const [,slug]=queue.shift();const url='https://biggeek.ru/products/'+slug;try{let html='',response;for(let attempt=0;attempt<3;attempt++){response=await fetch(url);if(response.ok){html=await response.text();break}await new Promise(r=>setTimeout(r,500*(attempt+1)))}if(!html)continue;const amount=jsonLdPrice(html)||price((html.match(/data-price="(\d+)"/i)||[])[1]);const title=(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||slug;const o=parseProduct(title,url,'BigGeek',amount)||parseProduct(slug,url,'BigGeek',amount);if(o)out.push(o)}catch{}}};await Promise.all(Array.from({length:3},worker));
-    const home=await (await fetch('https://biggeek.ru/')).text();
-    const paths=[...new Set([...home.matchAll(/href="(\/catalog\/macbook-[^"]+)"/gi)].map(m=>m[1]))];
-    for(const path of paths){const html=await (await fetch('https://biggeek.ru'+path)).text();const re=/<a href="(\/products\/[^\"]+)" class="catalog-card__title[^>]*>([\s\S]*?)<\/a>[\s\S]*?catalog-card__price[^>]*>[\s\S]*?cart-modal-count[^>]*>([\s\S]*?)<\//gi;for(const m of html.matchAll(re)){const o=parseProduct(m[2],'https://biggeek.ru'+m[1],'BigGeek',price(m[3]));if(o)out.push(o)}}
-  }
-  if(wants('RifaStore')) {
-    const homeUrl='https://rifastore.ru/';
-    const rifaHome=await (await fetch(homeUrl)).text();
-    const queue=findRifaCategoryUrls(rifaHome,homeUrl);
-    const seen=new Set();
-    while(queue.length){
-      const url=queue.shift();
-      if(seen.has(url)||seen.size>=400)continue;
-      seen.add(url);
-      const html=await (await fetch(url)).text();
-      for(const item of parseRifaCategory(html,url)){
-        const offer=parseProduct(item.title,item.url,'RifaStore',price(item.priceText));
-        if(offer)out.push(offer);
-      }
-      for(const pageUrl of findRifaPageUrls(html,url)) if(!seen.has(pageUrl)) queue.push(pageUrl);
+import { fetchTechnichnoOffers } from './technichno.mjs';
+import { buildCatalogRows } from './catalog-rows.mjs';
+import { assessCollection, knownProductUrls } from './collection-policy.mjs';
+import { extractProductPrice } from './structured-price.mjs';
+import { openMasterStore } from './master-store.mjs';
+
+const privateDir = 'data/private';
+await mkdir(`${privateDir}/backups`, { recursive: true, mode: 0o700 });
+const lockPath = `${privateDir}/build.lock`;
+async function acquireLock() {
+  try {
+    const handle = await open(lockPath, 'wx', 0o600);
+    await handle.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
+    await handle.close();
+  } catch (error) {
+    if (error.code !== 'EEXIST') throw error;
+    let owner;
+    try { owner = JSON.parse(await readFile(lockPath, 'utf8')); } catch { throw new Error('Нечитаемая блокировка сборщика; требуется проверка'); }
+    try { process.kill(owner.pid, 0); } catch (probe) {
+      if (probe.code === 'ESRCH') { await unlink(lockPath); return acquireLock(); }
+      throw probe;
     }
-  }
-  if(wants('Technichno')) {
-    for(const path of ['/catalog/mac/macbook-pro/','/catalog/mac/macbook-air-13-15/','/catalog/mac/macbook-neo/']){const html=await (await fetch('https://nn.technichno.ru'+path)).text();const re=/<a[^>]+href="([^"]+)"[^>]+class="product-card__name[^>]*>[\s\S]*?<p[^>]*>([^<]+)<\/p>[\s\S]*?<span class="product-card-price__current[^"]*">([\s\S]*?)<\/span>/gi;for(const m of html.matchAll(re)){const o=parseProduct(m[2],'https://nn.technichno.ru'+m[1],'Technichno',price(m[3]));if(o)out.push(o)}}
-  }
-  // Each retailer has its own adapter. BigGeek and Iphoriya are intentionally
-  // isolated here: their catalogue markup changes independently of Technichno.
-  const adapters=[
-    {retailer:'BigGeek',base:'https://biggeek.ru',paths:['/'],category:/href="(\/catalog\/macbook-[^"]+)"/gi,link:/href="([^"]*\/products\/[^\"]+)"/gi,price:/(?:data-price|data-card-price)="(\d+)"|((?:\d[\s]?){4,7})\s*(?:₽|руб)/gi},
-    {retailer:'Айфория',base:'https://iphoriya.ru',paths:['/'],link:/href="([^"]*(?:macbook|mac-book)[^"]*)"/gi,price:/((?:\d[\s]?){4,7})\s*(?:₽|руб)/gi}
-  ];
-  for(const adapter of target==='all'?adapters:[]){
-    try{
-      for(const path of adapter.paths){
-        const html=await (await fetch(adapter.base+path)).text();
-        if(adapter.category) adapter.paths.push(...[...html.matchAll(adapter.category)].map(m=>m[1]));
-        const links=[...html.matchAll(adapter.link)].map(m=>m[1].startsWith('http')?m[1]:adapter.base+m[1]).filter(url=>url.includes('/products/'));
-        for(const url of [...new Set(links)].slice(0,80)){
-          const page=await (await fetch(url)).text();
-          const title=(page.match(/<title[^>]*>([\s\S]*?)<\/title>/i)||[])[1]||url;
-          const amounts=[...page.matchAll(adapter.price)].map(m=>price(m[1]||m[2])).filter(Boolean);
-          const o=parseProduct(title,url,adapter.retailer,amounts[0]); if(o) out.push(o);
-        }
-      }
-    }catch(e){console.warn(`${adapter.retailer} live fetch failed: ${e.message}`)}
-  }
-  return out;
-}
-let live=[];
-if(process.env.LIVE==='1'){
-  try{
-    live=await fetchLive();
-    const requested=(process.env.RETAILER||'').split(',').map(value=>value.trim()).filter(Boolean);
-    const missing=requested.filter(retailer=>!live.some(offer=>offer.retailer===retailer||(retailer==='Iphoriya'&&offer.retailer==='Айфория')));
-    if(missing.length)throw new Error(`No live offers fetched for: ${missing.join(', ')}`);
-    console.log(`Fetched ${live.length} live offers`);
-  }catch(e){
-    console.error(`Live fetch failed: ${e.message}`);
-    process.exitCode=1;
+    throw new Error(`Сборщик уже работает (PID ${owner.pid})`);
   }
 }
-const liveRetailers=new Set(live.map(o=>o.retailer));
-const baseOffers=liveRetailers.size?[...offers.filter(o=>!liveRetailers.has(o.retailer)),...live]:[...offers,...live];
-const allOffers=[...new Map(baseOffers.map(o=>[`${o.retailer}|${o.url}|${o.price}`,o])).values()];
-const key = o => {
-  const fields=[o.model,o.chip,o.ramGb,o.storageGb,o.color];
-  if (/macbook\s+neo/i.test(o.model || '')) fields.push(o.cpuCores,o.gpuCores);
-  return fields.map(x => String(x ?? '').toLowerCase().replace(/[^a-zа-я0-9]+/gi, ' ').trim()).join('|');
+await acquireLock();
+const atomicJson = async (path, value) => {
+  const temporary = `${path}.${process.pid}.tmp`;
+  await writeFile(temporary, JSON.stringify(value, null, 2), { mode: 0o600 });
+  await rename(temporary, path);
 };
-const eligible = allOffers.filter(o => o.price != null && o.condition === 'new' && o.currency === 'RUB');
-const byKey = new Map();
-for (const offer of eligible) { const k=key(offer); byKey.set(k, [...(byKey.get(k)||[]), offer]); }
-const result = catalog.flatMap(item => item.colors.map(color => {
-  const productKey = key({model:item.name,chip:item.chip,ramGb:item.ramGb,storageGb:item.storageGb,color,cpuCores:item.cpuCores,gpuCores:item.gpuCores});
-  const items = [...(byKey.get(productKey)||[])].sort((a,b)=>a.price-b.price);
-  return {productKey, product:item, color, offers:items, best:items[0]||null};
-}));
-await writeFile('data/cheapest.json', JSON.stringify(result,null,2));
-console.log(`Built ${result.length} catalog rows from ${allOffers.length} offers`);
+let store;
+try {
+  const catalog = JSON.parse(await readFile('data/catalog.json', 'utf8'));
+  store = openMasterStore(`${privateDir}/master.sqlite`);
+  if (!store.getRuns().length) {
+    const snapshot = await readFile('data/cheapest.json', 'utf8').catch(error => { if (error.code === 'ENOENT') return '[]'; throw error; });
+    await writeFile(`${privateDir}/backups/before-master-migration-${Date.now()}.json`, snapshot, { flag: 'wx', mode: 0o600 });
+    const seeds = JSON.parse(await readFile('data/offers.json', 'utf8'));
+    const seedIds = new Set(seeds.map(o => `${o.retailer}|${o.url}|${o.fetchedAt}`));
+    const observations = JSON.parse(snapshot).flatMap(row => row.offers || []).filter(o => !seedIds.has(`${o.retailer}|${o.url}|${o.fetchedAt}`)).map(o => {
+      // Keep historical condition evidence and timestamps; all prices use RUB.
+      const parsed = parseProduct(o.rawTitle || o.title, o.url, o.retailer, o.price, o.fetchedAt);
+      return { ...o, ...parsed, currency: 'RUB', region: 'unknown', stock: o.stock || 'unknown', condition: parsed?.condition || 'unknown', qualityWarnings: [...new Set([...(o.qualityWarnings || []), ...(parsed?.qualityWarnings || [])])], visibility: 'public', dataKind: 'legacy', evidence: { ...parsed?.evidence, original: o, migration: 'legacy-unverified-v1' } };
+    });
+    store.ingestRun({ runId: 'legacy-migration-v1', observations, sources: [...new Set(observations.map(o => o.retailer))].map(retailer => ({ retailer, status: 'partial' })), actor: 'migration', reason: 'Сохранение исходного снимка; прежние предположения требуют проверки' });
+  }
+  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno'];
+  const selected = process.env.RETAILER && process.env.RETAILER !== 'all' ? [...new Set(process.env.RETAILER.split(',').map(x => x.trim() === 'Iphoriya' ? 'Айфория' : x.trim()))] : retailers;
+  if (selected.some(x => !retailers.includes(x))) throw new Error('Неизвестный источник RETAILER');
+  const runId = randomUUID(), startedAt = new Date().toISOString();
+  const sources = [], observations = [];
+  const reference = await readFile('apps-script/reference.gs', 'utf8');
+  const slugs = name => {
+    const block = reference.match(new RegExp(`var\\s+${name}\\s*=\\s*\\{([\\s\\S]*?)\\n\\};`))?.[1] || '';
+    return [...block.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(match => match[2]);
+  };
+  const runSignal = AbortSignal.timeout(12 * 60_000);
+  const fetchPage = async url => {
+    const response = await fetch(url, { signal: AbortSignal.any([runSignal, AbortSignal.timeout(20000)]), headers: { 'user-agent': 'Mozilla/5.0 MacPriceRadar/2.0' } });
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
+    return response.text();
+  };
+  const failedObservation = (retailer, url, title, error) => ({ retailer, url, title: title || url, price: null, priceMinor: null, currency: 'RUB', condition: 'unknown', fetchedAt: new Date().toISOString(), dataKind: 'live', visibility: 'public', validationStatus: 'rejected', qualityWarnings: [error] });
+  async function collect(retailer) {
+    const out = [], failures = [];
+    if (retailer === 'Technichno') {
+      const result = await fetchTechnichnoOffers({ fetchPage });
+      return { offers: result.offers, failures, counts: result.stats };
+    }
+    if (retailer === 'RifaStore') {
+      const home = 'https://rifastore.ru/';
+      const queue = findRifaCategoryUrls(await fetchPage(home), home), seen = new Set();
+      while (queue.length) {
+        const url = queue.shift(); if (seen.has(url)) continue;
+        if (seen.size >= 400) { failures.push('Достигнут лимит страниц'); break; }
+        seen.add(url);
+        try {
+          const html = await fetchPage(url);
+          for (const item of parseRifaCategory(html, url)) {
+            const offer = parseProduct(item.title, item.url, retailer, price(item.priceText), undefined, { rawPrice: item.priceText, evidence: { method: 'rifastore-category-card-v1', categoryUrl: url, rawPrice: item.priceText } });
+            out.push(offer || failedObservation(retailer, item.url, item.title, 'Не распознана цена/конфигурация'));
+          }
+          for (const next of findRifaPageUrls(html, url)) if (!seen.has(next)) queue.push(next);
+        } catch (error) { failures.push(error.message); }
+      }
+      return { offers: out, failures, counts: { pagesFetched: seen.size, found: out.length } };
+    }
+    const urls = knownProductUrls(store.getOffers({ includeRejected: true }), retailer);
+    for (const slug of slugs(retailer === 'BigGeek' ? 'SLUGS_BIGGEEK' : 'SLUGS_IPHORIYA')) {
+      if (retailer === 'Айфория' && !slug.startsWith('apple-macbook')) continue;
+      urls.add((retailer === 'BigGeek' ? 'https://biggeek.ru/products/' : 'https://iphoriya.ru/product/') + slug);
+    }
+    if (retailer === 'Айфория') {
+      try {
+        const html = await fetchPage('https://iphoriya.ru/product-category/mac/macbook-neo/');
+        for (const match of html.matchAll(/href=["'](https:\/\/iphoriya\.ru\/product\/[^"']*macbook-neo[^"']*)["']/gi)) urls.add(match[1]);
+      } catch (error) { failures.push(error.message); }
+    }
+    const queue = [...urls];
+    await Promise.all(Array.from({ length: 3 }, async () => {
+      while (queue.length) {
+        const url = queue.shift();
+        try {
+          const html = await fetchPage(url);
+          const extracted = extractProductPrice(html, url);
+          if (extracted.error) { out.push(failedObservation(retailer, url, extracted.title, extracted.error)); continue; }
+          const parsed = parseProduct(extracted.title, url, retailer, extracted.amount, undefined, extracted.metadata);
+          out.push(parsed || failedObservation(retailer, url, extracted.title, 'Не распознана конфигурация'));
+        } catch (error) { failures.push(error.message); }
+      }
+    }));
+    return { offers: out, failures, counts: { found: urls.size, parsed: out.filter(o => o.price).length, rejected: out.filter(o => !o.price).length } };
+  }
+  if (process.env.LIVE === '1') {
+    for (const retailer of selected) {
+      await atomicJson('data/status.json', { state: 'running', stage: 'fetching', source: retailer, completed: sources.length, total: selected.length, runId, startedAt, sources });
+      try {
+        const result = await collect(retailer);
+        const assessment = assessCollection(store.getOffers({ includeRejected: true }).filter(o => o.retailer === retailer && o.visibility !== 'private'), result.offers, result.failures);
+        sources.push({ retailer, status: assessment.status, counts: { ...result.counts, ...assessment.counts }, error: assessment.error });
+        observations.push(...assessment.observations.map(offer => ({ ...offer, visibility: 'public', dataKind: 'live' })));
+      } catch (error) { sources.push({ retailer, status: 'failed', error: error.message, counts: { published: 0 } }); }
+    }
+    store.ingestRun({ runId, startedAt, observations, sources, actor: 'parser', reason: 'Обновление публичных наблюдений' });
+  }
+  const result = buildCatalogRows(catalog, store.getOffers({ includeRejected: true }).filter(offer => offer.visibility !== 'private').map(({ raw, evidence, ...summary }) => summary));
+  await atomicJson('data/cheapest.json', result);
+  const failures = sources.filter(source => ['failed', 'degraded', 'partial'].includes(source.status));
+  await atomicJson('data/status.json', { state: failures.length ? 'degraded' : 'ready', stage: 'complete', completed: sources.length, total: sources.length, sources, runId, startedAt, updatedAt: new Date().toISOString(), error: failures.length ? failures.map(x => `${x.retailer}: ${x.error || x.status}`).join('; ') : null });
+  console.log(`Мастер-база: ${result.length} строк, ${result.reduce((n, r) => n + r.offers.length, 0)} наблюдений; ${failures.length} источников требуют проверки`);
+} finally {
+  store?.close();
+  await unlink(lockPath);
+}
