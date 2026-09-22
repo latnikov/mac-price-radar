@@ -38,13 +38,13 @@ test('BSA parser handles compact Pro core notation and ignores undated historica
   );
 });
 
-test('BSA collector uses injected MTProto history and requires no web fetch', async () => {
+test('BSA collector uses injected Business API messages and requires no web fetch', async () => {
   let calls = 0;
   const result = await fetchBsaOffers({
     now: '2026-09-23T10:00:00+03:00',
     readMessages: async () => { calls++; return [{ id: 300, text: '23/09/2026\nMDH74 Air 13 (M5 16/512) Silver-126.500' }]; },
   });
   assert.equal(calls, 1);
-  assert.equal(result.stats.protocol, 'MTProto');
+  assert.equal(result.stats.protocol, 'Telegram Business Bot API');
   assert.equal(result.offers[0].price, 126500);
 });

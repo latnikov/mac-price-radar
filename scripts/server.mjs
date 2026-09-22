@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { buildCatalogRows } from './catalog-rows.mjs';
+import { startBsaBusinessPolling } from './telegram-business.mjs';
 
 const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'RifaStore', 'BSA'];
 const STATIC_FILES = new Map([
@@ -165,5 +166,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 4173);
   const server = await createMasterServer();
+  const bsaPolling = startBsaBusinessPolling();
+  server.on('close', () => { void bsaPolling.stop(); });
   server.listen(port, '127.0.0.1', () => console.log(`Мастер-таблица: http://127.0.0.1:${port}/web/`));
 }

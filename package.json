@@ -11,7 +11,7 @@
     "dev": "node scripts/server.mjs",
     "export:public": "node scripts/export-public.mjs",
     "backup": "node scripts/backup.mjs",
-    "telegram:login": "node scripts/telegram-login.mjs"
+    "telegram:poll": "node scripts/telegram-business-poll.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",
@@ -20,8 +20,5 @@
   },
   "engines": {
     "node": ">=22.13.0"
-  },
-  "dependencies": {
-    "teleproto": "^1.229.0"
   }
 }

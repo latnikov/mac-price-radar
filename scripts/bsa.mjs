@@ -1,4 +1,5 @@
 import { parseProduct } from './offer-normalization.mjs';
+import { readCachedBsaMessages } from './telegram-business.mjs';
 
 function dateInTimeZone(now, timeZone) {
   const parts = new Intl.DateTimeFormat('en', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -129,7 +130,7 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
         priceType: 'full',
         buyerType: 'retail',
         minimumQuantity: 1,
-        evidence: { method: 'bsa-mtproto-price-list-v2', channel: '@BigSaleApple', postId, listDate, rawLine: line },
+        evidence: { method: 'bsa-business-bot-api-v1', channel: '@BigSaleApple', postId, listDate, rawLine: line },
       });
       if (!parsed) {
         failures.push(`BSA ${postId}, строка ${lineIndex + 1}: не распознана конфигурация`);
@@ -145,7 +146,7 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
         externalId: sku ? `${postId}:${sku}` : `${postId}:${sourceKey}`,
         sourceVariantId: sourceKey,
         validFrom: listDate,
-        evidence: { ...parsed.evidence, method: 'bsa-mtproto-price-list-v2', channel: '@BigSaleApple', postId, listDate, rawLine: line },
+        evidence: { ...parsed.evidence, method: 'bsa-business-bot-api-v1', channel: '@BigSaleApple', postId, listDate, rawLine: line },
       });
     }
   }
@@ -153,37 +154,12 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
   return {
     offers,
     failures,
-    stats: { protocol: 'MTProto', messages: messages.length, datedMessages, eligibleMessages, candidates, parsed: offers.length, rejected: failures.length, fromDate: today },
+    stats: { protocol: 'Telegram Business Bot API', messages: messages.length, datedMessages, eligibleMessages, candidates, parsed: offers.length, rejected: failures.length, fromDate: today },
   };
 }
 
-function credentials(env) {
-  const apiId = Number(env.TELEGRAM_API_ID);
-  const apiHash = String(env.TELEGRAM_API_HASH || '').trim();
-  const session = String(env.TELEGRAM_SESSION || '').trim();
-  if (!Number.isSafeInteger(apiId) || apiId <= 0 || !apiHash || !session) {
-    throw new Error('BSA MTProto не настроен: нужны TELEGRAM_API_ID, TELEGRAM_API_HASH и TELEGRAM_SESSION');
-  }
-  return { apiId, apiHash, session };
-}
-
-export async function readBsaMessages({ env = process.env, limit = 100 } = {}) {
-  const { apiId, apiHash, session } = credentials(env);
-  const [{ TelegramClient }, { StringSession }] = await Promise.all([
-    import('teleproto'),
-    import('teleproto/sessions/index.js'),
-  ]);
-  const client = new TelegramClient(new StringSession(session), apiId, apiHash, { connectionRetries: 3, requestRetries: 3 });
-  try {
-    await client.connect();
-    if (!await client.checkAuthorization()) throw new Error('Telegram-сессия BSA истекла; требуется повторный вход');
-    const history = await client.getMessages('@BigSaleApple', { limit, search: 'MacBook' });
-    return history
-      .filter(message => typeof message?.message === 'string' && message.message.trim())
-      .map(message => ({ id: String(message.id), text: message.message, date: message.date ? new Date(message.date * 1000).toISOString() : null }));
-  } finally {
-    await client.disconnect().catch(() => {});
-  }
+export async function readBsaMessages({ env = process.env } = {}) {
+  return readCachedBsaMessages({ env });
 }
 
 export async function fetchBsaOffers({ now = new Date(), timeZone = 'Europe/Moscow', env = process.env, readMessages = readBsaMessages } = {}) {
