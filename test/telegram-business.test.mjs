@@ -127,6 +127,7 @@ test('Webhook setup registers only the expected URL and update types', async () 
     TELEGRAM_BUSINESS_BOT_TOKEN: '123456:abcdefghijklmnopqrstuvwxyz',
     TELEGRAM_BUSINESS_WEBHOOK_URL: 'https://dev.example.test/api/telegram/bsa-webhook',
     TELEGRAM_BUSINESS_WEBHOOK_SECRET: 'secret_for_telegram',
+    TELEGRAM_BUSINESS_WEBHOOK_IP: '203.0.113.10',
   };
   const fetchImpl = async (url, options) => {
     calls.push({ url, body: JSON.parse(options.body) });
@@ -140,4 +141,5 @@ test('Webhook setup registers only the expected URL and update types', async () 
   assert.deepEqual(calls.map(call => call.url.split('/').at(-1)), ['setWebhook', 'getWebhookInfo']);
   assert.ok(calls[0].body.allowed_updates.includes('business_connection'));
   assert.equal(calls[0].body.secret_token, env.TELEGRAM_BUSINESS_WEBHOOK_SECRET);
+  assert.equal(calls[0].body.ip_address, env.TELEGRAM_BUSINESS_WEBHOOK_IP);
 });

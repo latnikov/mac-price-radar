@@ -219,14 +219,17 @@ export async function configureBusinessWebhook({ env = process.env, fetchImpl = 
   const token = configuredToken(env);
   const url = String(env.TELEGRAM_BUSINESS_WEBHOOK_URL || '').trim();
   const secret = String(env.TELEGRAM_BUSINESS_WEBHOOK_SECRET || '').trim();
+  const ipAddress = String(env.TELEGRAM_BUSINESS_WEBHOOK_IP || '').trim();
   if (!/^https:\/\/[^\s]+$/i.test(url)) throw new Error('Нужен HTTPS TELEGRAM_BUSINESS_WEBHOOK_URL');
   if (!/^[A-Za-z0-9_-]{16,256}$/.test(secret)) throw new Error('Некорректный TELEGRAM_BUSINESS_WEBHOOK_SECRET');
-  await botApi(token, 'setWebhook', {
+  const settings = {
     url,
     secret_token: secret,
     allowed_updates: BUSINESS_ALLOWED_UPDATES,
     drop_pending_updates: false,
-  }, { fetchImpl });
+  };
+  if (ipAddress) settings.ip_address = ipAddress;
+  await botApi(token, 'setWebhook', settings, { fetchImpl });
   const info = await botApi(token, 'getWebhookInfo', {}, { fetchImpl });
   if (info.url !== url) throw new Error('Telegram не сохранил ожидаемый webhook URL');
   return {
