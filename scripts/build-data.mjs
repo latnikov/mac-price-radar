@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { parseProduct, price } from './offer-normalization.mjs';
 import { findRifaCategoryUrls, findRifaPageUrls, parseRifaCategory } from './rifastore.mjs';
 import { fetchTechnichnoOffers } from './technichno.mjs';
+import { fetchBsaOffers } from './bsa.mjs';
 import { buildCatalogRows } from './catalog-rows.mjs';
 import { assessCollection, knownProductUrls } from './collection-policy.mjs';
 import { extractProductPrice } from './structured-price.mjs';
@@ -49,7 +50,7 @@ try {
     });
     store.ingestRun({ runId: 'legacy-migration-v1', observations, sources: [...new Set(observations.map(o => o.retailer))].map(retailer => ({ retailer, status: 'partial' })), actor: 'migration', reason: 'Сохранение исходного снимка; прежние предположения требуют проверки' });
   }
-  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno'];
+  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'BSA'];
   const selected = process.env.RETAILER && process.env.RETAILER !== 'all' ? [...new Set(process.env.RETAILER.split(',').map(x => x.trim() === 'Iphoriya' ? 'Айфория' : x.trim()))] : retailers;
   if (selected.some(x => !retailers.includes(x))) throw new Error('Неизвестный источник RETAILER');
   const runId = randomUUID(), startedAt = new Date().toISOString();
@@ -68,6 +69,10 @@ try {
   const failedObservation = (retailer, url, title, error) => ({ retailer, url, title: title || url, price: null, priceMinor: null, currency: 'RUB', condition: 'unknown', fetchedAt: new Date().toISOString(), dataKind: 'live', visibility: 'public', validationStatus: 'rejected', qualityWarnings: [error] });
   async function collect(retailer) {
     const out = [], failures = [];
+    if (retailer === 'BSA') {
+      const result = await fetchBsaOffers({ fetchPage });
+      return { offers: result.offers, failures: result.failures, counts: result.stats };
+    }
     if (retailer === 'Technichno') {
       const result = await fetchTechnichnoOffers({ fetchPage });
       return { offers: result.offers, failures, counts: result.stats };

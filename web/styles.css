@@ -78,6 +78,10 @@ th { position: sticky; top: 0; z-index: 2; background: #f3f5f8; white-space: now
 th:first-child, td:first-child { position: sticky; left: 0; background: white; z-index: 1; min-width: 150px; max-width: 200px; }
 th:first-child { background: #f3f5f8; z-index: 3; }
 tbody tr:hover td { background: #f7faff; }
+.best-price-heading { background: #e6f5eb; color: #2e6842; }
+.best-price-cell { background: #f1faf4; }
+.best-price-cell .price { color: #187b3c; }
+tbody tr:hover td.best-price-cell { background: #e8f7ed; }
 tbody tr:last-child td { border-bottom: 0; }
 td:nth-child(2), td:nth-child(3), td:nth-child(4), td:nth-child(5) { white-space: nowrap; }
 .price-cell { min-width: 157px; }

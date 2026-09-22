@@ -15,6 +15,7 @@ const plural = (n, forms) => forms[n % 100 >= 11 && n % 100 <= 14 ? 2 : n % 10 =
 const storage = value => value >= 1000 && value % 1000 === 0 ? `${value / 1000} TB` : value ? `${value} GB` : '—';
 const amount = offer => `${number(offer.price)} ₽`;
 const stock = offer => ['InStock', 'confirmed', 'source_reported'].includes(offer.stock) ? 'in' : ['OutOfStock', 'Discontinued', 'SoldOut'].includes(offer.stock) ? 'out' : 'unknown';
+const compareOffers = (a, b) => (stock(a) === 'out') - (stock(b) === 'out') || a.price - b.price;
 const stockLabel = offer => ({ in: 'В наличии на сайте', out: 'Нет в наличии', unknown: 'Наличие не указано' })[stock(offer)];
 const model = offer => String(offer.model || offer.title || 'Не распознано').replace(/\s+/g, ' ').trim();
 const family = offer => /MacBook\s+Air/i.test(model(offer)) ? 'air' : /MacBook\s+Pro/i.test(model(offer)) ? 'pro' : /MacBook\s+Neo/i.test(model(offer)) ? 'neo' : 'other';
@@ -137,15 +138,26 @@ function render() {
     return mode === 'price-up' ? priceA - priceB : mode === 'price-down' ? priceB - priceA : mode === 'fresh' ? Math.max(...b.offers.map(offer => Date.parse(offer.fetchedAt) || 0)) - Math.max(...a.offers.map(offer => Date.parse(offer.fetchedAt) || 0)) : key(a.sample).localeCompare(key(b.sample), 'ru', { numeric: true });
   });
   const heading = text('tr');
-  for (const name of ['Модель', 'Чип', 'RAM', 'SSD', 'Цвет', ...state.retailers]) heading.append(text('th', name));
+  for (const name of ['Модель', 'Чип', 'RAM', 'SSD', 'Цвет', 'Лучшая цена', ...state.retailers]) heading.append(text('th', name, name === 'Лучшая цена' ? 'best-price-heading' : null));
   $('head').replaceChildren(heading);
   const fragment = document.createDocumentFragment();
   for (const group of groupsSorted) {
     const row = text('tr'), sample = group.sample;
     for (const value of [model(sample), sample.chip || '—', sample.ramGb ? `${sample.ramGb} GB` : '—', storage(sample.storageGb), sample.color && sample.color !== 'unknown' ? sample.color : '—']) row.append(text('td', value));
+    const bestCell = text('td', null, 'price-cell best-price-cell');
+    const best = [...group.offers].sort(compareOffers)[0];
+    if (!best) bestCell.append(text('span', '—', 'empty-cell'));
+    else {
+      const details = text('details'), summary = text('summary');
+      summary.append(text('span', amount(best), 'price'), text('span', best.retailer, 'variant'));
+      if (stock(best) === 'out') summary.append(text('span', 'Нет в наличии', 'tag'));
+      else if (Date.now() - Date.parse(best.fetchedAt) > 4 * 3600000) summary.append(text('span', 'Старая проверка', 'tag warn'));
+      details.append(summary, offerDetail(best)); bestCell.append(details);
+    }
+    row.append(bestCell);
     for (const retailer of state.retailers) {
       const cell = text('td', null, 'price-cell');
-      const items = group.offers.filter(offer => offer.retailer === retailer).sort((a, b) => (stock(a) === 'out') - (stock(b) === 'out') || a.price - b.price);
+      const items = group.offers.filter(offer => offer.retailer === retailer).sort(compareOffers);
       if (!items.length) cell.append(text('span', '—', 'empty-cell'));
       else {
         const first = items[0], details = text('details'), summary = text('summary');

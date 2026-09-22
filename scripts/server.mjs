@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { buildCatalogRows } from './catalog-rows.mjs';
 
-const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'RifaStore'];
+const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'RifaStore', 'BSA'];
 const STATIC_FILES = new Map([
   ['/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/', ['web/index.html', 'text/html; charset=utf-8']],
