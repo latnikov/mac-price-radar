@@ -70,7 +70,7 @@ try {
   async function collect(retailer) {
     const out = [], failures = [];
     if (retailer === 'BSA') {
-      const result = await fetchBsaOffers({ fetchPage });
+      const result = await fetchBsaOffers({});
       return { offers: result.offers, failures: result.failures, counts: result.stats };
     }
     if (retailer === 'Technichno') {

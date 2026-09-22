@@ -1,24 +1,5 @@
 import { parseProduct } from './offer-normalization.mjs';
 
-export const BSA_CHANNEL_URL = 'https://t.me/s/BigSaleApple?q=MacBook';
-
-const namedEntities = new Map([
-  ['amp', '&'], ['quot', '"'], ['apos', "'"], ['lt', '<'], ['gt', '>'], ['nbsp', ' '],
-  ['ndash', '—'], ['mdash', '—'], ['hellip', '…'],
-]);
-
-function decodeHtml(value) {
-  return String(value ?? '')
-    .replace(/<br\s*\/?\s*>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (_, entity) => {
-      if (entity[0] !== '#') return namedEntities.get(entity.toLowerCase()) ?? `&${entity};`;
-      const number = entity[1].toLowerCase() === 'x' ? Number.parseInt(entity.slice(2), 16) : Number(entity.slice(1));
-      return Number.isFinite(number) ? String.fromCodePoint(number) : '';
-    })
-    .replace(/\r/g, '');
-}
-
 function dateInTimeZone(now, timeZone) {
   const parts = new Intl.DateTimeFormat('en', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
     .formatToParts(new Date(now));
@@ -114,27 +95,19 @@ function looksLikeProduct(line, contextModel) {
   return hasFamily && hasChip && hasMemory;
 }
 
-function messageSections(html) {
-  const matches = [...String(html).matchAll(/data-post=["']BigSaleApple\/(\d+)["']/gi)];
-  return matches.map((match, index) => {
-    const segment = html.slice(match.index, matches[index + 1]?.index ?? html.length);
-    const body = segment.match(/<div\s+class=["'][^"']*tgme_widget_message_text[^"']*["'][^>]*>([\s\S]*?)<\/div>/i)?.[1];
-    return body ? { postId: match[1], text: decodeHtml(body) } : null;
-  }).filter(Boolean);
-}
-
-export function parseBsaTelegramPage(html, { now = new Date(), timeZone = 'Europe/Moscow' } = {}) {
+export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europe/Moscow' } = {}) {
   const today = dateInTimeZone(now, timeZone);
-  const messages = messageSections(html);
   const offers = [], failures = [];
   let datedMessages = 0, eligibleMessages = 0, candidates = 0;
 
   for (const message of messages) {
-    const listDate = priceListDate(message.text);
+    const text = String(message.text ?? '').replace(/\r/g, '');
+    const postId = String(message.id ?? message.postId ?? 'unknown');
+    const listDate = priceListDate(text);
     if (listDate) datedMessages++;
     if (!listDate || listDate < today) continue;
     eligibleMessages++;
-    const joined = message.text.replace(/(\d+)\s*-\s*\n\s*Core\b/gi, '$1-Core');
+    const joined = text.replace(/(\d+)\s*-\s*\n\s*Core\b/gi, '$1-Core');
     let contextModel = null;
     for (const [lineIndex, rawLine] of joined.split('\n').entries()) {
       const line = rawLine.replace(/\s+/g, ' ').trim();
@@ -156,23 +129,23 @@ export function parseBsaTelegramPage(html, { now = new Date(), timeZone = 'Europ
         priceType: 'full',
         buyerType: 'retail',
         minimumQuantity: 1,
-        evidence: { method: 'bsa-telegram-price-list-v1', channel: '@BigSaleApple', postId: message.postId, listDate, rawLine: line },
+        evidence: { method: 'bsa-mtproto-price-list-v2', channel: '@BigSaleApple', postId, listDate, rawLine: line },
       });
       if (!parsed) {
-        failures.push(`BSA ${message.postId}, строка ${lineIndex + 1}: не распознана конфигурация`);
+        failures.push(`BSA ${postId}, строка ${lineIndex + 1}: не распознана конфигурация`);
         continue;
       }
       contextModel = parsed.model;
       const sourceKey = [sku || 'no-sku', parsed.model, parsed.chip, parsed.ramGb, parsed.storageGb, parsed.color, condition].join('|');
-      const url = new URL(`https://t.me/BigSaleApple/${message.postId}`);
+      const url = new URL(`https://t.me/BigSaleApple/${postId}`);
       url.searchParams.set('item', sourceKey);
       offers.push({
         ...parsed,
         url: url.href,
-        externalId: sku ? `${message.postId}:${sku}` : `${message.postId}:${sourceKey}`,
+        externalId: sku ? `${postId}:${sku}` : `${postId}:${sourceKey}`,
         sourceVariantId: sourceKey,
         validFrom: listDate,
-        evidence: { ...parsed.evidence, method: 'bsa-telegram-price-list-v1', channel: '@BigSaleApple', postId: message.postId, listDate, rawLine: line },
+        evidence: { ...parsed.evidence, method: 'bsa-mtproto-price-list-v2', channel: '@BigSaleApple', postId, listDate, rawLine: line },
       });
     }
   }
@@ -180,11 +153,40 @@ export function parseBsaTelegramPage(html, { now = new Date(), timeZone = 'Europ
   return {
     offers,
     failures,
-    stats: { pagesFetched: 1, messages: messages.length, datedMessages, eligibleMessages, candidates, parsed: offers.length, rejected: failures.length, fromDate: today },
+    stats: { protocol: 'MTProto', messages: messages.length, datedMessages, eligibleMessages, candidates, parsed: offers.length, rejected: failures.length, fromDate: today },
   };
 }
 
-export async function fetchBsaOffers({ fetchPage, now = new Date(), timeZone = 'Europe/Moscow' }) {
-  const html = await fetchPage(BSA_CHANNEL_URL);
-  return parseBsaTelegramPage(html, { now, timeZone });
+function credentials(env) {
+  const apiId = Number(env.TELEGRAM_API_ID);
+  const apiHash = String(env.TELEGRAM_API_HASH || '').trim();
+  const session = String(env.TELEGRAM_SESSION || '').trim();
+  if (!Number.isSafeInteger(apiId) || apiId <= 0 || !apiHash || !session) {
+    throw new Error('BSA MTProto не настроен: нужны TELEGRAM_API_ID, TELEGRAM_API_HASH и TELEGRAM_SESSION');
+  }
+  return { apiId, apiHash, session };
+}
+
+export async function readBsaMessages({ env = process.env, limit = 100 } = {}) {
+  const { apiId, apiHash, session } = credentials(env);
+  const [{ TelegramClient }, { StringSession }] = await Promise.all([
+    import('teleproto'),
+    import('teleproto/sessions/index.js'),
+  ]);
+  const client = new TelegramClient(new StringSession(session), apiId, apiHash, { connectionRetries: 3, requestRetries: 3 });
+  try {
+    await client.connect();
+    if (!await client.checkAuthorization()) throw new Error('Telegram-сессия BSA истекла; требуется повторный вход');
+    const history = await client.getMessages('@BigSaleApple', { limit, search: 'MacBook' });
+    return history
+      .filter(message => typeof message?.message === 'string' && message.message.trim())
+      .map(message => ({ id: String(message.id), text: message.message, date: message.date ? new Date(message.date * 1000).toISOString() : null }));
+  } finally {
+    await client.disconnect().catch(() => {});
+  }
+}
+
+export async function fetchBsaOffers({ now = new Date(), timeZone = 'Europe/Moscow', env = process.env, readMessages = readBsaMessages } = {}) {
+  const messages = await readMessages({ env });
+  return parseBsaMessages(messages, { now, timeZone });
 }
