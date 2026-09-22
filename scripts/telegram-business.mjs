@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 
 const DEFAULT_STATE_PATH = 'data/private/bsa-business.json';
 const DEFAULT_CHANNEL = 'BigSaleApple';
-const ALLOWED_UPDATES = [
+export const BUSINESS_ALLOWED_UPDATES = [
   'business_connection',
   'business_message',
   'edited_business_message',
@@ -156,7 +156,7 @@ export async function pollBusinessUpdates({
     offset: previous.lastUpdateId,
     limit: 100,
     timeout,
-    allowed_updates: ALLOWED_UPDATES,
+    allowed_updates: BUSINESS_ALLOWED_UPDATES,
   }, { fetchImpl, signal });
   const result = applyBusinessUpdates(previous, updates, { channel });
   if (!result.state.updatedAt) result.state.updatedAt = new Date().toISOString();
@@ -177,6 +177,9 @@ const wait = (milliseconds, signal) => new Promise((resolve, reject) => {
 });
 
 export function startBsaBusinessPolling({ env = process.env, logger = console } = {}) {
+  if (String(env.TELEGRAM_BUSINESS_WEBHOOK_SECRET || '').trim()) {
+    return { enabled: false, mode: 'webhook', stop: async () => {} };
+  }
   if (!String(env.TELEGRAM_BUSINESS_BOT_TOKEN || '').trim()) {
     return { enabled: false, stop: async () => {} };
   }
@@ -198,6 +201,38 @@ export function startBsaBusinessPolling({ env = process.env, logger = console } 
       controller.abort();
       await done;
     },
+  };
+}
+
+export async function ingestBusinessUpdate(update, {
+  env = process.env,
+  statePath = env.TELEGRAM_BSA_STATE_PATH || DEFAULT_STATE_PATH,
+  channel = env.TELEGRAM_BSA_CHANNEL || DEFAULT_CHANNEL,
+} = {}) {
+  const previous = await readBusinessState(statePath);
+  const result = applyBusinessUpdates(previous, [update], { channel });
+  if (result.changed) await writeBusinessState(statePath, result.state);
+  return result;
+}
+
+export async function configureBusinessWebhook({ env = process.env, fetchImpl = fetch } = {}) {
+  const token = configuredToken(env);
+  const url = String(env.TELEGRAM_BUSINESS_WEBHOOK_URL || '').trim();
+  const secret = String(env.TELEGRAM_BUSINESS_WEBHOOK_SECRET || '').trim();
+  if (!/^https:\/\/[^\s]+$/i.test(url)) throw new Error('Нужен HTTPS TELEGRAM_BUSINESS_WEBHOOK_URL');
+  if (!/^[A-Za-z0-9_-]{16,256}$/.test(secret)) throw new Error('Некорректный TELEGRAM_BUSINESS_WEBHOOK_SECRET');
+  await botApi(token, 'setWebhook', {
+    url,
+    secret_token: secret,
+    allowed_updates: BUSINESS_ALLOWED_UPDATES,
+    drop_pending_updates: false,
+  }, { fetchImpl });
+  const info = await botApi(token, 'getWebhookInfo', {}, { fetchImpl });
+  if (info.url !== url) throw new Error('Telegram не сохранил ожидаемый webhook URL');
+  return {
+    url: info.url,
+    pendingUpdateCount: info.pending_update_count,
+    lastErrorMessage: info.last_error_message || null,
   };
 }
 

@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { buildCatalogRows } from './catalog-rows.mjs';
-import { startBsaBusinessPolling } from './telegram-business.mjs';
+import { ingestBusinessUpdate, startBsaBusinessPolling } from './telegram-business.mjs';
 
 const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'RifaStore', 'BSA'];
 const STATIC_FILES = new Map([
@@ -51,7 +51,7 @@ function runCollector({ root, retailers, timeoutMs }) {
   }, error => error ? reject(new Error(error.killed ? 'Превышен срок выполнения сбора' : 'Сбор завершился с ошибкой; сохранён последний успешный снимок')) : resolveJob()));
 }
 
-export async function createMasterServer({ root = process.cwd(), store, refreshRunner = runCollector, refreshTimeoutMs = 15 * 60 * 1000 } = {}) {
+export async function createMasterServer({ root = process.cwd(), store, refreshRunner = runCollector, refreshTimeoutMs = 15 * 60 * 1000, env = process.env } = {}) {
   const ownsStore = !store;
   if (!store) {
     const { openMasterStore } = await import('./master-store.mjs');
@@ -62,6 +62,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
   const previews = new Map();
   let activeJob = null;
   let jobStatus = null;
+  let bsaWebhookQueue = Promise.resolve();
 
   async function status() {
     const saved = await readFile(join(root, 'data/status.json'), 'utf8').then(JSON.parse).catch(() => ({ state: 'idle', stage: 'idle' }));
@@ -92,6 +93,19 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       const url = new URL(req.url, `http://${req.headers.host}`);
       const path = url.pathname;
       if (!['GET', 'POST'].includes(req.method)) return send(res, 405, { error: 'Метод не поддерживается' });
+      if (path === '/api/telegram/bsa-webhook') {
+        if (req.method !== 'POST') return send(res, 405, { error: 'Метод не поддерживается' });
+        const supplied = Buffer.from(String(req.headers['x-telegram-bot-api-secret-token'] || ''));
+        const expected = Buffer.from(String(env.TELEGRAM_BUSINESS_WEBHOOK_SECRET || ''));
+        if (!expected.length || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+          return send(res, 403, { error: 'Неверный секрет Telegram webhook' });
+        }
+        const update = await jsonBody(req);
+        const task = bsaWebhookQueue.catch(() => {}).then(() => ingestBusinessUpdate(update, { env }));
+        bsaWebhookQueue = task;
+        const result = await task;
+        return send(res, 200, { ok: true, accepted: result.changed });
+      }
       if (req.method === 'POST') {
         const token = Buffer.from(String(req.headers['x-csrf-token'] || ''));
         const expected = Buffer.from(csrfToken);

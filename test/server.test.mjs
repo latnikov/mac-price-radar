@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { createMasterServer } from '../scripts/server.mjs';
 import { openMasterStore } from '../scripts/master-store.mjs';
 
-async function setup(t) {
+async function setup(t, options = {}) {
   const store=openMasterStore(':memory:');let refreshes=0;
-  const server=await createMasterServer({store,refreshRunner:async()=>{refreshes++;}});
+  const server=await createMasterServer({store,refreshRunner:async()=>{refreshes++;},...options});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const origin=`http://127.0.0.1:${server.address().port}`;
   t.after(async()=>{await new Promise(resolve=>server.close(resolve));store.close();});
@@ -25,6 +27,18 @@ test('AC17 project files and cross-site mutation are blocked; reading never refr
   assert.equal(hostileHostStatus,403);
   assert.equal((await app.post('/api/refresh',{retailer:'Technichno'})).status,202);
   assert.equal(app.refreshes(),1);
+});
+test('Telegram webhook requires its secret and bypasses browser CSRF only for that route',async t=>{
+  const directory = await mkdtemp(`${tmpdir()}/server-webhook-`);
+  t.after(async()=>{await rm(directory,{recursive:true,force:true});});
+  const env={TELEGRAM_BUSINESS_WEBHOOK_SECRET:'telegram_webhook_secret',TELEGRAM_BSA_STATE_PATH:`${directory}/state.json`};
+  const app=await setup(t,{env});
+  const body={update_id:50,business_message:{message_id:900,date:1800000600,chat:{id:-1001,type:'channel',username:'BigSaleApple'},text:'23/09/2026\nMDH74 Air 13 (M5 16/512) Silver-126.500'}};
+  const send=secret=>app.request('/api/telegram/bsa-webhook',{method:'POST',headers:{'content-type':'application/json','x-telegram-bot-api-secret-token':secret},body:JSON.stringify(body)});
+  assert.equal((await send('wrong')).status,403);
+  assert.equal((await send(env.TELEGRAM_BUSINESS_WEBHOOK_SECRET)).status,200);
+  const saved=JSON.parse(await readFile(env.TELEGRAM_BSA_STATE_PATH,'utf8'));
+  assert.equal(saved.messages[0].id,'900');
 });
 test('import commit applies only the reviewed payload, with a one-use expiring token',async t=>{
   const app=await setup(t);
