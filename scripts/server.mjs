@@ -52,7 +52,7 @@ function runCollector({ root, retailers, timeoutMs }) {
   }, error => error ? reject(new Error(error.killed ? 'Превышен срок выполнения сбора' : 'Сбор завершился с ошибкой; сохранён последний успешный снимок')) : resolveJob()));
 }
 
-export async function createMasterServer({ root = process.cwd(), store, refreshRunner = runCollector, refreshTimeoutMs = 15 * 60 * 1000, env = process.env } = {}) {
+export async function createMasterServer({ root = process.cwd(), store, refreshRunner = runCollector, refreshTimeoutMs = 15 * 60 * 1000, telegramRefreshDelayMs = 1500, env = process.env } = {}) {
   const ownsStore = !store;
   if (!store) {
     const { openMasterStore } = await import('./master-store.mjs');
@@ -64,6 +64,8 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
   let activeJob = null;
   let jobStatus = null;
   let bsaWebhookQueue = Promise.resolve();
+  let telegramRefreshTimer = null;
+  const pendingTelegramRetailers = new Set();
 
   async function status() {
     const saved = await readFile(join(root, 'data/status.json'), 'utf8').then(JSON.parse).catch(() => ({ state: 'idle', stage: 'idle' }));
@@ -82,8 +84,35 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
     activeJob = Promise.resolve().then(() => refreshRunner({ root, retailers: selected, timeoutMs: refreshTimeoutMs }))
       .then(() => { jobStatus = { ...jobStatus, state: 'ready', stage: 'complete', updatedAt: new Date().toISOString() }; })
       .catch(error => { jobStatus = { ...jobStatus, state: 'error', stage: 'failed', error: error.message, updatedAt: new Date().toISOString() }; })
-      .finally(() => { activeJob = null; });
+      .finally(() => {
+        activeJob = null;
+        if (pendingTelegramRetailers.size) scheduleTelegramRefresh([]);
+      });
     return true;
+  }
+
+  function telegramRetailers(sources) {
+    const bsaUsername = String(env.TELEGRAM_BSA_CHANNEL || 'BigSaleApple').replace(/^@/, '').toLowerCase();
+    const dimaChatId = String(env.TELEGRAM_DIMA_CHAT_ID || '-1003421701174');
+    const selected = new Set();
+    for (const source of sources || []) {
+      if (String(source.sourceUsername || '').replace(/^@/, '').toLowerCase() === bsaUsername) selected.add('BSA');
+      if (String(source.sourceChatId || '') === dimaChatId) selected.add('Дима');
+    }
+    return [...selected];
+  }
+
+  function scheduleTelegramRefresh(retailers) {
+    for (const retailer of retailers) pendingTelegramRetailers.add(retailer);
+    if (telegramRefreshTimer) clearTimeout(telegramRefreshTimer);
+    telegramRefreshTimer = setTimeout(() => {
+      telegramRefreshTimer = null;
+      if (activeJob) return scheduleTelegramRefresh([]);
+      const selected = [...pendingTelegramRetailers];
+      pendingTelegramRetailers.clear();
+      if (selected.length) refresh(selected);
+    }, Math.max(0, Number(telegramRefreshDelayMs) || 0));
+    telegramRefreshTimer.unref?.();
   }
 
   const server = createServer(async (req, res) => {
@@ -105,7 +134,9 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
         const task = bsaWebhookQueue.catch(() => {}).then(() => ingestBusinessUpdate(update, { env }));
         bsaWebhookQueue = task;
         const result = await task;
-        return send(res, 200, { ok: true, accepted: result.changed });
+        const scheduledRetailers = telegramRetailers(result.acceptedSources);
+        if (scheduledRetailers.length) scheduleTelegramRefresh(scheduledRetailers);
+        return send(res, 200, { ok: true, accepted: result.acceptedMessages > 0, refreshScheduled: scheduledRetailers });
       }
       if (req.method === 'POST') {
         const token = Buffer.from(String(req.headers['x-csrf-token'] || ''));
@@ -174,7 +205,10 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       send(res, code, { error: error.message || 'Не удалось выполнить действие' });
     }
   });
-  server.on('close', () => { if (ownsStore) store.close(); });
+  server.on('close', () => {
+    if (telegramRefreshTimer) clearTimeout(telegramRefreshTimer);
+    if (ownsStore) store.close();
+  });
   return server;
 }
 

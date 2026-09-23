@@ -88,6 +88,7 @@ export function applyBusinessUpdates(previous, updates, { maxMessages = 500 } = 
   const state = { ...emptyState(), ...previous, messages: [...(previous?.messages || [])] };
   state.schemaVersion = 2;
   let changed = false;
+  const acceptedSources = new Map();
   for (const update of updates) {
     const updateId = Number(update?.update_id);
     if (Number.isSafeInteger(updateId) && updateId >= state.lastUpdateId) {
@@ -101,6 +102,12 @@ export function applyBusinessUpdates(previous, updates, { maxMessages = 500 } = 
     }
     const message = cachedMessage(update);
     if (!message) continue;
+    const sourceKey = `${message.sourceChatId}:${username(message.sourceUsername)}`;
+    acceptedSources.set(sourceKey, {
+      sourceChatId: message.sourceChatId,
+      sourceUsername: message.sourceUsername,
+      sourceTitle: message.sourceTitle,
+    });
     const key = `${message.sourceChatId}:${message.id}`;
     const existing = state.messages.findIndex(item => `${item.sourceChatId}:${item.id}` === key);
     if (existing >= 0) state.messages.splice(existing, 1, message);
@@ -110,7 +117,7 @@ export function applyBusinessUpdates(previous, updates, { maxMessages = 500 } = 
   state.messages.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.id) - Number(a.id));
   state.messages = state.messages.slice(0, maxMessages);
   if (changed) state.updatedAt = new Date().toISOString();
-  return { state, changed };
+  return { state, changed, acceptedMessages: acceptedSources.size ? updates.map(cachedMessage).filter(Boolean).length : 0, acceptedSources: [...acceptedSources.values()] };
 }
 
 export async function readBusinessState(path = DEFAULT_STATE_PATH) {

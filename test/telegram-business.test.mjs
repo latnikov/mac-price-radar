@@ -44,6 +44,8 @@ test('Business API cache accepts multiple channels and preserves sender metadata
   assert.equal(result.state.messages.length, 2);
   assert.deepEqual(result.state.messages.map(message => message.sourceUsername).sort(), ['BigSaleApple', 'OtherChannel']);
   assert.equal(result.state.messages.find(message => message.id === '501').sourceTitle, 'BSA Store');
+  assert.equal(result.acceptedMessages, 2);
+  assert.deepEqual(result.acceptedSources.map(source => source.sourceUsername).sort(), ['BigSaleApple', 'OtherChannel']);
 });
 
 test('Business API cache accepts a forwarded BSA post and replaces its edited copy', () => {
@@ -68,6 +70,7 @@ test('Business API cache accepts a forwarded BSA post and replaces its edited co
   assert.match(edited.state.messages[0].text, /99\.000/);
   assert.equal(edited.state.messages[0].sourceTitle, 'BSA Store');
   assert.equal(edited.state.messages[0].forwardedByUsername, 'buyer');
+  assert.equal(edited.acceptedMessages, 1);
 });
 
 test('Business API cache ignores ordinary private messages that are not forwarded from a channel', () => {

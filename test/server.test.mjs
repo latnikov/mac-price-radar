@@ -33,13 +33,22 @@ test('Telegram webhook requires its secret and bypasses browser CSRF only for th
   const directory = await mkdtemp(`${tmpdir()}/server-webhook-`);
   t.after(async()=>{await rm(directory,{recursive:true,force:true});});
   const env={TELEGRAM_BUSINESS_WEBHOOK_SECRET:'telegram_webhook_secret',TELEGRAM_BSA_STATE_PATH:`${directory}/state.json`};
-  const app=await setup(t,{env});
+  const app=await setup(t,{env,telegramRefreshDelayMs:5});
   const body={update_id:50,business_message:{message_id:900,date:1800000600,chat:{id:-1001,type:'channel',username:'BigSaleApple'},text:'23/09/2026\nMDH74 Air 13 (M5 16/512) Silver-126.500'}};
   const send=secret=>app.request('/api/telegram/bsa-webhook',{method:'POST',headers:{'content-type':'application/json','x-telegram-bot-api-secret-token':secret},body:JSON.stringify(body)});
   assert.equal((await send('wrong')).status,403);
-  assert.equal((await send(env.TELEGRAM_BUSINESS_WEBHOOK_SECRET)).status,200);
+  const response=await send(env.TELEGRAM_BUSINESS_WEBHOOK_SECRET);
+  assert.equal(response.status,200);
+  assert.deepEqual((await response.json()).refreshScheduled,['BSA']);
   const saved=JSON.parse(await readFile(env.TELEGRAM_BSA_STATE_PATH,'utf8'));
   assert.equal(saved.messages[0].id,'900');
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(app.refreshes(),1);
+  const dima={update_id:51,message:{message_id:901,date:1800000601,chat:{id:42,type:'private'},forward_origin:{type:'channel',chat:{id:-1003421701174,type:'channel',title:'прайс от Л'},message_id:634},text:'MacBook MDHH4 Air 13 Sky Blue (M5, 16GB, 512GB) 2026 123500'}};
+  const dimaResponse=await app.request('/api/telegram/bsa-webhook',{method:'POST',headers:{'content-type':'application/json','x-telegram-bot-api-secret-token':env.TELEGRAM_BUSINESS_WEBHOOK_SECRET},body:JSON.stringify(dima)});
+  assert.deepEqual((await dimaResponse.json()).refreshScheduled,['Дима']);
+  await new Promise(resolve=>setTimeout(resolve,30));
+  assert.equal(app.refreshes(),2);
 });
 test('import commit applies only the reviewed payload, with a one-use expiring token',async t=>{
   const app=await setup(t);
