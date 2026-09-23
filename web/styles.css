@@ -6,6 +6,7 @@
   font-synthesis: none;
   --border: #e1e5ea;
   --blue: #235ecd;
+  --group-header-height: 34px;
 }
 * { box-sizing: border-box; }
 body { margin: 0; padding: 22px 24px; }
@@ -74,14 +75,35 @@ input:focus, select:focus { outline: 2px solid #cadbfa; outline-offset: 1px; }
 .table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 8px; background: white; max-height: 62vh; }
 table { border-collapse: separate; border-spacing: 0; min-width: 100%; font-variant-numeric: tabular-nums; font-size: 12px; }
 th, td { text-align: left; padding: 11px 12px; vertical-align: top; border-bottom: 1px solid #edf0f3; border-right: 1px solid #edf0f3; }
-th { position: sticky; top: 0; z-index: 2; background: #f3f5f8; white-space: nowrap; font-weight: 600; color: #58667b; font-size: 11px; }
-th:first-child, td:first-child { position: sticky; left: 0; background: white; z-index: 1; min-width: 150px; max-width: 200px; }
-th:first-child { background: #f3f5f8; z-index: 3; }
+th { position: sticky; z-index: 2; background: #f3f5f8; white-space: nowrap; font-weight: 600; color: #58667b; font-size: 11px; }
+.column-groups { height: var(--group-header-height); }
+.column-groups th { top: 0; }
+.retailer-headings th { top: var(--group-header-height); }
+td:first-child { position: sticky; left: 0; background: white; z-index: 1; min-width: 150px; max-width: 200px; }
+th.model-heading { left: 0; min-width: 150px; max-width: 200px; z-index: 4; }
+.retailer-group-heading { padding-top: 8px; padding-bottom: 8px; text-align: center; text-transform: uppercase; letter-spacing: .55px; font-size: 10px; border-left: 2px solid rgba(70, 83, 101, .2); border-bottom-color: rgba(80, 94, 113, .16); }
+.retailer-heading { text-align: center; }
+.retailer-group-start { border-left: 2px solid rgba(70, 83, 101, .2); }
 tbody tr:hover td { background: #f7faff; }
 .best-price-heading { background: #e6f5eb; color: #2e6842; }
 .best-price-cell { background: #f1faf4; }
 .best-price-cell .price { color: #187b3c; }
 tbody tr:hover td.best-price-cell { background: #e8f7ed; }
+.retailer-group-procurement { background: #f2dfc8; color: #765126; }
+.retailer-procurement { background: #fff8ef; }
+.retailer-heading.retailer-procurement { background: #faeddc; color: #765126; }
+tbody tr:hover td.retailer-procurement { background: #ffefd9; }
+.retailer-group-moscow { background: #dce9f8; color: #365e8e; }
+.retailer-moscow { background: #f5f9fe; }
+.retailer-heading.retailer-moscow { background: #eaf2fb; color: #365e8e; }
+tbody tr:hover td.retailer-moscow { background: #eaf3fd; }
+.retailer-group-nizhny { background: #dfeee2; color: #3f704a; }
+.retailer-nizhny { background: #f5faf6; }
+.retailer-heading.retailer-nizhny { background: #ebf5ed; color: #3f704a; }
+tbody tr:hover td.retailer-nizhny { background: #e9f5eb; }
+.retailer-group-other { background: #e8ebef; color: #5c6878; }
+.retailer-other { background: #fafbfc; }
+.retailer-heading.retailer-other { background: #f0f2f5; color: #5c6878; }
 tbody tr:last-child td { border-bottom: 0; }
 td:nth-child(2), td:nth-child(3), td:nth-child(4), td:nth-child(5) { white-space: nowrap; }
 .price-cell { min-width: 157px; }

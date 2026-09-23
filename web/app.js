@@ -9,6 +9,12 @@ const CURRENT_CHIPS = {
   neo: new Set(['A18 Pro']),
   imac: new Set(['M4']),
 };
+const RETAILER_GROUPS = [
+  { key: 'procurement', label: 'Закупка', retailers: [{ name: 'Дима', label: 'Дима' }, { name: 'BSA', label: 'BSA' }] },
+  { key: 'moscow', label: 'МСК / РФ', retailers: [{ name: 'BigGeek', label: 'BigGeek' }, { name: 'RifaStore', label: 'Rifa' }] },
+  { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }] },
+];
+const CONFIGURED_RETAILERS = RETAILER_GROUPS.flatMap(group => group.retailers.map(retailer => retailer.name));
 const text = (tag, value, cls) => { const node = document.createElement(tag); if (value != null) node.textContent = String(value); if (cls) node.className = cls; return node; };
 const date = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ru-RU') : 'Дата не указана';
 const number = value => Number(value).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
@@ -121,6 +127,12 @@ function offerDetail(offer) {
   return node;
 }
 
+function retailerGroups() {
+  const configured = new Set(CONFIGURED_RETAILERS);
+  const other = state.retailers.filter(retailer => !configured.has(retailer)).map(name => ({ name, label: name }));
+  return other.length ? [...RETAILER_GROUPS, { key: 'other', label: 'Другие', retailers: other }] : RETAILER_GROUPS;
+}
+
 function render() {
   const ready = state.filters.family !== null && state.filters.chip !== null;
   $('sort').disabled = !ready; $('export').disabled = !ready;
@@ -141,9 +153,26 @@ function render() {
     const priceA = Math.min(...a.offers.filter(offer => offer.marketEligible).map(offer => offer.price), Infinity), priceB = Math.min(...b.offers.filter(offer => offer.marketEligible).map(offer => offer.price), Infinity);
     return mode === 'price-up' ? priceA - priceB : mode === 'price-down' ? priceB - priceA : mode === 'fresh' ? Math.max(...b.offers.map(offer => Date.parse(offer.fetchedAt) || 0)) - Math.max(...a.offers.map(offer => Date.parse(offer.fetchedAt) || 0)) : key(a.sample).localeCompare(key(b.sample), 'ru', { numeric: true });
   });
-  const heading = text('tr');
-  for (const name of ['Модель', 'Чип', 'RAM', 'SSD', 'Цвет', 'Лучшая цена', ...state.retailers]) heading.append(text('th', name, name === 'Лучшая цена' ? 'best-price-heading' : null));
-  $('head').replaceChildren(heading);
+  const priceGroups = retailerGroups();
+  const groupHeading = text('tr', null, 'column-groups');
+  for (const name of ['Модель', 'Чип', 'RAM', 'SSD', 'Цвет']) {
+    const cell = text('th', name, name === 'Модель' ? 'model-heading' : null);
+    cell.rowSpan = 2; cell.scope = 'col'; groupHeading.append(cell);
+  }
+  const bestHeading = text('th', 'Лучшая цена', 'best-price-heading');
+  bestHeading.rowSpan = 2; bestHeading.scope = 'col'; groupHeading.append(bestHeading);
+  for (const group of priceGroups) {
+    const cell = text('th', group.label, `retailer-group-heading retailer-group-${group.key}`);
+    cell.colSpan = group.retailers.length; cell.scope = 'colgroup'; groupHeading.append(cell);
+  }
+  const retailerHeading = text('tr', null, 'retailer-headings');
+  for (const group of priceGroups) {
+    for (const [index, retailer] of group.retailers.entries()) {
+      const cell = text('th', retailer.label, `retailer-heading retailer-${group.key}${index === 0 ? ' retailer-group-start' : ''}`);
+      cell.scope = 'col'; retailerHeading.append(cell);
+    }
+  }
+  $('head').replaceChildren(groupHeading, retailerHeading);
   const fragment = document.createDocumentFragment();
   for (const group of groupsSorted) {
     const row = text('tr'), sample = group.sample;
@@ -159,9 +188,9 @@ function render() {
       details.append(summary, offerDetail(best)); bestCell.append(details);
     }
     row.append(bestCell);
-    for (const retailer of state.retailers) {
-      const cell = text('td', null, 'price-cell');
-      const items = group.offers.filter(offer => offer.retailer === retailer).sort(compareOffers);
+    for (const retailerGroup of priceGroups) for (const [index, retailer] of retailerGroup.retailers.entries()) {
+      const cell = text('td', null, `price-cell retailer-${retailerGroup.key}${index === 0 ? ' retailer-group-start' : ''}`);
+      const items = group.offers.filter(offer => offer.retailer === retailer.name).sort(compareOffers);
       if (!items.length) cell.append(text('span', '—', 'empty-cell'));
       else {
         const first = items[0], details = text('details'), summary = text('summary');
@@ -187,7 +216,9 @@ async function reload() {
   const offers = data.rows.flatMap(row => row.offers).filter(offer => offer.visibility !== 'private' && Number.isFinite(offer.price) && offer.price > 0);
   const latest = new Map();
   for (const offer of offers) { const id = [offer.retailer, offer.url, offer.keyboard, offer.paymentMethod, offer.minimumQuantity].join('|'); const prior = latest.get(id); if (!prior || Date.parse(offer.fetchedAt) >= Date.parse(prior.fetchedAt)) latest.set(id, offer); }
-  state.offers = [...latest.values()]; state.retailers = [...new Set(state.offers.map(offer => offer.retailer))].sort((a, b) => a.localeCompare(b, 'ru'));
+  state.offers = [...latest.values()];
+  const discovered = [...new Set(state.offers.map(offer => offer.retailer))];
+  state.retailers = [...CONFIGURED_RETAILERS, ...discovered.filter(retailer => !CONFIGURED_RETAILERS.includes(retailer)).sort((a, b) => a.localeCompare(b, 'ru'))];
   renderControls(); render();
 }
 
