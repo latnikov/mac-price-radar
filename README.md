@@ -53,7 +53,7 @@ TELEGRAM_BUSINESS_WEBHOOK_IP=135.106.220.39
 
 Сервису нужно передать этот файл как `EnvironmentFile`. Его права должны оставаться `0600`; содержимое нельзя коммитить или выводить в логи. В dev используется защищённый webhook `https://dev.macbookbro.ru/api/telegram/bsa-webhook`. `TELEGRAM_BUSINESS_WEBHOOK_IP` необязателен и привязывает доставку Telegram к конкретному IPv4. Если webhook-секрет не задан, сервер использует long polling как резервный режим. Для разовой проверки polling без запуска веб-сервера доступен `npm run telegram:poll`.
 
-Если Telegram не может установить входящее соединение с dev-сервером, `apps-script/telegram-relay.gs` можно развернуть как Google Apps Script Web App с доступом `Anyone`. В Script Properties задаются `TELEGRAM_RELAY_KEY`, `DEV_WEBHOOK_URL` и `DEV_WEBHOOK_SECRET`; в Telegram регистрируется URL вида `<web-app-url>?key=<TELEGRAM_RELAY_KEY>`. Релей не хранит посты и пересылает тело запроса в защищённый dev webhook.
+Если хостинг не может напрямую соединиться с Telegram, `apps-script/telegram-relay.gs` работает как минутный polling-релей. В Script Properties задаются `TELEGRAM_BOT_TOKEN`, `DEV_WEBHOOK_URL` и `DEV_WEBHOOK_SECRET`, после чего один раз запускается `installTelegramPoller`. Релей забирает очередь через Bot API, пересылает обновление в защищённый dev webhook и только после успешного ответа сохраняет следующий `TELEGRAM_LAST_UPDATE_ID`; поэтому недоставленное сообщение не подтверждается и будет повторено.
 
 Кнопка «Обновить цены» собирает выбранный магазин или все подключённые источники. Открытие страницы само по себе сбор не запускает. Ручной запуск:
 
