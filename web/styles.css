@@ -111,12 +111,6 @@ td:nth-child(2), td:nth-child(3), td:nth-child(4), td:nth-child(5) { white-space
 .price:hover { text-decoration: underline; }
 .empty-cell { color: #bbc3ce; }
 .variant { display: block; margin-top: 4px; color: #7c8796; font-size: 10px; line-height: 1.5; }
-.price-cell summary { cursor: pointer; list-style: none; }
-.price-cell summary::-webkit-details-marker { display: none; }
-.price-cell summary::after { content: '⌄'; padding-left: 8px; color: #9aa4b2; }
-.price-cell details[open] summary::after { content: '⌃'; }
-.offer { padding: 10px 0; border-top: 1px solid var(--border); margin-top: 9px; min-width: 190px; max-width: 310px; }
-.offer small { display: block; font-size: 10px; line-height: 1.55; color: #718094; }
 .tag { display: inline-block; padding: 2px 5px; background: #eef1f5; border-radius: 3px; font-size: 10px; margin-top: 5px; color: #7c8796; }
 .tag.warn { background: #fff4df; color: #976921; }
 footer { margin-top: 13px; font-size: 11px; color: #8590a0; }
