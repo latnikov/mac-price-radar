@@ -271,7 +271,7 @@ export async function readCachedChannelMessages({ env = process.env, channel, so
     if (wantedChatId && String(message.sourceChatId || '') === wantedChatId) return true;
     if (wantedUsername && username(message.sourceUsername) === wantedUsername) return true;
     // State written by v1 contained BSA messages only and had no source username.
-    return wantedUsername === username(DEFAULT_CHANNEL) && !message.sourceUsername;
+    return state.schemaVersion < 2 && wantedUsername === username(DEFAULT_CHANNEL) && !message.sourceUsername;
   });
   if (!messages.length) {
     const connection = state.businessConnection?.isEnabled ? 'подключение активно' : 'подключение ещё не подтверждено';
