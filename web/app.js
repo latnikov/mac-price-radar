@@ -12,7 +12,7 @@ const CURRENT_CHIPS = {
 const RETAILER_GROUPS = [
   { key: 'procurement', label: 'Закупка', retailers: [{ name: 'Дима', label: 'Дима' }, { name: 'BSA', label: 'BSA' }] },
   { key: 'moscow', label: 'МСК / РФ', retailers: [{ name: 'BigGeek', label: 'BigGeek' }, { name: 'RifaStore', label: 'Rifa' }] },
-  { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }] },
+  { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }, { name: 'iMobile', label: 'iMobile' }] },
 ];
 const CONFIGURED_RETAILERS = RETAILER_GROUPS.flatMap(group => group.retailers.map(retailer => retailer.name));
 const text = (tag, value, cls) => { const node = document.createElement(tag); if (value != null) node.textContent = String(value); if (cls) node.className = cls; return node; };
@@ -206,7 +206,7 @@ async function reload() {
   const data = await api('/api/master');
   const offers = data.rows.flatMap(row => row.offers).filter(offer => offer.visibility !== 'private' && Number.isFinite(offer.price) && offer.price > 0);
   const latest = new Map();
-  for (const offer of offers) { const id = [offer.retailer, offer.url, offer.keyboard, offer.paymentMethod, offer.minimumQuantity].join('|'); const prior = latest.get(id); if (!prior || Date.parse(offer.fetchedAt) >= Date.parse(prior.fetchedAt)) latest.set(id, offer); }
+  for (const offer of offers) { const id = offer.listingId || [offer.retailer, offer.externalId || offer.sourceVariantId || '', offer.url, offer.keyboard, offer.paymentMethod, offer.minimumQuantity].join('|'); const prior = latest.get(id); if (!prior || Date.parse(offer.fetchedAt) >= Date.parse(prior.fetchedAt)) latest.set(id, offer); }
   state.offers = [...latest.values()];
   const discovered = [...new Set(state.offers.map(offer => offer.retailer))];
   state.retailers = [...CONFIGURED_RETAILERS, ...discovered.filter(retailer => !CONFIGURED_RETAILERS.includes(retailer)).sort((a, b) => a.localeCompare(b, 'ru'))];

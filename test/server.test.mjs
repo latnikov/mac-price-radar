@@ -23,6 +23,7 @@ test('AC17 project files and cross-site mutation are blocked; reading never refr
   assert.equal((await app.request('/web/')).status,200);assert.equal((await app.request('/api/master')).status,200);assert.equal(app.refreshes(),0);
   assert.ok((await (await app.request('/api/session')).json()).retailers.includes('BSA'));
   assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Дима'));
+  assert.ok((await (await app.request('/api/session')).json()).retailers.includes('iMobile'));
   assert.equal((await app.request('/api/quotes',{method:'POST',headers:{origin:'https://evil.test','content-type':'application/json'},body:'{}'})).status,403);
   const hostileHostStatus = await new Promise((resolve,reject)=>{const request=httpRequest(app.origin+'/api/session',{headers:{host:'evil.test'}},response=>{response.resume();resolve(response.statusCode);});request.on('error',reject);request.end();});
   assert.equal(hostileHostStatus,403);

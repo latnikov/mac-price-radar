@@ -5,6 +5,7 @@ import { findRifaCategoryUrls, findRifaPageUrls, parseRifaCategory } from './rif
 import { fetchTechnichnoOffers } from './technichno.mjs';
 import { fetchBsaOffers } from './bsa.mjs';
 import { fetchDimaOffers } from './dima.mjs';
+import { fetchImobileOffers } from './imobile.mjs';
 import { buildCatalogRows } from './catalog-rows.mjs';
 import { assessCollection, knownProductUrls } from './collection-policy.mjs';
 import { extractProductPrice } from './structured-price.mjs';
@@ -52,7 +53,7 @@ try {
     });
     store.ingestRun({ runId: 'legacy-migration-v1', observations, sources: [...new Set(observations.map(o => o.retailer))].map(retailer => ({ retailer, status: 'partial' })), actor: 'migration', reason: 'Сохранение исходного снимка; прежние предположения требуют проверки' });
   }
-  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'BSA', 'Дима'];
+  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'BSA', 'Дима'];
   const selected = process.env.RETAILER && process.env.RETAILER !== 'all' ? [...new Set(process.env.RETAILER.split(',').map(x => x.trim() === 'Iphoriya' ? 'Айфория' : x.trim()))] : retailers;
   if (selected.some(x => !retailers.includes(x))) throw new Error('Неизвестный источник RETAILER');
   const runId = randomUUID(), startedAt = new Date().toISOString();
@@ -64,7 +65,14 @@ try {
   };
   const runSignal = AbortSignal.timeout(12 * 60_000);
   const fetchPage = async url => {
-    const response = await fetch(url, { signal: AbortSignal.any([runSignal, AbortSignal.timeout(20000)]), headers: { 'user-agent': 'Mozilla/5.0 MacPriceRadar/2.0' } });
+    const response = await fetch(url, {
+      signal: AbortSignal.any([runSignal, AbortSignal.timeout(20000)]),
+      headers: {
+        'user-agent': 'Mozilla/5.0 MacPriceRadar/2.0',
+        'cache-control': 'no-cache, no-store',
+        pragma: 'no-cache',
+      },
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
     return response.text();
   };
@@ -81,6 +89,10 @@ try {
     }
     if (retailer === 'Technichno') {
       const result = await fetchTechnichnoOffers({ fetchPage });
+      return { offers: result.offers, failures, counts: result.stats };
+    }
+    if (retailer === 'iMobile') {
+      const result = await fetchImobileOffers({ fetchPage });
       return { offers: result.offers, failures, counts: result.stats };
     }
     if (retailer === 'RifaStore') {

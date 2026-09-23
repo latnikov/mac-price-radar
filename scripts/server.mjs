@@ -8,7 +8,7 @@ import { buildCatalogRows } from './catalog-rows.mjs';
 import { ingestBusinessUpdate, startBsaBusinessPolling } from './telegram-business.mjs';
 import { inPublicSourceScope } from './domain.mjs';
 
-const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'RifaStore', 'BSA', 'Дима'];
+const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'RifaStore', 'BSA', 'Дима'];
 const STATIC_FILES = new Map([
   ['/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/', ['web/index.html', 'text/html; charset=utf-8']],

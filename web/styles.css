@@ -97,10 +97,10 @@ tbody tr:hover td.retailer-procurement { background: #ffefd9; }
 .retailer-moscow { background: #f5f9fe; }
 .retailer-heading.retailer-moscow { background: #eaf2fb; color: #365e8e; }
 tbody tr:hover td.retailer-moscow { background: #eaf3fd; }
-.retailer-group-nizhny { background: #dfeee2; color: #3f704a; }
-.retailer-nizhny { background: #f5faf6; }
-.retailer-heading.retailer-nizhny { background: #ebf5ed; color: #3f704a; }
-tbody tr:hover td.retailer-nizhny { background: #e9f5eb; }
+.retailer-group-nizhny { background: #e5dcf5; color: #65458b; }
+.retailer-nizhny { background: #faf7fe; }
+.retailer-heading.retailer-nizhny { background: #f0eafa; color: #65458b; }
+tbody tr:hover td.retailer-nizhny { background: #f1eafd; }
 .retailer-group-other { background: #e8ebef; color: #5c6878; }
 .retailer-other { background: #fafbfc; }
 .retailer-heading.retailer-other { background: #f0f2f5; color: #5c6878; }

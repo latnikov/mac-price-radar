@@ -61,7 +61,7 @@ export function parseProduct(title, url, retailer, amount, fetchedAt = new Date(
 
   const macBookColorMap = [
     ['Sky Blue', 'sky blue|sky-blue|небесно[ -]голуб|nebesno[ -]golub|goluboe'],
-    ['Midnight', 'midnight|полуноч|polunochn|temnaa[ -]noc'],
+    ['Midnight', 'midnight|полуноч|т[её]мн(?:ая|ую)?[ -]ноч|polunochn|temnaa[ -]noc'],
     ['Starlight', 'starlight|сияющ|zvezda'],
     ['Blush', 'blush|румян|rumyan|rumian|розов|rozov|pink'],
     ['Citrus', 'citrus|цитрус|tsitrus|желт|zhelt|yellow'],

@@ -54,3 +54,19 @@ test('HTML entities in a current product heading do not reduce price coverage',(
     assert.equal(parsed.amount,280990);assert.equal(parsed.metadata.currency,'RUB');
   }
 });
+test('BigGeek uses the current checkout price, not stale JSON-LD, old or add-on prices',()=>{
+  const url='https://biggeek.ru/products/noutbuk-apple-macbook-air-13-mdhe4-m5-10-core-gpu-8-core-16gb-512gb-temnaa-noc-midnight';
+  const product={'@type':'Product',name:'MacBook Air 13 M5 16GB 512GB Midnight',offers:{'@type':'Offer',price:139990,priceCurrency:'RUB',availability:'https://schema.org/InStock'}};
+  const html=`<h1>${product.name}</h1>
+    <div class="prod-info-price" data-card-price="150690" data-price="136990">
+      <span class="total-prod-price">136 990</span><span class="old-price">147 990</span>
+    </div>
+    <a class="addon" data-price="5 490">Accessory</a>
+    <script type="application/ld+json">${JSON.stringify(product)}</script>`;
+  const parsed=extractProductPrice(html,url);
+  assert.equal(parsed.error,undefined);
+  assert.equal(parsed.amount,136990);
+  assert.equal(parsed.metadata.stock,'InStock');
+  assert.equal(parsed.metadata.evidence.method,'biggeek-checkout-price-v1');
+  assert.equal(parsed.metadata.evidence.structuredPrice,139990);
+});
