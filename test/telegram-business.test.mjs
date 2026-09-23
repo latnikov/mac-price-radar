@@ -3,7 +3,13 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { applyBusinessUpdates, configureBusinessWebhook, ingestBusinessUpdate, pollBusinessUpdates, readCachedChannelMessages } from '../scripts/telegram-business.mjs';
+import { applyBusinessUpdates, businessDeliveryMode, configureBusinessWebhook, ingestBusinessUpdate, pollBusinessUpdates, readCachedChannelMessages } from '../scripts/telegram-business.mjs';
+
+test('Telegram delivery can use polling while keeping the webhook secret configured', () => {
+  assert.equal(businessDeliveryMode({ TELEGRAM_BUSINESS_WEBHOOK_SECRET: 'secret' }), 'webhook');
+  assert.equal(businessDeliveryMode({ TELEGRAM_BUSINESS_WEBHOOK_SECRET: 'secret', TELEGRAM_BUSINESS_DELIVERY_MODE: 'polling' }), 'polling');
+  assert.throws(() => businessDeliveryMode({ TELEGRAM_BUSINESS_DELIVERY_MODE: 'redirect' }), /polling или webhook/);
+});
 
 test('Business API cache accepts multiple channels and preserves sender metadata', () => {
   const result = applyBusinessUpdates(null, [

@@ -173,6 +173,14 @@ export async function pollBusinessUpdates({
   return { ...result, received: updates.length };
 }
 
+export function businessDeliveryMode(env = process.env) {
+  const configured = String(env.TELEGRAM_BUSINESS_DELIVERY_MODE || '').trim().toLowerCase();
+  if (configured && !['polling', 'webhook'].includes(configured)) {
+    throw new Error('TELEGRAM_BUSINESS_DELIVERY_MODE должен быть polling или webhook');
+  }
+  return configured || (String(env.TELEGRAM_BUSINESS_WEBHOOK_SECRET || '').trim() ? 'webhook' : 'polling');
+}
+
 const wait = (milliseconds, signal) => new Promise((resolve, reject) => {
   const onAbort = () => {
     clearTimeout(timer);
@@ -186,7 +194,7 @@ const wait = (milliseconds, signal) => new Promise((resolve, reject) => {
 });
 
 export function startBsaBusinessPolling({ env = process.env, logger = console } = {}) {
-  if (String(env.TELEGRAM_BUSINESS_WEBHOOK_SECRET || '').trim()) {
+  if (businessDeliveryMode(env) === 'webhook') {
     return { enabled: false, mode: 'webhook', stop: async () => {} };
   }
   if (!String(env.TELEGRAM_BUSINESS_BOT_TOKEN || '').trim()) {
