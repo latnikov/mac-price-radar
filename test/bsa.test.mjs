@@ -39,7 +39,7 @@ test('BSA parser handles compact Pro core notation and ignores undated historica
   );
 });
 
-test('BSA parser resets sections and never turns iMac or Mac Mini into MacBooks', () => {
+test('BSA parser keeps iMac separate and never turns Mac Mini into MacBooks', () => {
   const messages = [{ id: 250, text: `iMac
 23/09/2026
 🇺🇸🍏[MU9D3] Mac Mini M4 (16/256)-73.000
@@ -55,11 +55,17 @@ iMac M4
   const result = parseBsaMessages(messages, { now: '2026-09-23T10:00:00+03:00' });
   assert.equal(result.failures.length, 0);
   assert.deepEqual(result.offers.map(offer => offer.model), [
+    'iMac 24"',
     'MacBook Neo 13"',
     'MacBook Air 13"',
     'MacBook Pro 14"',
+    'iMac 24"',
   ]);
-  assert.ok(result.offers.every(offer => !/iMac|Mac Mini/i.test(offer.title)));
+  assert.ok(result.offers.every(offer => !/Mac Mini/i.test(offer.title)));
+  assert.deepEqual(result.offers.filter(offer => offer.model === 'iMac 24"').map(offer => [offer.cpuCores, offer.gpuCores, offer.ramGb, offer.storageGb, offer.color]), [
+    [8, 8, 16, 256, 'Blue'],
+    [10, 10, 16, 1000, 'Silver'],
+  ]);
 });
 
 test('BSA collector uses injected Business API messages and requires no web fetch', async () => {

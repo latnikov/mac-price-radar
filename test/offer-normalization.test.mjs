@@ -45,3 +45,11 @@ test('Technichno colors work in full titles and transliterated leaf slugs', () =
   }
   assert.equal(parse('MacBook Air 13 M5 16GB / 512GB Небесно голубой').color, 'Sky Blue');
 });
+
+test('normalizes iMac identity and keeps desktop colors distinct from MacBook colors', () => {
+  const blue = parse('iMac 24" M4 10c CPU 10c GPU 16GB RAM 512GB SSD Blue');
+  const pink = parse('iMac 24" M4 10c CPU 10c GPU 24GB RAM 1TB SSD Pink');
+  assert.deepEqual([blue.model, blue.chip, blue.cpuCores, blue.gpuCores, blue.ramGb, blue.storageGb, blue.color, blue.screenIn], ['iMac 24"', 'M4', 10, 10, 16, 512, 'Blue', 24]);
+  assert.equal(pink.color, 'Pink');
+  assert.equal(pink.storageGb, 1000);
+});

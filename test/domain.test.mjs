@@ -1,12 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { moneyMinor, variantKey, assessOffer } from '../scripts/domain.mjs';
+import { moneyMinor, variantKey, assessOffer, inPublicSourceScope } from '../scripts/domain.mjs';
 import { parseProduct } from '../scripts/offer-normalization.mjs';
 import { extractProductPrice } from '../scripts/structured-price.mjs';
 
 test('AC-05 strict monetary formats reject signs, ambiguous locale, monthly strings and zero', () => {
   for (const input of ['99 990,00 ₽', '99990.00', 99990]) assert.equal(moneyMinor(input), 9999000);
   for (const input of ['99.990 ₽', '-100', '99,990', 'от 99990', '9990 /мес', 0, NaN, '99 99']) assert.equal(moneyMinor(input), null, String(input));
+});
+test('BSA public scope excludes non-target desktop families without hiding iMac', () => {
+  assert.equal(inPublicSourceScope({ retailer: 'BSA', title: 'Mac Mini M4', model: 'MacBook Pro 14"' }), false);
+  assert.equal(inPublicSourceScope({ retailer: 'BSA', title: 'iMac 24" M4', model: 'iMac 24"' }), true);
+  assert.equal(inPublicSourceScope({ retailer: 'Дима', title: 'Mac Mini M4' }), true);
 });
 test('AC-01 cores, keyboards and region never collapse, unknown cannot claim exact', () => {
   const a={model:'Air',chip:'M5',ramGb:16,storageGb:512,screenIn:13,color:'Silver',cpuCores:10,gpuCores:8,keyboard:'US',region:'US',displayType:'standard',bundle:'standard',url:'https://a.test/a',retailer:'a'};

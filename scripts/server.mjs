@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { buildCatalogRows } from './catalog-rows.mjs';
 import { ingestBusinessUpdate, startBsaBusinessPolling } from './telegram-business.mjs';
+import { inPublicSourceScope } from './domain.mjs';
 
-const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'RifaStore', 'BSA'];
+const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'RifaStore', 'BSA', 'Дима'];
 const STATIC_FILES = new Map([
   ['/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/', ['web/index.html', 'text/html; charset=utf-8']],
@@ -143,7 +144,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       if (path === '/status' || path === '/api/status') return send(res, 200, await status());
       if (path === '/api/master') {
         const catalog = JSON.parse(await readFile(join(root, 'data/catalog.json'), 'utf8'));
-        const offers = store.getOffers({ includeRejected: true }).map(({ raw, evidence, ...summary }) => summary);
+        const offers = store.getOffers({ includeRejected: true }).filter(inPublicSourceScope).map(({ raw, evidence, ...summary }) => summary);
         const rows = buildCatalogRows(catalog, offers);
         for (const quote of store.listQuotes()) {
           if (rows.some(row => row.productKey === quote.variantId || row.product.id === quote.variantId || row.offers.some(offer => offer.listingId === quote.listingId))) continue;
@@ -151,7 +152,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
         }
         return send(res, 200, { schemaVersion: 1, generatedAt: new Date().toISOString(), rows });
       }
-      if (path === '/api/offers') return send(res, 200, store.getOffers({ includeRejected: true }));
+      if (path === '/api/offers') return send(res, 200, store.getOffers({ includeRejected: true }).filter(inPublicSourceScope));
       if (path === '/api/history') {
         const listingId = url.searchParams.get('listingId') || url.searchParams.get('offerId');
         if (!listingId) return send(res, 400, { error: 'Не указан listingId' });

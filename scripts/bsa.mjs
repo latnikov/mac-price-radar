@@ -111,6 +111,15 @@ function looksLikeProduct(line, contextModel) {
   return hasFamily && hasChip && hasMemory;
 }
 
+function normalizeImacTitle(line) {
+  const normalized = line.normalize('NFKC');
+  const match = normalized.match(/\biMac\s+(M\d+(?:\s+(?:Pro|Max|Ultra))?)\s*\(\s*(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{1,3})\s*\/\s*(\d{1,4})\s*(TB|ТБ|GB|ГБ)?\s*\)\s*(Silver|Blue|Green|Orange|Yellow|Pink|Purple)\b/i);
+  if (!match) return null;
+  const [, chip, cpu, gpu, ram, storage, unit = '', color] = match;
+  const storageLabel = /TB|ТБ/i.test(unit) ? `${storage}TB` : `${storage}GB`;
+  return `iMac 24" ${chip} ${cpu}c CPU ${gpu}c GPU ${ram}GB RAM ${storageLabel} SSD ${color}`;
+}
+
 export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europe/Moscow' } = {}) {
   const today = dateInTimeZone(now, timeZone);
   const offers = [], failures = [];
@@ -135,7 +144,45 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
       if (!line) continue;
       contextModel = contextFrom(line, contextModel);
       const extracted = extractPrice(line);
-      if (!extracted || !looksLikeProduct(line, contextModel)) continue;
+      if (!extracted) continue;
+      const imacTitle = normalizeImacTitle(extracted.title);
+      if (imacTitle) {
+        candidates++;
+        const sku = skuFrom(line);
+        const parsed = parseProduct(imacTitle, `https://t.me/${sourceUsername}`, 'BSA', extracted.amount, new Date(now).toISOString(), {
+          rawPrice: extracted.rawPrice,
+          sourceType: 'telegram_channel',
+          stock: 'source_reported',
+          condition: 'new',
+          region: regionFrom(line),
+          keyboard: /\bРус\b/i.test(line) ? 'RU' : 'unknown',
+          displayType: 'standard',
+          bundle: 'standard',
+          priceType: 'full',
+          buyerType: 'retail',
+          minimumQuantity: 1,
+          sourceSender,
+          sourceTitle,
+          sourceUsername: `@${sourceUsername}`,
+          evidence: { method: 'telegram-forward-v2', sourceTitle, sourceUsername: `@${sourceUsername}`, sourceChatId: message.sourceChatId || null, postId, listDate, rawLine: line },
+        });
+        if (!parsed) {
+          failures.push(`BSA ${postId}, строка ${lineIndex + 1}: не распознана конфигурация iMac`);
+          continue;
+        }
+        const sourceKey = [sku || 'no-sku', parsed.model, parsed.chip, parsed.cpuCores, parsed.gpuCores, parsed.ramGb, parsed.storageGb, parsed.color].join('|');
+        const url = new URL(`https://t.me/${sourceUsername}/${postId}`);
+        url.searchParams.set('item', sourceKey);
+        offers.push({
+          ...parsed,
+          url: url.href,
+          externalId: sku ? `${postId}:${sku}` : `${postId}:${sourceKey}`,
+          sourceVariantId: sourceKey,
+          validFrom: listDate,
+        });
+        continue;
+      }
+      if (!looksLikeProduct(line, contextModel)) continue;
       candidates++;
       const title = normalizeProductTitle(extracted.title, contextModel);
       const sku = skuFrom(line);
@@ -150,6 +197,8 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
         priceType: 'full',
         buyerType: 'retail',
         minimumQuantity: 1,
+        displayType: 'standard',
+        bundle: 'standard',
         sourceSender,
         sourceTitle,
         sourceUsername: `@${sourceUsername}`,

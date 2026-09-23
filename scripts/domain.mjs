@@ -5,6 +5,7 @@ export const known = value => value !== undefined && value !== null && value !==
 export const identityFields = ['model', 'chip', 'cpuCores', 'gpuCores', 'ramGb', 'storageGb', 'screenIn', 'color', 'keyboard', 'region', 'displayType', 'bundle'];
 export const canonicalModelName = value => /^MacBook\s+Neo(?:\s+13(?:["”]|\s*дюйм)?)?$/i.test(String(value ?? '').trim()) ? 'MacBook Neo 13"' : value;
 export const canonicalStorageGb = value => ({ 1024: 1000, 2048: 2000, 4096: 4000, 8192: 8000, 16384: 16000 })[Number(value)] ?? value;
+export const inPublicSourceScope = offer => offer?.retailer !== 'BSA' || !/\b(?:Mac\s*Mini|Mac\s*Studio|Studio\s*Display|Pro\s*Display)\b/i.test(String(offer.title || offer.rawTitle || ''));
 export const canonicalUrl = value => {
   try {
     const url = new URL(value);

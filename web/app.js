@@ -7,6 +7,7 @@ const CURRENT_CHIPS = {
   air: new Set(['M5']),
   pro: new Set(['M5', 'M5 Pro', 'M5 Max']),
   neo: new Set(['A18 Pro']),
+  imac: new Set(['M4']),
 };
 const text = (tag, value, cls) => { const node = document.createElement(tag); if (value != null) node.textContent = String(value); if (cls) node.className = cls; return node; };
 const date = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ru-RU') : 'Дата не указана';
@@ -18,8 +19,8 @@ const stock = offer => ['InStock', 'confirmed', 'source_reported'].includes(offe
 const compareOffers = (a, b) => (stock(a) === 'out') - (stock(b) === 'out') || a.price - b.price;
 const stockLabel = offer => ({ in: 'В наличии на сайте', out: 'Нет в наличии', unknown: 'Наличие не указано' })[stock(offer)];
 const model = offer => String(offer.model || offer.title || 'Не распознано').replace(/\s+/g, ' ').trim();
-const family = offer => /MacBook\s+Air/i.test(model(offer)) ? 'air' : /MacBook\s+Pro/i.test(model(offer)) ? 'pro' : /MacBook\s+Neo/i.test(model(offer)) ? 'neo' : 'other';
-const screen = offer => offer.screenIn || Number(model(offer).match(/\b(13|14|15|16)\b/)?.[1]) || null;
+const family = offer => /MacBook\s+Air/i.test(model(offer)) ? 'air' : /MacBook\s+Pro/i.test(model(offer)) ? 'pro' : /MacBook\s+Neo/i.test(model(offer)) ? 'neo' : /^iMac\b/i.test(model(offer)) ? 'imac' : 'other';
+const screen = offer => offer.screenIn || Number(model(offer).match(/\b(13|14|15|16|24|27)\b/)?.[1]) || null;
 const key = offer => [model(offer), offer.chip, offer.ramGb, offer.storageGb, offer.color].join('|');
 const characteristics = offer => [offer.cpuCores ? `CPU ${offer.cpuCores}` : null, offer.gpuCores ? `GPU ${offer.gpuCores}` : null, offer.keyboard && offer.keyboard !== 'unknown' ? `KB ${offer.keyboard}` : null, offer.region && offer.region !== 'unknown' ? offer.region : null].filter(Boolean).join(' · ');
 const message = value => { $('message').textContent = value; $('message').hidden = !value; };

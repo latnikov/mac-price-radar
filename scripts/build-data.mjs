@@ -4,10 +4,12 @@ import { parseProduct, price } from './offer-normalization.mjs';
 import { findRifaCategoryUrls, findRifaPageUrls, parseRifaCategory } from './rifastore.mjs';
 import { fetchTechnichnoOffers } from './technichno.mjs';
 import { fetchBsaOffers } from './bsa.mjs';
+import { fetchDimaOffers } from './dima.mjs';
 import { buildCatalogRows } from './catalog-rows.mjs';
 import { assessCollection, knownProductUrls } from './collection-policy.mjs';
 import { extractProductPrice } from './structured-price.mjs';
 import { openMasterStore } from './master-store.mjs';
+import { inPublicSourceScope } from './domain.mjs';
 
 const privateDir = 'data/private';
 await mkdir(`${privateDir}/backups`, { recursive: true, mode: 0o700 });
@@ -50,7 +52,7 @@ try {
     });
     store.ingestRun({ runId: 'legacy-migration-v1', observations, sources: [...new Set(observations.map(o => o.retailer))].map(retailer => ({ retailer, status: 'partial' })), actor: 'migration', reason: 'Сохранение исходного снимка; прежние предположения требуют проверки' });
   }
-  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'BSA'];
+  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'BSA', 'Дима'];
   const selected = process.env.RETAILER && process.env.RETAILER !== 'all' ? [...new Set(process.env.RETAILER.split(',').map(x => x.trim() === 'Iphoriya' ? 'Айфория' : x.trim()))] : retailers;
   if (selected.some(x => !retailers.includes(x))) throw new Error('Неизвестный источник RETAILER');
   const runId = randomUUID(), startedAt = new Date().toISOString();
@@ -71,6 +73,10 @@ try {
     const out = [], failures = [];
     if (retailer === 'BSA') {
       const result = await fetchBsaOffers({});
+      return { offers: result.offers, failures: result.failures, counts: result.stats };
+    }
+    if (retailer === 'Дима') {
+      const result = await fetchDimaOffers({});
       return { offers: result.offers, failures: result.failures, counts: result.stats };
     }
     if (retailer === 'Technichno') {
@@ -133,7 +139,7 @@ try {
     }
     store.ingestRun({ runId, startedAt, observations, sources, actor: 'parser', reason: 'Обновление публичных наблюдений' });
   }
-  const result = buildCatalogRows(catalog, store.getOffers({ includeRejected: true }).filter(offer => offer.visibility !== 'private').map(({ raw, evidence, ...summary }) => summary));
+  const result = buildCatalogRows(catalog, store.getOffers({ includeRejected: true }).filter(offer => offer.visibility !== 'private' && inPublicSourceScope(offer)).map(({ raw, evidence, ...summary }) => summary));
   await atomicJson('data/cheapest.json', result);
   const failures = sources.filter(source => ['failed', 'degraded', 'partial'].includes(source.status));
   await atomicJson('data/status.json', { state: failures.length ? 'degraded' : 'ready', stage: 'complete', completed: sources.length, total: sources.length, sources, runId, startedAt, updatedAt: new Date().toISOString(), error: failures.length ? failures.map(x => `${x.retailer}: ${x.error || x.status}`).join('; ') : null });

@@ -26,7 +26,7 @@ export function parseProduct(title, url, retailer, amount, fetchedAt = new Date(
   catch { slug = ''; }
   const combined = `${decodedTitle} ${slug}`;
   const chip = (combined.match(/\b(A18 Pro|M\d+(?:\s+(?:Pro|Max|Ultra))?)\b/i) || [])[1];
-  const modelMatch = normalizedTitle.match(/(MacBook\s+(?:Air|Pro|Neo)(?:\s+(?:13|14|15|16)\s*(?:["”]|дюйм)?|\s*\d{2}\s*Early\s*\d{4})?)/i);
+  const modelMatch = normalizedTitle.match(/((?:MacBook\s+(?:Air|Pro|Neo)(?:\s+(?:13|14|15|16)\s*(?:["”]|дюйм)?|\s*\d{2}\s*Early\s*\d{4})?)|(?:iMac(?:\s+(?:24|27)\s*(?:["”]|дюйм)?)?))/i);
   if (!chip || !modelMatch) return null;
 
   let model = modelMatch[1]
@@ -59,7 +59,7 @@ export function parseProduct(title, url, retailer, amount, fetchedAt = new Date(
   const storageGb = canonicalStorageGb(titleMemory.storage ?? slugMemory.storage ?? null);
   if (!ramGb || !storageGb) return null;
 
-  const colorMap = [
+  const macBookColorMap = [
     ['Sky Blue', 'sky blue|sky-blue|небесно[ -]голуб|nebesno[ -]golub|goluboe'],
     ['Midnight', 'midnight|полуноч|polunochn|temnaa[ -]noc'],
     ['Starlight', 'starlight|сияющ|zvezda'],
@@ -71,6 +71,16 @@ export function parseProduct(title, url, retailer, amount, fetchedAt = new Date(
     ['Gold', 'gold|золот|zolot'],
     ['Space Black', 'space black|space-black|ч[её]рн|chern|cernyj'],
   ];
+  const imacColorMap = [
+    ['Silver', 'silver|серебр'],
+    ['Blue', '\\bblue\\b|син(?:ий|яя|ее|его)?'],
+    ['Green', '\\bgreen\\b|зел[её]н'],
+    ['Orange', '\\borange\\b|оранжев'],
+    ['Yellow', '\\byellow\\b|ж[её]лт'],
+    ['Pink', '\\bpink\\b|розов'],
+    ['Purple', '\\bpurple\\b|фиолет'],
+  ];
+  const colorMap = /^iMac\b/i.test(model) ? imacColorMap : macBookColorMap;
   const findColor = text => colorMap.find(([, pattern]) => new RegExp(pattern, 'i').test(text))?.[0];
   const color = findColor(decodedTitle) || findColor(slug) || 'unknown';
   const cores = text => {
@@ -103,5 +113,5 @@ export function parseProduct(title, url, retailer, amount, fetchedAt = new Date(
   metadata = { ...metadata, currency: 'RUB' };
   const currency = 'RUB';
   const priceType = /рассроч|в месяц|\/мес/i.test(String(metadata.rawPrice || '')) ? 'installment' : /(?:^|\s)от\s+\d/i.test(String(metadata.rawPrice || '')) ? 'from' : 'unknown';
-  return { ...metadata, retailer, title: normalizedTitle, rawTitle: String(title), url, price: amount, priceMinor: moneyMinor(amount), currency: metadata.currency || currency, fetchedAt, observedAt: fetchedAt, condition: condition !== 'unknown' ? condition : metadata.condition || condition, model, chip: chip.replace(/\s+/g, ' ').toUpperCase().replace(' PRO', ' Pro').replace(' MAX', ' Max').replace(' ULTRA', ' Ultra'), ramGb, storageGb, color, cpuCores, gpuCores, screenIn: Number(model.match(/\b(13|14|15|16)/)?.[1]) || null, keyboard: metadata.keyboard || keyboard, region: metadata.region || 'unknown', displayType: metadata.displayType || 'unknown', bundle: metadata.bundle || 'unknown', priceType: priceType !== 'unknown' ? priceType : metadata.priceType || 'unknown', stock: metadata.stock || 'unknown', evidence: { title: String(title), slug, titleMemory, slugMemory, ...(metadata.evidence || {}) }, qualityWarnings, normalizationVersion: 2 };
+  return { ...metadata, retailer, title: normalizedTitle, rawTitle: String(title), url, price: amount, priceMinor: moneyMinor(amount), currency: metadata.currency || currency, fetchedAt, observedAt: fetchedAt, condition: condition !== 'unknown' ? condition : metadata.condition || condition, model, chip: chip.replace(/\s+/g, ' ').toUpperCase().replace(' PRO', ' Pro').replace(' MAX', ' Max').replace(' ULTRA', ' Ultra'), ramGb, storageGb, color, cpuCores, gpuCores, screenIn: Number(model.match(/\b(13|14|15|16|24|27)/)?.[1]) || null, keyboard: metadata.keyboard || keyboard, region: metadata.region || 'unknown', displayType: metadata.displayType || 'unknown', bundle: metadata.bundle || 'unknown', priceType: priceType !== 'unknown' ? priceType : metadata.priceType || 'unknown', stock: metadata.stock || 'unknown', evidence: { title: String(title), slug, titleMemory, slugMemory, ...(metadata.evidence || {}) }, qualityWarnings, normalizationVersion: 3 };
 }
