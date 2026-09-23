@@ -16,7 +16,7 @@ const plural = (n, forms) => forms[n % 100 >= 11 && n % 100 <= 14 ? 2 : n % 10 =
 const storage = value => value >= 1000 && value % 1000 === 0 ? `${value / 1000} TB` : value ? `${value} GB` : '—';
 const amount = offer => `${number(offer.price)} ₽`;
 const stock = offer => ['InStock', 'confirmed', 'source_reported'].includes(offer.stock) ? 'in' : ['OutOfStock', 'Discontinued', 'SoldOut'].includes(offer.stock) ? 'out' : 'unknown';
-const compareOffers = (a, b) => (stock(a) === 'out') - (stock(b) === 'out') || a.price - b.price;
+const compareOffers = (a, b) => (b.marketEligible === true) - (a.marketEligible === true) || (stock(a) === 'out') - (stock(b) === 'out') || a.price - b.price;
 const stockLabel = offer => ({ in: 'В наличии на сайте', out: 'Нет в наличии', unknown: 'Наличие не указано' })[stock(offer)];
 const model = offer => String(offer.model || offer.title || 'Не распознано').replace(/\s+/g, ' ').trim();
 const family = offer => /MacBook\s+Air/i.test(model(offer)) ? 'air' : /MacBook\s+Pro/i.test(model(offer)) ? 'pro' : /MacBook\s+Neo/i.test(model(offer)) ? 'neo' : /^iMac\b/i.test(model(offer)) ? 'imac' : 'other';
@@ -116,6 +116,8 @@ function offerDetail(offer) {
   node.append(safeLink(offer), text('small', offer.title), text('small', characteristics(offer)), text('small', stockLabel(offer)), text('small', date(offer.fetchedAt || offer.observedAt)));
   if (offer.sourceSender) node.append(text('small', `Источник: ${offer.sourceSender}`));
   if (offer.qualityWarnings?.length) node.append(text('small', offer.qualityWarnings.join('; ')));
+  const reasons = [...new Set(offer.qualityReasons || [])].filter(reason => !offer.qualityWarnings?.includes(reason));
+  if (reasons.length) node.append(text('small', reasons.join('; ')));
   return node;
 }
 
@@ -136,7 +138,7 @@ function render() {
   for (const offer of offers) { const id = key(offer); if (!groups.has(id)) groups.set(id, { sample: offer, offers: [] }); groups.get(id).offers.push(offer); }
   const groupsSorted = [...groups.values()].sort((a, b) => {
     const mode = $('sort').value;
-    const priceA = Math.min(...a.offers.map(offer => offer.price)), priceB = Math.min(...b.offers.map(offer => offer.price));
+    const priceA = Math.min(...a.offers.filter(offer => offer.marketEligible).map(offer => offer.price), Infinity), priceB = Math.min(...b.offers.filter(offer => offer.marketEligible).map(offer => offer.price), Infinity);
     return mode === 'price-up' ? priceA - priceB : mode === 'price-down' ? priceB - priceA : mode === 'fresh' ? Math.max(...b.offers.map(offer => Date.parse(offer.fetchedAt) || 0)) - Math.max(...a.offers.map(offer => Date.parse(offer.fetchedAt) || 0)) : key(a.sample).localeCompare(key(b.sample), 'ru', { numeric: true });
   });
   const heading = text('tr');
@@ -147,8 +149,8 @@ function render() {
     const row = text('tr'), sample = group.sample;
     for (const value of [model(sample), sample.chip || '—', sample.ramGb ? `${sample.ramGb} GB` : '—', storage(sample.storageGb), sample.color && sample.color !== 'unknown' ? sample.color : '—']) row.append(text('td', value));
     const bestCell = text('td', null, 'price-cell best-price-cell');
-    const best = [...group.offers].sort(compareOffers)[0];
-    if (!best) bestCell.append(text('span', '—', 'empty-cell'));
+    const best = group.offers.filter(offer => offer.marketEligible === true).sort(compareOffers)[0];
+    if (!best) bestCell.append(text('span', 'Нет проверенной цены', 'empty-cell'));
     else {
       const details = text('details'), summary = text('summary');
       summary.append(text('span', amount(best), 'price'), text('span', best.retailer, 'variant'));
@@ -165,6 +167,7 @@ function render() {
         const first = items[0], details = text('details'), summary = text('summary');
         summary.append(text('span', amount(first), 'price'), text('span', characteristics(first) || 'Подробности', 'variant'));
         if (items.length > 1) summary.append(text('span', `${items.length} ${plural(items.length, ['вариант', 'варианта', 'вариантов'])}`, 'variant'));
+        if (first.marketEligible !== true) summary.append(text('span', 'Требует проверки', 'tag warn'));
         if (stock(first) === 'out') summary.append(text('span', 'Нет в наличии', 'tag')); else if (Date.now() - Date.parse(first.fetchedAt) > 4 * 3600000) summary.append(text('span', 'Старая проверка', 'tag warn'));
         details.append(summary); for (const offer of items) details.append(offerDetail(offer)); cell.append(details);
       }

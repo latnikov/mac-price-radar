@@ -12,16 +12,25 @@ export const inPublicSourceScope = offer => {
   if (/\biMac\b/i.test(title) && !/^iMac\b/i.test(String(offer.model || ''))) return false;
   return true;
 };
-export const canonicalUrl = value => {
+// Keep a source URL usable for navigation. Some stores, including Technichno,
+// treat a product path with and without the trailing slash as different routes.
+export const listingUrl = value => {
   try {
     const url = new URL(value);
     if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return null;
     url.hash = '';
     for (const key of [...url.searchParams.keys()]) if (/^(utm_|gclid|fbclid)/i.test(key)) url.searchParams.delete(key);
     url.searchParams.sort();
-    return url.href.replace(/\/$/, '');
+    if (url.hostname.toLowerCase() === 'nn.technichno.ru'
+      && url.pathname.startsWith('/catalog/mac/')
+      && url.pathname.split('/').filter(Boolean).length >= 5
+      && !url.pathname.endsWith('/')) url.pathname += '/';
+    return url.href;
   } catch { return null; }
 };
+// Identity and coverage comparisons intentionally ignore a final slash, while
+// listingUrl remains the address presented to users and fetched from the store.
+export const canonicalUrl = value => listingUrl(value)?.replace(/\/$/, '') ?? null;
 export const stableId = (prefix, value) => `${prefix}_${createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 24)}`;
 
 // Integer minor units are the only arithmetic representation for money.

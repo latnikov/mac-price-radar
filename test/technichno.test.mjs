@@ -62,7 +62,7 @@ test('walks pagination and neighboring color/storage variants; uses each own ful
   assert.equal(offers.find(offer => offer.url === blue512).price, 83990);
   assert.equal(offers.find(offer => offer.url === silver512).storageGb, 512);
   assert.ok(offers.every(offer => offer.cpuCores === null && offer.gpuCores === null));
-  assert.ok(offers.every(offer => offer.region === 'unknown' && offer.sourceCity === 'unknown' && offer.stock === 'InStock'));
+  assert.ok(offers.every(offer => offer.region === 'unknown' && offer.sourceCity === 'Нижний Новгород' && offer.stock === 'InStock'));
   assert.deepEqual(stats, { pagesFetched: 6, catalogPagesFetched: 2, catalogCards: 1, productsDiscovered: 4, productsFetched: 4, offers: 4 });
 });
 

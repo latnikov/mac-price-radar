@@ -89,6 +89,31 @@ test('external IDs survive URL and title changes; explicit options separate same
   assert.equal(store.getOffers().length, 3);
 });
 
+test('Technichno keeps navigable URLs and merges unknown/full listing profiles', t => {
+  const store = memory(t);
+  const url = 'https://nn.technichno.ru/catalog/mac/macbook-neo/group/product';
+  const first = { ...offer({ retailer: 'Technichno', externalId: undefined, url, priceType: 'unknown' }), sourceId: 'technichno-source' };
+  store.ingestRun({ runId: 'technichno-legacy', observations: [first] });
+  const saved = store.getOffers()[0];
+  assert.equal(saved.url, `${url}/`);
+  store.ingestRun({ runId: 'technichno-live', observations: [{ ...first, priceType: 'full', price: 101000, fetchedAt: '2026-09-16T11:00:00Z' }] });
+  assert.equal(store.getOffers().length, 1);
+  assert.equal(store.getOffers()[0].listingId, saved.listingId);
+  assert.equal(store.getOffers()[0].price, 101000);
+  assert.equal(store.getHistory({ retailer: 'Technichno', url }).length, 2);
+});
+
+test('Technichno read model hides pre-existing legacy/live duplicate listings', t => {
+  const store = memory(t);
+  const url = 'https://nn.technichno.ru/catalog/mac/macbook-neo/group/product';
+  const base = { ...offer({ retailer: 'Technichno', externalId: undefined, url }), sourceId: 'technichno-source' };
+  store.ingestRun({ runId: 'old-listing', observations: [{ ...base, listingId: 'legacy-listing', dataKind: 'legacy' }] });
+  store.ingestRun({ runId: 'new-listing', observations: [{ ...base, listingId: 'live-listing', dataKind: 'live', price: 101000, fetchedAt: '2026-09-16T11:00:00Z' }] });
+  assert.equal(store.getOffers().length, 1);
+  assert.equal(store.getOffers()[0].listingId, 'live-listing');
+  assert.equal(store.getHistory({ retailer: 'Technichno', url: `${url}/` }).length, 2);
+});
+
 test('manual import previews without mutation, isolates bad rows and retries without duplicates', t => {
   const store = memory(t);
   const input = { supplier: 'Private', actor: 'max', reason: 'Supplier emailed price list', rows: [offer({ retailer: 'Private', externalId: 'sku1' }), { price: -5, currency: 'RUB' }, { url: 'javascript:bad', currency: 'RUB', price: 50000 }] };

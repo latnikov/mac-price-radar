@@ -117,7 +117,7 @@ function productOffer(html, url) {
     title,
     currency: 'RUB',
     region: 'unknown',
-    sourceCity: 'unknown',
+    sourceCity: 'Нижний Новгород',
     sourceSite: 'nn.technichno.ru',
     priceType: 'full',
     rawPrice: field('price'),

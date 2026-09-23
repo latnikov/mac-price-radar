@@ -1,4 +1,5 @@
 import type { Offer } from './model.js';
+import { fetchTechnichnoOffers } from '../scripts/technichno.mjs';
 
 export interface RetailerAdapter { name: string; url: string; fetchOffers(): Promise<Offer[]>; }
 const now = () => new Date().toISOString();
@@ -16,5 +17,5 @@ export function textOffers(retailer: string, html: string, baseUrl: string): Off
   return out;
 }
 
-export const technichno: RetailerAdapter = { name:'Technichno', url:'https://nn.technichno.ru/', async fetchOffers(){ const r=await fetch(this.url); return textOffers(this.name, await r.text(), this.url); } };
+export const technichno: RetailerAdapter = { name:'Technichno', url:'https://nn.technichno.ru/catalog/mac/', async fetchOffers(){ return (await fetchTechnichnoOffers()).offers as Offer[]; } };
 export const rifastore: RetailerAdapter = { name:'RifaStore', url:'https://rifastore.ru/', async fetchOffers(){ const r=await fetch(this.url); return textOffers(this.name, await r.text(), this.url); } };

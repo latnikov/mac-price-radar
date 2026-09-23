@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { chmodSync, copyFileSync, constants, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { calculateEconomics, minorUnits, validateQuote } from './procurement.mjs';
-import { canonicalModelName, canonicalStorageGb } from './domain.mjs';
+import { canonicalModelName, canonicalStorageGb, canonicalUrl, listingUrl } from './domain.mjs';
 
 export const SCHEMA_VERSION = 1;
 const canonical = value => JSON.stringify(value, (_, item) => item && typeof item === 'object' && !Array.isArray(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, item[key]])) : item);
@@ -21,15 +21,9 @@ function sanitize(value) {
 }
 function canonicalURL(value) {
   if (!value) return '';
-  try {
-    const parsed = new URL(value);
-    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Unsupported URL protocol');
-    if (parsed.username || parsed.password) throw new Error('Credentials in URL are not allowed');
-    parsed.hash = '';
-    for (const key of [...parsed.searchParams.keys()]) if (/^(utm_|fbclid|gclid)/i.test(key)) parsed.searchParams.delete(key);
-    parsed.searchParams.sort();
-    return parsed.href.replace(/\/$/, '');
-  } catch { throw new TypeError(`Invalid listing URL: ${value}`); }
+  const result = listingUrl(value);
+  if (!result) throw new TypeError(`Invalid listing URL: ${value}`);
+  return result;
 }
 function identity(offer) {
   const retailer = required(offer.retailer ?? offer.supplier, 'retailer');
@@ -37,11 +31,35 @@ function identity(offer) {
   const sourceType = offer.sourceType ?? 'website';
   const sourceId = offer.sourceId ?? id('source', [sellerId, sourceType]);
   const url = canonicalURL(offer.url);
+  const identityUrl = canonicalUrl(url);
   const externalId = offer.externalId ?? offer.sourceProductId ?? offer.sellerSku ?? offer.sku;
-  const optionId = [offer.optionId ?? offer.sourceVariantId ?? offer.listingVariantKey ?? '', offer.paymentMethod ?? 'unknown', offer.minimumQuantity ?? offer.moq ?? 'unknown', offer.priceType ?? 'unknown'];
+  // Historical "unknown" and subsequently verified "full" prices describe
+  // the same listing. Other commercial price profiles remain distinct.
+  const priceProfile = retailer === 'Technichno' && (!offer.priceType || offer.priceType === 'unknown') ? 'full' : offer.priceType ?? 'unknown';
+  const optionId = [offer.optionId ?? offer.sourceVariantId ?? offer.listingVariantKey ?? '', offer.paymentMethod ?? 'unknown', offer.minimumQuantity ?? offer.moq ?? 'unknown', priceProfile];
   if (!offer.listingId && !externalId && !url) throw new TypeError('Listing requires listingId, externalId or URL');
-  const listingId = offer.listingId ?? id('listing', [sourceId, externalId ? ['external', String(externalId)] : ['url', url], optionId]);
+  const listingId = offer.listingId ?? id('listing', [sourceId, externalId ? ['external', String(externalId)] : ['url', identityUrl], optionId]);
   return { retailer, sellerId, sourceId, sourceType, listingId, externalId: externalId == null ? null : String(externalId), url };
+}
+
+function repairOfferUrl(offer) {
+  const url = listingUrl(offer.url);
+  return url && url !== offer.url ? { ...offer, url } : offer;
+}
+
+function collapseEquivalentOffers(offers) {
+  const byIdentity = new Map();
+  for (const original of offers) {
+    const offer = repairOfferUrl(original);
+    // Technichno historically produced a legacy listing and a live listing for
+    // the same card because priceType changed from unknown to full.
+    const key = offer.retailer === 'Technichno'
+      ? [offer.sourceId, canonicalUrl(offer.url), offer.optionId ?? offer.sourceVariantId ?? '', offer.paymentMethod ?? 'unknown', offer.minimumQuantity ?? offer.moq ?? 'unknown'].join('|')
+      : offer.listingId;
+    const prior = byIdentity.get(key);
+    if (!prior || (offer.observedAt || offer.fetchedAt || '') > (prior.observedAt || prior.fetchedAt || '')) byIdentity.set(key, offer);
+  }
+  return [...byIdentity.values()];
 }
 function isRejected(offer) {
   return offer.rejected === true || ['rejected', 'invalid'].includes(offer.validationStatus) || offer.status === 'rejected' || offer.matchStatus === 'rejected';
@@ -180,7 +198,7 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
     // A failed fetch must not erase even an unverified legacy price from the table.
     // Such a fallback remains rejected; it is never promoted to an accepted offer.
     const rows = db.prepare(`SELECT o.json FROM observations o WHERE o.seq = COALESCE((SELECT good.seq FROM observations good WHERE good.listing_id=o.listing_id AND good.rejected=0 ORDER BY good.observed_at DESC,good.seq DESC LIMIT 1), ${includeRejected ? "(SELECT rejected.seq FROM observations rejected WHERE rejected.listing_id=o.listing_id ORDER BY CASE WHEN json_extract(rejected.json,'$.price') > 0 THEN 0 ELSE 1 END,rejected.observed_at DESC,rejected.seq DESC LIMIT 1)" : 'NULL'}) ORDER BY o.listing_id`).all();
-    return rows.map(row => {
+    return collapseEquivalentOffers(rows.map(row => {
       const offer = rowJSON(row);
       offer.currency = 'RUB';
       offer.model = canonicalModelName(offer.model);
@@ -188,18 +206,19 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
       const latest = rowJSON(db.prepare('SELECT json FROM observations WHERE listing_id=? ORDER BY observed_at DESC,seq DESC LIMIT 1').get(offer.listingId));
       if (latest.observationId !== offer.observationId) offer.latestAttempt = { observationId: latest.observationId, observedAt: latest.observedAt, receivedAt: latest.receivedAt, rejected: latest.rejected, validationStatus: latest.validationStatus, validationIssues: latest.validationIssues, qualityWarnings: latest.qualityWarnings ?? [], runId: latest.runId };
       return offer;
-    });
+    }));
   }
   function getHistory(reference, { limit = 1000 } = {}) {
     const value = typeof reference === 'string' ? { listingId: reference } : reference ?? {};
     let listingId = value.listingId ?? value.offerId;
     if (!listingId && value.retailer && value.url) {
-      const url = canonicalURL(value.url);
-      const listings = db.prepare('SELECT json FROM listings WHERE url=?').all(url).map(rowJSON).filter(item => item.retailer === value.retailer);
+      const navigableUrl = canonicalURL(value.url);
+      const identityUrl = canonicalUrl(navigableUrl);
+      const listings = db.prepare('SELECT json FROM listings WHERE url=? OR url=?').all(navigableUrl, identityUrl).map(rowJSON).filter(item => item.retailer === value.retailer);
       return listings.flatMap(item => getHistory(item.listingId, { limit })).sort((a, b) => b.observedAt.localeCompare(a.observedAt));
     }
     if (!listingId) return [];
-    return db.prepare('SELECT json FROM observations WHERE listing_id=? ORDER BY observed_at DESC,seq DESC LIMIT ?').all(listingId, Math.max(1, Math.min(10000, Number(limit) || 1000))).map(rowJSON);
+    return db.prepare('SELECT json FROM observations WHERE listing_id=? ORDER BY observed_at DESC,seq DESC LIMIT ?').all(listingId, Math.max(1, Math.min(10000, Number(limit) || 1000))).map(rowJSON).map(repairOfferUrl);
   }
   function previewImport(input) {
     if (!Array.isArray(input.rows)) throw new TypeError('rows must be an array');
