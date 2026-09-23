@@ -15,7 +15,7 @@ export const BUSINESS_ALLOWED_UPDATES = [
 ];
 
 const emptyState = () => ({
-  schemaVersion: 1,
+  schemaVersion: 2,
   lastUpdateId: 0,
   businessConnection: null,
   messages: [],
@@ -31,18 +31,23 @@ function messageOrigin(message) {
   if (forward?.type === 'channel' && forward.chat) {
     return {
       username: forward.chat.username,
+      title: forward.chat.title,
       chatId: forward.chat.id,
       postId: forward.message_id,
     };
   }
-  return {
-    username: message?.chat?.username,
-    chatId: message?.chat?.id,
-    postId: message?.message_id,
-  };
+  if (message?.chat?.type === 'channel') {
+    return {
+      username: message.chat.username,
+      title: message.chat.title,
+      chatId: message.chat.id,
+      postId: message.message_id,
+    };
+  }
+  return null;
 }
 
-function cachedMessage(update, channel) {
+function cachedMessage(update) {
   const message = update.business_message
     || update.edited_business_message
     || update.message
@@ -51,7 +56,7 @@ function cachedMessage(update, channel) {
     || update.edited_channel_post;
   if (!message) return null;
   const origin = messageOrigin(message);
-  if (username(origin.username) !== username(channel)) return null;
+  if (!origin) return null;
   const text = String(message.text || message.caption || '').trim();
   if (!text || !Number.isSafeInteger(Number(origin.postId))) return null;
   return {
@@ -59,6 +64,10 @@ function cachedMessage(update, channel) {
     text,
     date: Number.isSafeInteger(message.date) ? new Date(message.date * 1000).toISOString() : null,
     sourceChatId: String(origin.chatId ?? ''),
+    sourceUsername: origin.username ? String(origin.username).replace(/^@/, '') : null,
+    sourceTitle: origin.title ? String(origin.title) : null,
+    forwardedByUserId: message.from?.id == null ? null : String(message.from.id),
+    forwardedByUsername: message.from?.username ? String(message.from.username).replace(/^@/, '') : null,
     receivedAt: new Date().toISOString(),
     businessConnectionId: message.business_connection_id || null,
   };
@@ -75,8 +84,9 @@ function connectionFrom(update) {
   };
 }
 
-export function applyBusinessUpdates(previous, updates, { channel = DEFAULT_CHANNEL, maxMessages = 500 } = {}) {
+export function applyBusinessUpdates(previous, updates, { maxMessages = 500 } = {}) {
   const state = { ...emptyState(), ...previous, messages: [...(previous?.messages || [])] };
+  state.schemaVersion = 2;
   let changed = false;
   for (const update of updates) {
     const updateId = Number(update?.update_id);
@@ -89,7 +99,7 @@ export function applyBusinessUpdates(previous, updates, { channel = DEFAULT_CHAN
       state.businessConnection = connection;
       changed = true;
     }
-    const message = cachedMessage(update, channel);
+    const message = cachedMessage(update);
     if (!message) continue;
     const key = `${message.sourceChatId}:${message.id}`;
     const existing = state.messages.findIndex(item => `${item.sourceChatId}:${item.id}` === key);
@@ -145,7 +155,6 @@ async function botApi(token, method, payload, { fetchImpl = fetch, signal } = {}
 export async function pollBusinessUpdates({
   env = process.env,
   statePath = env.TELEGRAM_BSA_STATE_PATH || DEFAULT_STATE_PATH,
-  channel = env.TELEGRAM_BSA_CHANNEL || DEFAULT_CHANNEL,
   timeout = 0,
   fetchImpl = fetch,
   signal,
@@ -158,7 +167,7 @@ export async function pollBusinessUpdates({
     timeout,
     allowed_updates: BUSINESS_ALLOWED_UPDATES,
   }, { fetchImpl, signal });
-  const result = applyBusinessUpdates(previous, updates, { channel });
+  const result = applyBusinessUpdates(previous, updates);
   if (!result.state.updatedAt) result.state.updatedAt = new Date().toISOString();
   if (result.changed || !previous.updatedAt) await writeBusinessState(statePath, result.state);
   return { ...result, received: updates.length };
@@ -207,10 +216,9 @@ export function startBsaBusinessPolling({ env = process.env, logger = console } 
 export async function ingestBusinessUpdate(update, {
   env = process.env,
   statePath = env.TELEGRAM_BSA_STATE_PATH || DEFAULT_STATE_PATH,
-  channel = env.TELEGRAM_BSA_CHANNEL || DEFAULT_CHANNEL,
 } = {}) {
   const previous = await readBusinessState(statePath);
-  const result = applyBusinessUpdates(previous, [update], { channel });
+  const result = applyBusinessUpdates(previous, [update]);
   if (result.changed) await writeBusinessState(statePath, result.state);
   return result;
 }
@@ -239,12 +247,25 @@ export async function configureBusinessWebhook({ env = process.env, fetchImpl = 
   };
 }
 
-export async function readCachedBsaMessages({ env = process.env } = {}) {
+export async function readCachedChannelMessages({ env = process.env, channel, sourceChatId } = {}) {
   const statePath = env.TELEGRAM_BSA_STATE_PATH || DEFAULT_STATE_PATH;
   const state = await readBusinessState(statePath);
-  if (!state.messages.length) {
+  const wantedUsername = username(channel);
+  const wantedChatId = sourceChatId == null ? '' : String(sourceChatId);
+  const messages = state.messages.filter(message => {
+    if (wantedChatId && String(message.sourceChatId || '') === wantedChatId) return true;
+    if (wantedUsername && username(message.sourceUsername) === wantedUsername) return true;
+    // State written by v1 contained BSA messages only and had no source username.
+    return wantedUsername === username(DEFAULT_CHANNEL) && !message.sourceUsername;
+  });
+  if (!messages.length) {
     const connection = state.businessConnection?.isEnabled ? 'подключение активно' : 'подключение ещё не подтверждено';
-    throw new Error(`BSA Business API ещё не получил прайс-лист из @${env.TELEGRAM_BSA_CHANNEL || DEFAULT_CHANNEL} (${connection})`);
+    const source = channel ? `@${String(channel).replace(/^@/, '')}` : `чата ${wantedChatId || 'без идентификатора'}`;
+    throw new Error(`Telegram Business API ещё не получил прайс-лист из ${source} (${connection})`);
   }
-  return state.messages;
+  return messages;
+}
+
+export async function readCachedBsaMessages({ env = process.env } = {}) {
+  return readCachedChannelMessages({ env, channel: env.TELEGRAM_BSA_CHANNEL || DEFAULT_CHANNEL });
 }

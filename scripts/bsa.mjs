@@ -75,12 +75,25 @@ function normalizeProductTitle(line, contextModel) {
   return normalizeCoreNotation(title);
 }
 
+function sectionText(line) {
+  return line
+    .normalize('NFKC')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function contextFrom(line, current) {
-  const pro = line.match(/\bMACBOOK\s+PRO\s+(14|16)\b/i);
+  const section = sectionText(line);
+  if (/\b(?:IMAC|MAC\s+MINI|MAC\s+STUDIO|STUDIO\s+DISPLAY|PRO\s+DISPLAY|IPAD|IPHONE|APPLE\s+WATCH)\b/i.test(section)) return null;
+  if (/\bMACBOOK\s+NEO\b/i.test(section)) return 'MacBook Neo 13" A18 Pro';
+  const pro = section.match(/\bMACBOOK\s+PRO\s+(14|16)\b/i);
   if (pro) return `MacBook Pro ${pro[1]}`;
-  const air = line.match(/\bMACBOOK\s+AIR\s+(13|15)\b/i);
+  const air = section.match(/\bMACBOOK\s+AIR\s+(13|15)\b/i);
   if (air) return `MacBook Air ${air[1]}`;
-  if (/^\s*MacBook\s+Air\s*$/i.test(line)) return 'MacBook Air';
+  if (/^MACBOOK\s+AIR$/i.test(section)) return 'MacBook Air';
+  const compactAir = section.match(/^AIR\s*(13|15)\b/i);
+  if (compactAir) return `MacBook Air ${compactAir[1]}`;
   return current;
 }
 
@@ -90,6 +103,8 @@ function skuFrom(line) {
 }
 
 function looksLikeProduct(line, contextModel) {
+  const section = sectionText(line);
+  if (/\b(?:IMAC|MAC\s+MINI|MAC\s+STUDIO|STUDIO\s+DISPLAY|PRO\s+DISPLAY|IPAD|IPHONE|APPLE\s+WATCH)\b/i.test(section)) return false;
   const hasFamily = /\b(?:MacBook\s+)?(?:Air|Pro|NEO)\b/i.test(line) || Boolean(contextModel);
   const hasChip = /[MМ]\d+(?:\s+(?:Pro|Max|Ultra))?\b/i.test(line) || /\bA18\s+Pro\b/i.test(line) || /\bNEO\b/i.test(line);
   const hasMemory = /\b\d{1,3}\s*(?:GB|ГБ|TB|ТБ)\b/i.test(line) || /\b\d{1,3}\s*\/\s*\d{1,4}\b/.test(line);
@@ -104,6 +119,11 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
   for (const message of messages) {
     const text = String(message.text ?? '').replace(/\r/g, '');
     const postId = String(message.id ?? message.postId ?? 'unknown');
+    const sourceUsername = String(message.sourceUsername || 'BigSaleApple').replace(/^@/, '');
+    const sourceTitle = String(message.sourceTitle || 'BSA Store');
+    const sourceSender = sourceTitle && sourceTitle.toLowerCase() !== sourceUsername.toLowerCase()
+      ? `${sourceTitle} · @${sourceUsername}`
+      : `@${sourceUsername}`;
     const listDate = priceListDate(text);
     if (listDate) datedMessages++;
     if (!listDate || listDate < today) continue;
@@ -120,7 +140,7 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
       const title = normalizeProductTitle(extracted.title, contextModel);
       const sku = skuFrom(line);
       const condition = /предактив|вскрыт|open.?box/i.test(line) ? 'open_box' : 'new';
-      const parsed = parseProduct(title, 'https://t.me/BigSaleApple', 'BSA', extracted.amount, new Date(now).toISOString(), {
+      const parsed = parseProduct(title, `https://t.me/${sourceUsername}`, 'BSA', extracted.amount, new Date(now).toISOString(), {
         rawPrice: extracted.rawPrice,
         sourceType: 'telegram_channel',
         stock: 'source_reported',
@@ -130,7 +150,10 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
         priceType: 'full',
         buyerType: 'retail',
         minimumQuantity: 1,
-        evidence: { method: 'bsa-business-bot-api-v1', channel: '@BigSaleApple', postId, listDate, rawLine: line },
+        sourceSender,
+        sourceTitle,
+        sourceUsername: `@${sourceUsername}`,
+        evidence: { method: 'telegram-forward-v2', sourceTitle, sourceUsername: `@${sourceUsername}`, sourceChatId: message.sourceChatId || null, postId, listDate, rawLine: line },
       });
       if (!parsed) {
         failures.push(`BSA ${postId}, строка ${lineIndex + 1}: не распознана конфигурация`);
@@ -138,7 +161,7 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
       }
       contextModel = parsed.model;
       const sourceKey = [sku || 'no-sku', parsed.model, parsed.chip, parsed.ramGb, parsed.storageGb, parsed.color, condition].join('|');
-      const url = new URL(`https://t.me/BigSaleApple/${postId}`);
+      const url = new URL(`https://t.me/${sourceUsername}/${postId}`);
       url.searchParams.set('item', sourceKey);
       offers.push({
         ...parsed,
@@ -146,7 +169,10 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
         externalId: sku ? `${postId}:${sku}` : `${postId}:${sourceKey}`,
         sourceVariantId: sourceKey,
         validFrom: listDate,
-        evidence: { ...parsed.evidence, method: 'bsa-business-bot-api-v1', channel: '@BigSaleApple', postId, listDate, rawLine: line },
+        sourceSender,
+        sourceTitle,
+        sourceUsername: `@${sourceUsername}`,
+        evidence: { ...parsed.evidence, method: 'telegram-forward-v2', sourceTitle, sourceUsername: `@${sourceUsername}`, sourceChatId: message.sourceChatId || null, postId, listDate, rawLine: line },
       });
     }
   }

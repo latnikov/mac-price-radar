@@ -104,7 +104,7 @@ function filtered() {
     && (!selected.ssd || String(offer.storageGb) === selected.ssd)
     && (!selected.color || offer.color === selected.color)
     && (!selected.stock || stock(offer) === selected.stock)
-    && (!query || `${offer.title} ${model(offer)} ${offer.chip} ${offer.retailer} ${offer.url} ${characteristics(offer)}`.toLowerCase().includes(query))
+    && (!query || `${offer.title} ${model(offer)} ${offer.chip} ${offer.retailer} ${offer.sourceSender || ''} ${offer.sourceTitle || ''} ${offer.sourceUsername || ''} ${offer.url} ${characteristics(offer)}`.toLowerCase().includes(query))
     && (minimum === '' || offer.price >= Number(minimum))
     && (maximum === '' || offer.price <= Number(maximum))
   );
@@ -113,6 +113,7 @@ function filtered() {
 function offerDetail(offer) {
   const node = text('div', null, 'offer');
   node.append(safeLink(offer), text('small', offer.title), text('small', characteristics(offer)), text('small', stockLabel(offer)), text('small', date(offer.fetchedAt || offer.observedAt)));
+  if (offer.sourceSender) node.append(text('small', `Источник: ${offer.sourceSender}`));
   if (offer.qualityWarnings?.length) node.append(text('small', offer.qualityWarnings.join('; ')));
   return node;
 }

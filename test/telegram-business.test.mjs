@@ -1,11 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { applyBusinessUpdates, configureBusinessWebhook, ingestBusinessUpdate, pollBusinessUpdates } from '../scripts/telegram-business.mjs';
+import { applyBusinessUpdates, configureBusinessWebhook, ingestBusinessUpdate, pollBusinessUpdates, readCachedChannelMessages } from '../scripts/telegram-business.mjs';
 
-test('Business API cache accepts direct BSA channel updates and ignores other channels', () => {
+test('Business API cache accepts multiple channels and preserves sender metadata', () => {
   const result = applyBusinessUpdates(null, [
     {
       update_id: 10,
@@ -17,7 +17,7 @@ test('Business API cache accepts direct BSA channel updates and ignores other ch
         business_connection_id: 'connection',
         message_id: 501,
         date: 1_800_000_100,
-        chat: { id: -1001, type: 'channel', username: 'BigSaleApple' },
+        chat: { id: -1001, type: 'channel', username: 'BigSaleApple', title: 'BSA Store' },
         text: '23/09/2026\nMDH74 Air 13 (M5 16/512) Silver-126.500',
       },
     },
@@ -27,15 +27,17 @@ test('Business API cache accepts direct BSA channel updates and ignores other ch
         business_connection_id: 'connection',
         message_id: 99,
         date: 1_800_000_200,
-        chat: { id: -1002, type: 'channel', username: 'OtherChannel' },
+        chat: { id: -1002, type: 'channel', username: 'OtherChannel', title: 'Другой магазин' },
         text: 'не наш прайс',
       },
     },
   ]);
   assert.equal(result.state.lastUpdateId, 13);
   assert.equal(result.state.businessConnection.isEnabled, true);
-  assert.equal(result.state.messages.length, 1);
-  assert.equal(result.state.messages[0].id, '501');
+  assert.equal(result.state.schemaVersion, 2);
+  assert.equal(result.state.messages.length, 2);
+  assert.deepEqual(result.state.messages.map(message => message.sourceUsername).sort(), ['BigSaleApple', 'OtherChannel']);
+  assert.equal(result.state.messages.find(message => message.id === '501').sourceTitle, 'BSA Store');
 });
 
 test('Business API cache accepts a forwarded BSA post and replaces its edited copy', () => {
@@ -44,9 +46,10 @@ test('Business API cache accepts a forwarded BSA post and replaces its edited co
     message_id: 700,
     date: 1_800_000_300,
     chat: { id: 42, type: 'private' },
+    from: { id: 42, username: 'buyer' },
     forward_origin: {
       type: 'channel',
-      chat: { id: -1001, type: 'channel', username: 'BigSaleApple' },
+      chat: { id: -1001, type: 'channel', username: 'BigSaleApple', title: 'BSA Store' },
       message_id: 502,
       date: 1_800_000_000,
     },
@@ -57,6 +60,37 @@ test('Business API cache accepts a forwarded BSA post and replaces its edited co
   assert.equal(edited.state.messages.length, 1);
   assert.equal(edited.state.messages[0].id, '502');
   assert.match(edited.state.messages[0].text, /99\.000/);
+  assert.equal(edited.state.messages[0].sourceTitle, 'BSA Store');
+  assert.equal(edited.state.messages[0].forwardedByUsername, 'buyer');
+});
+
+test('Business API cache ignores ordinary private messages that are not forwarded from a channel', () => {
+  const result = applyBusinessUpdates(null, [{
+    update_id: 22,
+    message: { message_id: 900, date: 1_800_000_300, chat: { id: 42, type: 'private', username: 'buyer' }, text: 'обычное сообщение' },
+  }]);
+  assert.equal(result.state.messages.length, 0);
+});
+
+test('Channel reader selects one sender and supports legacy BSA state', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'channel-reader-'));
+  const statePath = join(directory, 'state.json');
+  try {
+    await writeFile(statePath, JSON.stringify({
+      schemaVersion: 1,
+      messages: [
+        { id: '1', sourceChatId: '-1001', sourceUsername: 'OtherChannel', text: 'other' },
+        { id: '2', sourceChatId: '-1002', sourceUsername: 'BigSaleApple', text: 'bsa' },
+        { id: '3', sourceChatId: '-1002', text: 'legacy bsa' },
+      ],
+    }));
+    const bsa = await readCachedChannelMessages({ env: { TELEGRAM_BSA_STATE_PATH: statePath }, channel: '@BigSaleApple' });
+    assert.deepEqual(bsa.map(message => message.id), ['2', '3']);
+    const other = await readCachedChannelMessages({ env: { TELEGRAM_BSA_STATE_PATH: statePath }, channel: 'OtherChannel' });
+    assert.deepEqual(other.map(message => message.id), ['1']);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
 });
 
 test('Bot API polling persists BSA messages without persisting the bot token', async () => {
