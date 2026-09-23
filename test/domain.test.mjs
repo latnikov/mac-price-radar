@@ -10,6 +10,7 @@ test('AC-05 strict monetary formats reject signs, ambiguous locale, monthly stri
 });
 test('BSA public scope excludes non-target desktop families without hiding iMac', () => {
   assert.equal(inPublicSourceScope({ retailer: 'BSA', title: 'Mac Mini M4', model: 'MacBook Pro 14"' }), false);
+  assert.equal(inPublicSourceScope({ retailer: 'BSA', title: 'iMac M4 MacBook Pro 14/20/48GB/1TB', model: 'MacBook Pro 14"' }), false);
   assert.equal(inPublicSourceScope({ retailer: 'BSA', title: 'iMac 24" M4', model: 'iMac 24"' }), true);
   assert.equal(inPublicSourceScope({ retailer: 'Дима', title: 'Mac Mini M4' }), true);
 });
