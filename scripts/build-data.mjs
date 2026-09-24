@@ -139,7 +139,7 @@ try {
     }
     if (retailer === 'Айфория') {
       try {
-        const html = await fetchPage('https://iphoriya.ru/product-category/mac/macbook-neo/', iphoriyaFetchOptions);
+        const html = await fetchPage('https://iphoriya.ru/product-category/mac/macbook-neo', iphoriyaFetchOptions);
         for (const match of html.matchAll(/href=["'](https:\/\/iphoriya\.ru\/product\/[^"']*macbook-neo[^"']*)["']/gi)) urls.add(match[1]);
       } catch (error) { failures.push(error.message); }
     }
