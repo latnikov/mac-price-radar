@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { assessCollection, knownProductUrls } from '../scripts/collection-policy.mjs';
+import { assessCollection, knownProductUrls, summarizeCollectionErrors } from '../scripts/collection-policy.mjs';
 const previous=Array.from({length:100},(_,i)=>({url:`https://a.test/${i}`,price:100000,currency:'RUB'}));
 test('AC06 one parsed item is not a successful 100-item source refresh',()=>{
   const result=assessCollection(previous,[previous[0]]);
@@ -24,4 +24,13 @@ test('discovery retains rejected and unpriced known cards without using private 
   const card={retailer:'BigGeek',url:'https://biggeek.ru/products/macbook',currency:'RUB',validationStatus:'rejected'};
   const urls=knownProductUrls([card,{...card,url:card.url+'/?utm_source=x'}, {...card,url:card.url+'-no-price',price:null}, {...card,url:card.url+'-private',visibility:'private'}, {...card,url:'https://biggeek.ru.evil.test/products/macbook'}],'BigGeek');
   assert.deepEqual([...urls],[card.url,card.url+'-no-price']);
+});
+test('repeated HTTP failures are summarized without dumping product URLs',()=>{
+  const summary=summarizeCollectionErrors([
+    'HTTP 503: https://iphoriya.ru/product/one',
+    'HTTP 503: https://iphoriya.ru/product/two',
+    'HTTP 429: https://iphoriya.ru/product/three',
+  ]);
+  assert.equal(summary,'Магазин временно отклонил запросы: 2 (HTTP 503); Магазин ограничил частоту запросов: 1 (HTTP 429)');
+  assert.doesNotMatch(summary,/iphoriya|product/);
 });

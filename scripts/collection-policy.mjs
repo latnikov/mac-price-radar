@@ -16,6 +16,21 @@ function uniquePricedCards(offers) {
   }
   return [...cards.values()];
 }
+export function summarizeCollectionErrors(errors) {
+  const httpCounts = new Map(), other = [];
+  for (const value of errors) {
+    const error = String(value || '').trim();
+    const match = error.match(/^HTTP\s+(\d{3}):\s+https?:\/\//i);
+    if (match) httpCounts.set(match[1], (httpCounts.get(match[1]) || 0) + 1);
+    else if (error) other.push(error);
+  }
+  const summaries = [...httpCounts].map(([status, count]) => status === '503'
+    ? `Магазин временно отклонил запросы: ${count} (HTTP 503)`
+    : status === '429'
+      ? `Магазин ограничил частоту запросов: ${count} (HTTP 429)`
+      : `Не загрузились карточки: ${count} (HTTP ${status})`);
+  return [...summaries, ...other].join('; ').slice(0, 3000);
+}
 export function assessCollection(previous, incoming, errors = []) {
   const priced = uniquePricedCards(incoming);
   const prior = uniquePricedCards(previous);
@@ -30,5 +45,5 @@ export function assessCollection(previous, incoming, errors = []) {
     if (anomaly) warnings.push(`Аномальное изменение цены: ${old.price} → ${offer.price}; требуется подтверждение`);
     return { ...offer, qualityWarnings: warnings, ...(anomaly || degraded || status === 'failed' ? { validationStatus: 'rejected' } : {}) };
   });
-  return { status, observations, error: errors.join('; ').slice(0, 3000) || (degraded ? 'Покрытие упало более чем на 50%; сохранены предыдущие цены' : null), counts: { previous: prior.length, parsed: priced.length, published: observations.filter(o => o.price > 0 && o.validationStatus !== 'rejected').length } };
+  return { status, observations, error: summarizeCollectionErrors(errors) || (degraded ? 'Покрытие упало более чем на 50%; сохранены предыдущие цены' : null), counts: { previous: prior.length, parsed: priced.length, published: observations.filter(o => o.price > 0 && o.validationStatus !== 'rejected').length } };
 }

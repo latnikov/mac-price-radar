@@ -14,6 +14,7 @@ import { assessCollection, knownProductUrls } from './collection-policy.mjs';
 import { extractProductPrice } from './structured-price.mjs';
 import { openMasterStore } from './master-store.mjs';
 import { inPublicSourceScope } from './domain.mjs';
+import { fetchTextWithRetry } from './fetch-text.mjs';
 
 const privateDir = 'data/private';
 await mkdir(`${privateDir}/backups`, { recursive: true, mode: 0o700 });
@@ -67,18 +68,20 @@ try {
     return [...block.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(match => match[2]);
   };
   const runSignal = AbortSignal.timeout(12 * 60_000);
-  const fetchPage = async url => {
-    const response = await fetch(url, {
+  const fetchPage = (url, options = {}) => fetchTextWithRetry(url, {
+    attempts: options.attempts || 1,
+    baseDelayMs: options.baseDelayMs || 500,
+    maxDelayMs: options.maxDelayMs || 5000,
+    fetchImpl: (requestUrl, requestOptions) => fetch(requestUrl, {
+      ...requestOptions,
       signal: AbortSignal.any([runSignal, AbortSignal.timeout(20000)]),
       headers: {
         'user-agent': 'Mozilla/5.0 MacPriceRadar/2.0',
         'cache-control': 'no-cache, no-store',
         pragma: 'no-cache',
       },
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
-    return response.text();
-  };
+    }),
+  });
   const failedObservation = (retailer, url, title, error) => ({ retailer, url, title: title || url, price: null, priceMinor: null, currency: 'RUB', condition: 'unknown', fetchedAt: new Date().toISOString(), dataKind: 'live', visibility: 'public', validationStatus: 'rejected', qualityWarnings: [error] });
   async function collect(retailer) {
     const out = [], failures = [];
@@ -135,16 +138,20 @@ try {
     }
     if (retailer === 'Айфория') {
       try {
-        const html = await fetchPage('https://iphoriya.ru/product-category/mac/macbook-neo/');
+        const html = await fetchPage('https://iphoriya.ru/product-category/mac/macbook-neo/', { attempts: 3, baseDelayMs: 600 });
         for (const match of html.matchAll(/href=["'](https:\/\/iphoriya\.ru\/product\/[^"']*macbook-neo[^"']*)["']/gi)) urls.add(match[1]);
       } catch (error) { failures.push(error.message); }
     }
     const queue = [...urls];
-    await Promise.all(Array.from({ length: 3 }, async () => {
+    const workers = retailer === 'Айфория' ? 1 : 3;
+    await Promise.all(Array.from({ length: workers }, async () => {
+      let firstRequest = true;
       while (queue.length) {
         const url = queue.shift();
         try {
-          const html = await fetchPage(url);
+          if (retailer === 'Айфория' && !firstRequest) await new Promise(resolve => setTimeout(resolve, 150));
+          firstRequest = false;
+          const html = await fetchPage(url, retailer === 'Айфория' ? { attempts: 3, baseDelayMs: 600 } : undefined);
           const extracted = extractProductPrice(html, url);
           if (extracted.error) { out.push(failedObservation(retailer, url, extracted.title, extracted.error)); continue; }
           const parsed = parseProduct(extracted.title, url, retailer, extracted.amount, undefined, extracted.metadata);
