@@ -9,12 +9,13 @@ import { fetchImobileOffers } from './imobile.mjs';
 import { fetchResale52Offers } from './resale52.mjs';
 import { fetchAppleStoreOffers } from './apple-store-nn.mjs';
 import { fetchRebroOffers } from './rebro.mjs';
+import { fetchIphoriyaOffers } from './iphoriya.mjs';
 import { buildCatalogRows } from './catalog-rows.mjs';
 import { assessCollection, knownProductUrls } from './collection-policy.mjs';
 import { extractProductPrice } from './structured-price.mjs';
 import { openMasterStore } from './master-store.mjs';
 import { inPublicSourceScope } from './domain.mjs';
-import { fetchTextWithRetry } from './fetch-text.mjs';
+import { fetchResponseWithRetry } from './fetch-text.mjs';
 
 const privateDir = 'data/private';
 await mkdir(`${privateDir}/backups`, { recursive: true, mode: 0o700 });
@@ -68,7 +69,7 @@ try {
     return [...block.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(match => match[2]);
   };
   const runSignal = AbortSignal.timeout(12 * 60_000);
-  const fetchPage = (url, options = {}) => fetchTextWithRetry(url, {
+  const fetchResponse = (url, options = {}) => fetchResponseWithRetry(url, {
     attempts: options.attempts || 1,
     baseDelayMs: options.baseDelayMs || 500,
     maxDelayMs: options.maxDelayMs || 5000,
@@ -82,6 +83,7 @@ try {
       },
     }),
   });
+  const fetchPage = async (url, options) => (await fetchResponse(url, options)).text();
   const iphoriyaFetchOptions = { attempts: 3, baseDelayMs: 5000, maxDelayMs: 5000 };
   const failedObservation = (retailer, url, title, error) => ({ retailer, url, title: title || url, price: null, priceMinor: null, currency: 'RUB', condition: 'unknown', fetchedAt: new Date().toISOString(), dataKind: 'live', visibility: 'public', validationStatus: 'rejected', qualityWarnings: [error] });
   async function collect(retailer) {
@@ -114,6 +116,10 @@ try {
       const result = await fetchRebroOffers({ fetchPage });
       return { offers: result.offers, failures, counts: result.stats };
     }
+    if (retailer === 'Айфория') {
+      const result = await fetchIphoriyaOffers({ fetchPage: url => fetchResponse(url, iphoriyaFetchOptions) });
+      return { offers: result.offers, failures: result.failures, counts: result.stats };
+    }
     if (retailer === 'RifaStore') {
       const home = 'https://rifastore.ru/';
       const queue = findRifaCategoryUrls(await fetchPage(home), home), seen = new Set();
@@ -134,25 +140,14 @@ try {
     }
     const urls = knownProductUrls(store.getOffers({ includeRejected: true }), retailer);
     for (const slug of slugs(retailer === 'BigGeek' ? 'SLUGS_BIGGEEK' : 'SLUGS_IPHORIYA')) {
-      if (retailer === 'Айфория' && !slug.startsWith('apple-macbook')) continue;
       urls.add((retailer === 'BigGeek' ? 'https://biggeek.ru/products/' : 'https://iphoriya.ru/product/') + slug);
     }
-    if (retailer === 'Айфория') {
-      try {
-        const html = await fetchPage('https://iphoriya.ru/product-category/mac/macbook-neo', iphoriyaFetchOptions);
-        for (const match of html.matchAll(/href=["'](https:\/\/iphoriya\.ru\/product\/[^"']*macbook-neo[^"']*)["']/gi)) urls.add(match[1]);
-      } catch (error) { failures.push(error.message); }
-    }
     const queue = [...urls];
-    const workers = retailer === 'Айфория' ? 1 : 3;
-    await Promise.all(Array.from({ length: workers }, async () => {
-      let firstRequest = true;
+    await Promise.all(Array.from({ length: 3 }, async () => {
       while (queue.length) {
         const url = queue.shift();
         try {
-          if (retailer === 'Айфория' && !firstRequest) await new Promise(resolve => setTimeout(resolve, 350));
-          firstRequest = false;
-          const html = await fetchPage(url, retailer === 'Айфория' ? iphoriyaFetchOptions : undefined);
+          const html = await fetchPage(url);
           const extracted = extractProductPrice(html, url);
           if (extracted.error) { out.push(failedObservation(retailer, url, extracted.title, extracted.error)); continue; }
           const parsed = parseProduct(extracted.title, url, retailer, extracted.amount, undefined, extracted.metadata);

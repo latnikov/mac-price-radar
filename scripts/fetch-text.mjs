@@ -12,7 +12,7 @@ function retryAfterMilliseconds(response, fallback, maximum) {
   return Math.min(fallback, maximum);
 }
 
-export async function fetchTextWithRetry(url, {
+export async function fetchResponseWithRetry(url, {
   attempts = 1,
   baseDelayMs = 500,
   maxDelayMs = 5000,
@@ -22,10 +22,14 @@ export async function fetchTextWithRetry(url, {
 } = {}) {
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     const response = await fetchImpl(url, options);
-    if (response.ok) return response.text();
+    if (response.ok) return response;
     if (!TRANSIENT_STATUSES.has(response.status) || attempt === attempts) throw new Error(`HTTP ${response.status}: ${url}`);
     await response.body?.cancel?.().catch(() => {});
     await sleep(retryAfterMilliseconds(response, baseDelayMs * 2 ** (attempt - 1), maxDelayMs));
   }
   throw new Error(`Не удалось загрузить: ${url}`);
+}
+
+export async function fetchTextWithRetry(url, options = {}) {
+  return (await fetchResponseWithRetry(url, options)).text();
 }
