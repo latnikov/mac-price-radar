@@ -113,6 +113,20 @@ test('Technichno read model hides pre-existing legacy/live duplicate listings', 
   assert.equal(store.getOffers()[0].listingId, 'live-listing');
   assert.equal(store.getHistory({ retailer: 'Technichno', url: `${url}/` }).length, 2);
 });
+test('Iphoriya keeps URL identity when WooCommerce ids appear and hides existing migration duplicates', t => {
+  const store = openMasterStore(':memory:'); t.after(() => store.close());
+  const url = 'https://iphoriya.ru/product/macbook-air';
+  const first = { ...offer({ retailer: 'Айфория', externalId: undefined, url }), sourceId: 'iphoriya-source' };
+  const legacy = store.ingestRun({ runId: 'iphoriya-legacy', observations: [first] });
+  const current = store.ingestRun({ runId: 'iphoriya-current', observations: [{ ...first, externalId: 'iphoriya:42', price: 101000, fetchedAt: '2026-09-16T11:00:00Z' }] });
+  assert.equal(store.getOffers().length, 1);
+  assert.equal(store.getOffers()[0].listingId, store.getHistory({ retailer: 'Айфория', url })[0].listingId);
+  store.ingestRun({ runId: 'iphoriya-migration-duplicate', observations: [{ ...first, listingId: 'temporary-external-id-listing', price: 102000, fetchedAt: '2026-09-16T12:00:00Z' }] });
+  assert.equal(store.getOffers().length, 1);
+  assert.equal(store.getOffers()[0].price, 102000);
+  assert.equal(legacy.counts.accepted, 1);
+  assert.equal(current.counts.accepted, 1);
+});
 
 test('manual import previews without mutation, isolates bad rows and retries without duplicates', t => {
   const store = memory(t);

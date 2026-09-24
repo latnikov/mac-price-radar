@@ -38,7 +38,11 @@ function identity(offer) {
   const priceProfile = retailer === 'Technichno' && (!offer.priceType || offer.priceType === 'unknown') ? 'full' : offer.priceType ?? 'unknown';
   const optionId = [offer.optionId ?? offer.sourceVariantId ?? offer.listingVariantKey ?? '', offer.paymentMethod ?? 'unknown', offer.minimumQuantity ?? offer.moq ?? 'unknown', priceProfile];
   if (!offer.listingId && !externalId && !url) throw new TypeError('Listing requires listingId, externalId or URL');
-  const listingId = offer.listingId ?? id('listing', [sourceId, externalId ? ['external', String(externalId)] : ['url', identityUrl], optionId]);
+  // Iphoriya historically had URL-only identities. Keep that stable when the
+  // WooCommerce adapter starts supplying a product id, because one URL is one
+  // simple product and changing the identity would duplicate the listing.
+  const identityKey = externalId && retailer !== 'Айфория' ? ['external', String(externalId)] : ['url', identityUrl];
+  const listingId = offer.listingId ?? id('listing', [sourceId, identityKey, optionId]);
   return { retailer, sellerId, sourceId, sourceType, listingId, externalId: externalId == null ? null : String(externalId), url };
 }
 
@@ -53,7 +57,7 @@ function collapseEquivalentOffers(offers) {
     const offer = repairOfferUrl(original);
     // Technichno historically produced a legacy listing and a live listing for
     // the same card because priceType changed from unknown to full.
-    const key = offer.retailer === 'Technichno'
+    const key = ['Technichno', 'Айфория'].includes(offer.retailer)
       ? [offer.sourceId, canonicalUrl(offer.url), offer.optionId ?? offer.sourceVariantId ?? '', offer.paymentMethod ?? 'unknown', offer.minimumQuantity ?? offer.moq ?? 'unknown'].join('|')
       : offer.listingId;
     const prior = byIdentity.get(key);
