@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateRetailAnalytics, colorPriceTrustKey, findColorPriceLowTrust, RETAILER_TRUST } from '../web/retail-analytics.js';
+import { calculateRetailAnalytics, catalogConfigurationKey, colorPriceTrustKey, findColorPriceLowTrust, RETAILER_TRUST } from '../web/retail-analytics.js';
+
+test('catalogue grouping ignores missing CPU/GPU core details', () => {
+  const base = { model: 'MacBook Air 15"', chip: 'M5', screenIn: 15, ramGb: 16, storageGb: 512 };
+  assert.equal(
+    catalogConfigurationKey({ ...base, cpuCores: 10, gpuCores: 10 }),
+    catalogConfigurationKey({ ...base, cpuCores: null, gpuCores: null }),
+  );
+  assert.notEqual(catalogConfigurationKey(base), catalogConfigurationKey({ ...base, ramGb: 24 }));
+  assert.notEqual(catalogConfigurationKey(base), catalogConfigurationKey({ ...base, storageGb: 1000 }));
+  assert.equal(catalogConfigurationKey({ ...base, storageGb: 1024 }), catalogConfigurationKey({ ...base, storageGb: 1000 }));
+});
 
 test('retail analytics compares the minimum procurement with trusted Nizhny prices', () => {
   const analytics = calculateRetailAnalytics([

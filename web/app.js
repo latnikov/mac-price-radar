@@ -1,4 +1,4 @@
-import { calculateRetailAnalytics, colorPriceTrustKey, findColorPriceLowTrust, RETAILER_TRUST } from './retail-analytics.js';
+import { calculateRetailAnalytics, catalogConfigurationKey, colorPriceTrustKey, findColorPriceLowTrust, RETAILER_TRUST } from './retail-analytics.js';
 
 const $ = id => document.getElementById(id);
 const state = {
@@ -35,9 +35,9 @@ const compareOffers = (a, b) => a.price - b.price || String(a.url).localeCompare
 const model = offer => String(offer.model || offer.title || 'Не распознано').replace(/\s+/g, ' ').trim();
 const family = offer => /^Mac mini/i.test(model(offer)) ? 'mini' : /^Mac Studio/i.test(model(offer)) ? 'studio' : /MacBook\s+Air/i.test(model(offer)) ? 'air' : /MacBook\s+Pro/i.test(model(offer)) ? 'pro' : /MacBook\s+Neo/i.test(model(offer)) ? 'neo' : /^iMac\b/i.test(model(offer)) ? 'imac' : 'other';
 const screen = offer => offer.screenIn || Number(model(offer).match(/\b(13|14|15|16|24|27)\b/)?.[1]) || null;
-const canonicalStorage = value => ({ 1024: 1000, 2048: 2000, 4096: 4000, 8192: 8000, 16384: 16000 })[Number(value)] ?? value;
-// Only comparable hardware configurations belong to the same analytics row.
-const colorConfigurationKey = offer => [model(offer), offer.chip, screen(offer), offer.cpuCores, offer.gpuCores, offer.ramGb, canonicalStorage(offer.storageGb)].map(value => value ?? 'unknown').join('|');
+// Core counts are display details, not grouping dimensions: procurement feeds
+// often omit them even when they refer to the same model sold by retailers.
+const colorConfigurationKey = offer => catalogConfigurationKey({ ...offer, model: model(offer), screenIn: screen(offer) });
 const key = offer => [colorConfigurationKey(offer), offer.color ?? 'unknown'].join('|');
 const characteristics = offer => [offer.keyboard && offer.keyboard !== 'unknown' ? `KB ${offer.keyboard}` : null, offer.region && offer.region !== 'unknown' ? offer.region : null].filter(Boolean).join(' · ');
 const message = value => { $('message').textContent = value; $('message').hidden = !value; };
@@ -57,12 +57,11 @@ function configurationCell(offer) {
   const values = [
     screen(offer) ? `${screen(offer)}″` : null,
     offer.chip || null,
-    offer.cpuCores && offer.gpuCores ? `CPU ${offer.cpuCores} · GPU ${offer.gpuCores}` : 'CPU/GPU не указаны',
     offer.ramGb ? `RAM ${offer.ramGb} GB` : null,
     offer.storageGb ? `SSD ${storage(offer.storageGb)}` : null,
     offer.color && offer.color !== 'unknown' ? offer.color : null,
   ];
-  for (const value of values.filter(Boolean)) badges.append(text('span', value, `configuration-badge${value === 'CPU/GPU не указаны' ? ' incomplete' : ''}`));
+  for (const value of values.filter(Boolean)) badges.append(text('span', value, 'configuration-badge'));
   cell.append(badges);
   return cell;
 }

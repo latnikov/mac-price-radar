@@ -10,6 +10,17 @@ export const RETAILER_TRUST = Object.freeze({
 });
 
 const average = values => values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
+const canonicalStorage = value => ({ 1024: 1000, 2048: 2000, 4096: 4000, 8192: 8000, 16384: 16000 })[Number(value)] ?? value;
+
+// Retailers frequently omit CPU/GPU core counts. Those optional details must
+// not split one sellable configuration into duplicate catalogue rows.
+export const catalogConfigurationKey = offer => [
+  offer.model,
+  offer.chip,
+  offer.screenIn,
+  offer.ramGb,
+  canonicalStorage(offer.storageGb),
+].map(value => value ?? 'unknown').join('|');
 
 function usableOffer(offer) {
   return offer && Number.isFinite(offer.price) && offer.price > 0 && !['OutOfStock', 'Discontinued', 'SoldOut'].includes(offer.stock);
