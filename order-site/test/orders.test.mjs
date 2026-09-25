@@ -104,15 +104,25 @@ test('keeps the 50 base totals private and publishes only final ruble quotes', a
   ]);
   assert.doesNotMatch(page, /<select\b/i);
   assert.match(page, /id="storage-options"/);
-  assert.match(page, /У базового варианта показана полная цена с ним/);
+  assert.match(page, /насколько цена увеличится или уменьшится/);
   assert.doesNotMatch(page, /Свериться с конфигуратором Apple/);
   assert.doesNotMatch(catalogSource, /prices|1189|applePrice|purchasePrice|procurement|customs|delivery/i);
   assert.deepEqual(quote, { ...quoteConfigurator(order().configuration), currency: 'RUB' });
-  assert.deepEqual(quote.basePricesRub, { chip: 105319, memory: 105319, storage: 105319, ethernet: 105319 });
   assert.equal(quote.stepPricesRub.memory[16], 0);
   assert.equal(quote.stepPricesRub.memory[24], 22145);
   assert.equal(quote.stepPricesRub.memory[32], 44289);
   assert.equal(quote.stepPricesRub.storage[512], 22145);
   assert.equal(quote.stepPricesRub.chip['m5pro-15-16'], 88844);
   assert.equal(privatePricing.status, 404);
+});
+
+test('quotes both surcharges and savings relative to the current selection', () => {
+  const quote = quoteConfigurator({ model: 'mini', chip: 'm6-12-12', memory: 24, storage: 512, ethernet: 2.5 });
+  assert.equal(quote.priceRub, 149608);
+  assert.equal(quote.stepPricesRub.memory[16], -22144);
+  assert.equal(quote.stepPricesRub.memory[24], 0);
+  assert.equal(quote.stepPricesRub.memory[32], 22145);
+  assert.equal(quote.stepPricesRub.storage[256], -22144);
+  assert.equal(quote.stepPricesRub.storage[512], 0);
+  assert.equal(quote.stepPricesRub.chip['m6-12-12'], 0);
 });

@@ -9,17 +9,20 @@ let quoteVersion = 0;
 const formatPublicPrice = price => `${Number(price).toLocaleString('ru-RU')} ₽`;
 const selectedValue = id => $(id).querySelector('[aria-pressed="true"]')?.dataset.value;
 const setStepPricesLoading = () => document.querySelectorAll('.option-step').forEach(step => {
-  step.textContent = 'Считаем доплату…';
-  step.closest('button').classList.remove('is-upgrade');
+  step.textContent = 'Считаем цену…';
+  step.closest('button').classList.remove('is-upgrade', 'is-downgrade');
 });
-const showStepPrices = (stepPrices, basePrices) => {
+const showStepPrices = (stepPrices, currentPrice) => {
   for (const [group, prices] of Object.entries(stepPrices)) {
     $(`${group}-options`)?.querySelectorAll('button').forEach(button => {
       const price = prices[button.dataset.value];
       const step = button.querySelector('.option-step');
       if (!step || !Number.isInteger(price)) return;
-      step.textContent = price > 0 ? `+ ${formatPublicPrice(price)}` : formatPublicPrice(basePrices[group]);
+      step.textContent = price === 0
+        ? formatPublicPrice(currentPrice)
+        : `${price > 0 ? '+' : '−'} ${formatPublicPrice(Math.abs(price))}`;
       button.classList.toggle('is-upgrade', price > 0);
+      button.classList.toggle('is-downgrade', price < 0);
     });
   }
 };
@@ -42,9 +45,10 @@ const optionButtons = (id, values, label, onChange, { preferred, preserve = true
     name.textContent = label(item.value);
     const step = document.createElement('span');
     step.className = 'option-step';
-    step.textContent = 'Считаем доплату…';
+    step.textContent = 'Считаем цену…';
     button.append(name, step);
     button.addEventListener('click', () => {
+      if (button.getAttribute('aria-pressed') === 'true') return;
       container.querySelectorAll('button').forEach(other => {
         const active = other === button;
         other.setAttribute('aria-pressed', String(active));
@@ -78,7 +82,7 @@ async function refreshQuote(configuration) {
     if (!response.ok) throw new Error(data.error || 'Не удалось рассчитать цену.');
     if (version !== quoteVersion) return;
     currentQuoteRub = data.priceRub;
-    showStepPrices(data.stepPricesRub, data.basePricesRub);
+    showStepPrices(data.stepPricesRub, currentQuoteRub);
     $('price').textContent = `Предварительная цена: ${formatPublicPrice(currentQuoteRub)}`;
     $('continue-order').disabled = false;
   } catch (error) {
@@ -92,9 +96,12 @@ function summary() {
   $('selection').textContent = describeConfiguration(configuration);
   void refreshQuote(configuration);
 }
-function chipChanged() {
+function chipChanged({ resetMemory = false } = {}) {
   const chip = model.chips.find(x => x.id === selectedValue('chip-options'));
-  optionButtons('memory-options', chip.memory, x => `${x} ГБ`, summary);
+  optionButtons('memory-options', chip.memory, x => `${x} ГБ`, summary, {
+    preferred: resetMemory && chip.memory.includes(16) ? 16 : undefined,
+    preserve: !resetMemory,
+  });
   optionButtons('storage-options', chip.storage, capacity, summary, { preferred: 256, preserve: false });
   summary();
 }
@@ -106,7 +113,7 @@ function modelChanged(id) {
   document.querySelectorAll('[data-model]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.model === id)));
   optionButtons('chip-options', model.chips, x => `${x.name} · ${x.cpu} CPU / ${x.gpu} GPU`, chipChanged, { preserve: false });
   optionButtons('ethernet-options', model.ethernet, x => `${x} Гбит/с`, summary, { preserve: false });
-  chipChanged();
+  chipChanged({ resetMemory: true });
 }
 function showStep(step) {
   $('configuration').hidden = step !== 'configuration';

@@ -31,6 +31,8 @@ input:not([type="checkbox"]) { width: 100%; min-height: 46px; min-width: 0; bord
 .option-name { line-height: 1.2; }
 .option-step { color: #651096; font-size: 13px; font-weight: bold; line-height: 1.15; }
 .option-buttons button.is-upgrade { border-style: dashed; border-color: #651096; }
+.option-buttons button.is-downgrade { border-style: dashed; border-color: #178b16; }
+.option-buttons button.is-downgrade .option-step { color: #126b12; }
 .option-buttons button[aria-pressed="true"] { color: #fff600; font-weight: bold; background: linear-gradient(#bd31ff, #7c00d9); border-color: #a420ed; text-shadow: 1px 1px #52005d; box-shadow: 2px 3px #4d087d; }
 .option-buttons button[aria-pressed="true"] .option-step { color: white; text-shadow: none; }
 .option-buttons button[aria-pressed="true"].is-upgrade { border-color: #fff600; }

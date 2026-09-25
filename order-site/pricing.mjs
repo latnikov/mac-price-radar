@@ -50,37 +50,32 @@ export function quoteCustomerPrice(value) {
   return Math.round(totalUsd * (pricingInfo.usdRub + pricingInfo.rateAdjustmentRub));
 }
 
-// Upgrade prices are derived from complete customer quotes. That keeps the UI in
-// sync with the authoritative price table without publishing its source amounts.
+// Option price changes are derived from complete customer quotes. That keeps the
+// UI in sync with the authoritative price table without publishing source amounts.
 export function quoteConfigurator(value) {
   const configuration = validateConfiguration(value);
   const model = catalog.models.find(item => item.id === configuration.model);
   const chip = model.chips.find(item => item.id === configuration.chip);
   const quote = overrides => quoteCustomerPrice({ ...configuration, ...overrides });
-  const startingQuote = candidate => quoteCustomerPrice({
+  const priceRub = quoteCustomerPrice(configuration);
+  const chipQuote = candidate => quoteCustomerPrice({
     model: model.id,
     chip: candidate.id,
-    memory: candidate.memory[0],
-    storage: candidate.storage[0],
+    memory: candidate.id === chip.id
+      ? configuration.memory
+      : (candidate.memory.includes(configuration.memory) ? configuration.memory : candidate.memory[0]),
+    storage: candidate.id === chip.id
+      ? configuration.storage
+      : (candidate.storage.includes(256) ? 256 : candidate.storage[0]),
     ethernet: model.ethernet[0],
   });
-  const modelBasePriceRub = startingQuote(model.chips[0]);
-  const memoryBasePriceRub = quote({ memory: chip.memory[0] });
-  const storageBasePriceRub = quote({ storage: chip.storage[0] });
-  const ethernetBasePriceRub = quote({ ethernet: model.ethernet[0] });
   return {
-    priceRub: quoteCustomerPrice(configuration),
-    basePricesRub: {
-      chip: modelBasePriceRub,
-      memory: memoryBasePriceRub,
-      storage: storageBasePriceRub,
-      ethernet: ethernetBasePriceRub,
-    },
+    priceRub,
     stepPricesRub: {
-      chip: Object.fromEntries(model.chips.map(option => [option.id, startingQuote(option) - modelBasePriceRub])),
-      memory: Object.fromEntries(chip.memory.map(option => [option, quote({ memory: option }) - memoryBasePriceRub])),
-      storage: Object.fromEntries(chip.storage.map(option => [option, quote({ storage: option }) - storageBasePriceRub])),
-      ethernet: Object.fromEntries(model.ethernet.map(option => [option, quote({ ethernet: option }) - ethernetBasePriceRub])),
+      chip: Object.fromEntries(model.chips.map(option => [option.id, chipQuote(option) - priceRub])),
+      memory: Object.fromEntries(chip.memory.map(option => [option, quote({ memory: option }) - priceRub])),
+      storage: Object.fromEntries(chip.storage.map(option => [option, quote({ storage: option }) - priceRub])),
+      ethernet: Object.fromEntries(model.ethernet.map(option => [option, quote({ ethernet: option }) - priceRub])),
     },
   };
 }
