@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createOrderService } from '../server.mjs';
 import { catalog } from '../catalog.mjs';
-import { pricingInfo, quoteCustomerPrice } from '../pricing.mjs';
+import { pricingInfo, quoteConfigurator, quoteCustomerPrice } from '../pricing.mjs';
 const order = () => ({ configuration: { model: 'mini', chip: 'm6-12-12', memory: 16, storage: 256, ethernet: 2.5 }, phone: '8 (999) 000-00-00', name: 'Тест', consent: true });
 async function setup(t, overrides = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'mac-orders-'));
@@ -104,8 +104,15 @@ test('keeps the 50 base totals private and publishes only final ruble quotes', a
   ]);
   assert.doesNotMatch(page, /<select\b/i);
   assert.match(page, /id="storage-options"/);
+  assert.match(page, /У базового варианта показана полная цена с ним/);
   assert.doesNotMatch(page, /Свериться с конфигуратором Apple/);
   assert.doesNotMatch(catalogSource, /prices|1189|applePrice|purchasePrice|procurement|customs|delivery/i);
-  assert.deepEqual(quote, { priceRub: 105319, currency: 'RUB' });
+  assert.deepEqual(quote, { ...quoteConfigurator(order().configuration), currency: 'RUB' });
+  assert.deepEqual(quote.basePricesRub, { chip: 105319, memory: 105319, storage: 105319, ethernet: 105319 });
+  assert.equal(quote.stepPricesRub.memory[16], 0);
+  assert.equal(quote.stepPricesRub.memory[24], 22145);
+  assert.equal(quote.stepPricesRub.memory[32], 44289);
+  assert.equal(quote.stepPricesRub.storage[512], 22145);
+  assert.equal(quote.stepPricesRub.chip['m5pro-15-16'], 88844);
   assert.equal(privatePricing.status, 404);
 });

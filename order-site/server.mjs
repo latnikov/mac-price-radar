@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { validateConfiguration, describeConfiguration } from './catalog.mjs';
-import { formatPublicPrice, pricingInfo, quoteCustomerPrice } from './pricing.mjs';
+import { formatPublicPrice, pricingInfo, quoteConfigurator, quoteCustomerPrice } from './pricing.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const fault = (status, message) => Object.assign(new Error(message), { status });
@@ -113,9 +113,9 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
           memory: Number(url.searchParams.get('memory')), storage: Number(url.searchParams.get('storage')),
           ethernet: Number(url.searchParams.get('ethernet')),
         };
-        let priceRub;
-        try { priceRub = quoteCustomerPrice(configuration); } catch (e) { throw fault(400, e.message); }
-        json(200, { priceRub, currency: 'RUB' }); return;
+        let quote;
+        try { quote = quoteConfigurator(configuration); } catch (e) { throw fault(400, e.message); }
+        json(200, { ...quote, currency: 'RUB' }); return;
       }
       if (req.method === 'GET' && path === '/healthz') { db.prepare('SELECT 1').get(); json(200, { ok: true }); return; }
       if (path === '/api/relay/claim' || path === '/api/relay/ack') {

@@ -8,6 +8,21 @@ let currentQuoteRub = null;
 let quoteVersion = 0;
 const formatPublicPrice = price => `${Number(price).toLocaleString('ru-RU')} ₽`;
 const selectedValue = id => $(id).querySelector('[aria-pressed="true"]')?.dataset.value;
+const setStepPricesLoading = () => document.querySelectorAll('.option-step').forEach(step => {
+  step.textContent = 'Считаем доплату…';
+  step.closest('button').classList.remove('is-upgrade');
+});
+const showStepPrices = (stepPrices, basePrices) => {
+  for (const [group, prices] of Object.entries(stepPrices)) {
+    $(`${group}-options`)?.querySelectorAll('button').forEach(button => {
+      const price = prices[button.dataset.value];
+      const step = button.querySelector('.option-step');
+      if (!step || !Number.isInteger(price)) return;
+      step.textContent = price > 0 ? `+ ${formatPublicPrice(price)}` : formatPublicPrice(basePrices[group]);
+      button.classList.toggle('is-upgrade', price > 0);
+    });
+  }
+};
 const optionButtons = (id, values, label, onChange, { preferred, preserve = true } = {}) => {
   const container = $(id);
   const previous = selectedValue(id);
@@ -22,7 +37,13 @@ const optionButtons = (id, values, label, onChange, { preferred, preserve = true
     button.setAttribute('role', 'radio');
     button.setAttribute('aria-pressed', String(item.id === selected));
     button.setAttribute('aria-checked', String(item.id === selected));
-    button.textContent = label(item.value);
+    const name = document.createElement('span');
+    name.className = 'option-name';
+    name.textContent = label(item.value);
+    const step = document.createElement('span');
+    step.className = 'option-step';
+    step.textContent = 'Считаем доплату…';
+    button.append(name, step);
     button.addEventListener('click', () => {
       container.querySelectorAll('button').forEach(other => {
         const active = other === button;
@@ -49,6 +70,7 @@ async function refreshQuote(configuration) {
   currentQuoteRub = null;
   $('continue-order').disabled = true;
   $('price').textContent = 'Считаем предварительную цену…';
+  setStepPricesLoading();
   try {
     const query = new URLSearchParams(Object.entries(configuration).map(([key, value]) => [key, String(value)]));
     const response = await fetch(`/api/quote?${query}`, { signal: AbortSignal.timeout(10000) });
@@ -56,10 +78,12 @@ async function refreshQuote(configuration) {
     if (!response.ok) throw new Error(data.error || 'Не удалось рассчитать цену.');
     if (version !== quoteVersion) return;
     currentQuoteRub = data.priceRub;
+    showStepPrices(data.stepPricesRub, data.basePricesRub);
     $('price').textContent = `Предварительная цена: ${formatPublicPrice(currentQuoteRub)}`;
     $('continue-order').disabled = false;
   } catch (error) {
     if (version !== quoteVersion) return;
+    document.querySelectorAll('.option-step').forEach(step => { step.textContent = 'Доплата недоступна'; });
     $('price').textContent = error.name === 'TimeoutError' ? 'Расчёт цены занял слишком много времени. Попробуйте ещё раз.' : error.message;
   }
 }
@@ -81,7 +105,7 @@ function modelChanged(id) {
   $('ethernet-block').hidden = model.id === 'mini';
   document.querySelectorAll('[data-model]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.model === id)));
   optionButtons('chip-options', model.chips, x => `${x.name} · ${x.cpu} CPU / ${x.gpu} GPU`, chipChanged, { preserve: false });
-  optionButtons('ethernet-options', model.ethernet, x => `${x} Гбит/с${model.id === 'studio' ? ' · в комплекте' : ''}`, summary, { preserve: false });
+  optionButtons('ethernet-options', model.ethernet, x => `${x} Гбит/с`, summary, { preserve: false });
   chipChanged();
 }
 function showStep(step) {

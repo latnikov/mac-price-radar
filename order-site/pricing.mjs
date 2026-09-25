@@ -1,4 +1,4 @@
-import { validateConfiguration } from './catalog.mjs';
+import { catalog, validateConfiguration } from './catalog.mjs';
 
 // Customer totals from the supplied workbook. This module is server-only.
 const totalsUsd = {
@@ -48,6 +48,41 @@ export function quoteCustomerPrice(value) {
   const totalUsd = totalsUsd[configuration.chip]?.[`${configuration.memory}-${configuration.storage}`];
   if (!Number.isInteger(totalUsd)) throw new Error('Для этой конфигурации пока нет предварительной цены.');
   return Math.round(totalUsd * (pricingInfo.usdRub + pricingInfo.rateAdjustmentRub));
+}
+
+// Upgrade prices are derived from complete customer quotes. That keeps the UI in
+// sync with the authoritative price table without publishing its source amounts.
+export function quoteConfigurator(value) {
+  const configuration = validateConfiguration(value);
+  const model = catalog.models.find(item => item.id === configuration.model);
+  const chip = model.chips.find(item => item.id === configuration.chip);
+  const quote = overrides => quoteCustomerPrice({ ...configuration, ...overrides });
+  const startingQuote = candidate => quoteCustomerPrice({
+    model: model.id,
+    chip: candidate.id,
+    memory: candidate.memory[0],
+    storage: candidate.storage[0],
+    ethernet: model.ethernet[0],
+  });
+  const modelBasePriceRub = startingQuote(model.chips[0]);
+  const memoryBasePriceRub = quote({ memory: chip.memory[0] });
+  const storageBasePriceRub = quote({ storage: chip.storage[0] });
+  const ethernetBasePriceRub = quote({ ethernet: model.ethernet[0] });
+  return {
+    priceRub: quoteCustomerPrice(configuration),
+    basePricesRub: {
+      chip: modelBasePriceRub,
+      memory: memoryBasePriceRub,
+      storage: storageBasePriceRub,
+      ethernet: ethernetBasePriceRub,
+    },
+    stepPricesRub: {
+      chip: Object.fromEntries(model.chips.map(option => [option.id, startingQuote(option) - modelBasePriceRub])),
+      memory: Object.fromEntries(chip.memory.map(option => [option, quote({ memory: option }) - memoryBasePriceRub])),
+      storage: Object.fromEntries(chip.storage.map(option => [option, quote({ storage: option }) - storageBasePriceRub])),
+      ethernet: Object.fromEntries(model.ethernet.map(option => [option, quote({ ethernet: option }) - ethernetBasePriceRub])),
+    },
+  };
 }
 
 export const formatPublicPrice = price => `${Number(price).toLocaleString('ru-RU')} ₽`;
