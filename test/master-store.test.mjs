@@ -9,6 +9,24 @@ const at = '2026-09-16T10:00:00.000Z';
 const offer = (overrides = {}) => ({ retailer: 'Shop', externalId: 'p1', title: 'MacBook', url: 'https://example.com/mac', price: 99990, currency: 'RUB', fetchedAt: at, condition: 'unknown', ...overrides });
 function memory(t) { const store = openMasterStore(':memory:'); t.after(() => store.close()); return store; }
 
+test('summary preserves prices and failed-attempt evidence; revisions track writes from other connections', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'master-revision-'));
+  const reader = openMasterStore(join(directory, 'master.sqlite'));
+  const writer = openMasterStore(join(directory, 'master.sqlite'));
+  t.after(() => { reader.close(); writer.close(); rmSync(directory, { recursive: true, force: true }); });
+  const before = reader.getRevision();
+  writer.ingestRun({ runId: 'accepted', observations: [offer({ raw: { payload: 'large' }, evidence: { method: 'test' } })] });
+  assert.notEqual(reader.getRevision(), before);
+  writer.ingestRun({ runId: 'failed', observations: [offer({ price: null, fetchedAt: '2026-09-16T11:00:00Z' })] });
+  const full = reader.getOffers({ includeRejected: true });
+  const summary = reader.getOffers({ includeRejected: true, summary: true });
+  assert.deepEqual(summary, full.map(({ raw, evidence, ...rest }) => rest));
+  assert.equal(summary[0].latestAttempt.rejected, true);
+  const localBefore = reader.getRevision();
+  reader.ingestRun({ runId: 'local', observations: [offer({ price: 99000, fetchedAt: '2026-09-16T12:00:00Z' })] });
+  assert.notEqual(reader.getRevision(), localBefore);
+});
+
 test('atomic ingestion preserves earlier sources and immutable history on partial failure', t => {
   const store = memory(t);
   store.ingestRun({ runId: 'one', observations: [offer(), offer({ retailer: 'Other', price: 100000 })], sources: [{ retailer: 'Shop', status: 'success' }, { retailer: 'Other', status: 'success' }] });

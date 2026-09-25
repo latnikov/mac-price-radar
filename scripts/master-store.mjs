@@ -94,6 +94,7 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
     CREATE TABLE IF NOT EXISTS runs (id TEXT PRIMARY KEY, started_at TEXT NOT NULL, finished_at TEXT NOT NULL, payload_hash TEXT NOT NULL, json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS observations (seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT UNIQUE NOT NULL, run_id TEXT NOT NULL REFERENCES runs(id), listing_id TEXT NOT NULL REFERENCES listings(id), observed_at TEXT NOT NULL, received_at TEXT NOT NULL, rejected INTEGER NOT NULL, json TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS observations_listing ON observations(listing_id, observed_at DESC, seq DESC);
+    CREATE INDEX IF NOT EXISTS observations_accepted ON observations(listing_id, observed_at DESC, seq DESC) WHERE rejected=0;
     CREATE INDEX IF NOT EXISTS observations_run ON observations(run_id);
     CREATE TABLE IF NOT EXISTS source_runs (run_id TEXT NOT NULL REFERENCES runs(id), source_id TEXT NOT NULL REFERENCES sources(id), json TEXT NOT NULL, PRIMARY KEY(run_id, source_id));
     CREATE TABLE IF NOT EXISTS audit (seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL, reason TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, json TEXT NOT NULL);
@@ -198,20 +199,45 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
       return run;
     });
   }
-  function getOffers({ includeRejected = false } = {}) {
-    // A failed fetch must not erase even an unverified legacy price from the table.
-    // Such a fallback remains rejected; it is never promoted to an accepted offer.
-    const rows = db.prepare(`SELECT o.json FROM observations o WHERE o.seq = COALESCE((SELECT good.seq FROM observations good WHERE good.listing_id=o.listing_id AND good.rejected=0 ORDER BY good.observed_at DESC,good.seq DESC LIMIT 1), ${includeRejected ? "(SELECT rejected.seq FROM observations rejected WHERE rejected.listing_id=o.listing_id ORDER BY CASE WHEN json_extract(rejected.json,'$.price') > 0 THEN 0 ELSE 1 END,rejected.observed_at DESC,rejected.seq DESC LIMIT 1)" : 'NULL'}) ORDER BY o.listing_id`).all();
-    return collapseEquivalentOffers(rows.map(row => {
+  const offerQueries = new Map();
+  function getOffers({ includeRejected = false, summary = false } = {}) {
+    // Seek once per listing, not once per historical observation. The partial
+    // index keeps successful-price lookup independent of failed-check history.
+    const key = `${includeRejected}:${summary}`;
+    if (!offerQueries.has(key)) offerQueries.set(key, db.prepare(`
+      SELECT ${summary ? "json_remove(o.json, '$.raw', '$.evidence')" : 'o.json'} AS json,
+        CASE WHEN latest.seq != o.seq THEN json_object(
+          'observationId', latest.id, 'observedAt', latest.observed_at,
+          'receivedAt', latest.received_at, 'rejected', json_extract(latest.json, '$.rejected'),
+          'validationStatus', json_extract(latest.json, '$.validationStatus'),
+          'validationIssues', json_extract(latest.json, '$.validationIssues'),
+          'qualityWarnings', json_extract(latest.json, '$.qualityWarnings'),
+          'runId', latest.run_id) END AS latest_json
+      FROM listings l
+      JOIN observations o ON o.seq = COALESCE(
+        (SELECT good.seq FROM observations good WHERE good.listing_id=l.id AND good.rejected=0
+         ORDER BY good.observed_at DESC,good.seq DESC LIMIT 1),
+        ${includeRejected ? "(SELECT rejected.seq FROM observations rejected WHERE rejected.listing_id=l.id ORDER BY CASE WHEN json_extract(rejected.json,'$.price') > 0 THEN 0 ELSE 1 END,rejected.observed_at DESC,rejected.seq DESC LIMIT 1)" : 'NULL'})
+      JOIN observations latest ON latest.seq =
+        (SELECT last.seq FROM observations last WHERE last.listing_id=l.id ORDER BY last.observed_at DESC,last.seq DESC LIMIT 1)
+      ORDER BY l.id`));
+    return collapseEquivalentOffers(offerQueries.get(key).all().map(row => {
       const offer = rowJSON(row);
       offer.currency = 'RUB';
       offer.model = canonicalModelName(offer.model);
       offer.storageGb = canonicalStorageGb(offer.storageGb);
-      const latest = rowJSON(db.prepare('SELECT json FROM observations WHERE listing_id=? ORDER BY observed_at DESC,seq DESC LIMIT 1').get(offer.listingId));
-      if (latest.observationId !== offer.observationId) offer.latestAttempt = { observationId: latest.observationId, observedAt: latest.observedAt, receivedAt: latest.receivedAt, rejected: latest.rejected, validationStatus: latest.validationStatus, validationIssues: latest.validationIssues, qualityWarnings: latest.qualityWarnings ?? [], runId: latest.runId };
+      if (row.latest_json) {
+        const latest = JSON.parse(row.latest_json);
+        latest.rejected = Boolean(latest.rejected);
+        latest.qualityWarnings ??= [];
+        offer.latestAttempt = latest;
+      }
       return offer;
     }));
   }
+  const dataVersion = db.prepare('PRAGMA data_version');
+  const localChanges = db.prepare('SELECT total_changes() AS changes');
+  const getRevision = () => `${dataVersion.get().data_version}:${localChanges.get().changes}`;
   function getHistory(reference, { limit = 1000 } = {}) {
     const value = typeof reference === 'string' ? { listingId: reference } : reference ?? {};
     let listingId = value.listingId ?? value.offerId;
@@ -356,7 +382,7 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
     return manifest;
   }
   return {
-    dbPath, ingestRun, getOffers, getHistory, previewImport, commitImport, saveQuote, listQuotes, saveCalculation, savePriceDecision, listPriceDecisions, backup,
+    dbPath, ingestRun, getOffers, getRevision, getHistory, previewImport, commitImport, saveQuote, listQuotes, saveCalculation, savePriceDecision, listPriceDecisions, backup,
     getRuns: ({ limit = 50 } = {}) => db.prepare('SELECT json FROM runs ORDER BY started_at DESC,rowid DESC LIMIT ?').all(Math.max(1, Math.min(1000, Number(limit) || 50))).map(rowJSON),
     getSources: () => db.prepare('SELECT json FROM sources ORDER BY id').all().map(rowJSON),
     getAudit: ({ limit = 100 } = {}) => db.prepare('SELECT json FROM audit ORDER BY seq DESC LIMIT ?').all(Math.max(1, Math.min(10000, Number(limit) || 100))).map(rowJSON),

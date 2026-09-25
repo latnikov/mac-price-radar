@@ -43,6 +43,40 @@ test('desktop price API preserves 50 workbook totals and separate CPU/GPU config
   assert.equal(data.rows[0].totalUsd, 1189);
   assert.equal(data.rows.at(-1).totalUsd, 14404);
 });
+test('table cache revalidates unchanged data and invalidates after a write; private offers stay private', async t => {
+  const app = await setup(t);
+  const offer = { retailer: 'Shop', externalId: 'one', title: 'MacBook Air', model: 'MacBook Air', url: 'https://shop.test/mac', price: 100000, fetchedAt: '2026-09-25T10:00:00Z' };
+  app.store.ingestRun({ runId: 'first', observations: [offer, { ...offer, externalId: 'private', visibility: 'private' }] });
+  let reads = 0;
+  const getOffers = app.store.getOffers;
+  app.store.getOffers = (...args) => { reads++; return getOffers(...args); };
+  const responses = await Promise.all(Array.from({ length: 8 }, () => app.request('/api/table')));
+  assert.equal(reads, 1);
+  const etag = responses[0].headers.get('etag');
+  const data = await responses[0].json();
+  assert.equal(data.offers.length, 1);
+  assert.equal(data.offers[0].price, 100000);
+  assert.equal(Object.hasOwn(data.offers[0], 'raw'), false);
+  assert.equal((await app.request('/api/table', { headers: { 'if-none-match': etag } })).status, 304);
+  app.store.ingestRun({ runId: 'second', observations: [{ ...offer, price: 90000, fetchedAt: '2026-09-25T11:00:00Z' }] });
+  const updated = await app.request('/api/table', { headers: { 'if-none-match': etag } });
+  assert.equal(updated.status, 200);
+  assert.notEqual(updated.headers.get('etag'), etag);
+  assert.equal((await updated.json()).offers[0].price, 90000);
+  assert.equal(reads, 2);
+});
+test('assets and desktop prices revalidate while sessions remain uncached', async t => {
+  const app = await setup(t);
+  for (const path of ['/web/', '/web/app.js', '/web/styles.css', '/api/desktop-prices']) {
+    const response = await app.request(path);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('cache-control'), 'private, no-cache');
+    const cached = await app.request(path, { headers: { 'if-none-match': `W/${response.headers.get('etag')}` } });
+    assert.equal(cached.status, 304);
+    assert.equal(await cached.text(), '');
+  }
+  assert.equal((await app.request('/api/session')).headers.get('cache-control'), 'no-store');
+});
 test('SEO assets, custom 404 and privacy-preserving analytics are served', async t => {
   const directory = await mkdtemp(`${tmpdir()}/server-analytics-`);
   t.after(async()=>{await rm(directory,{recursive:true,force:true});});

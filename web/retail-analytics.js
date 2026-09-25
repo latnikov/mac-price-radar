@@ -26,26 +26,78 @@ function lowestByRetailer(offers, retailerNames) {
   return result;
 }
 
-export function calculateRetailAnalytics(offers, { undercutRub = 500 } = {}) {
+export const colorPriceTrustKey = (offer, configurationKey) => [offer.retailer, configurationKey(offer), offer.color].join('\u0000');
+
+export function findColorPriceLowTrust(offers, configurationKey) {
+  if (typeof configurationKey !== 'function') throw new TypeError('configurationKey must be a function');
+  const groups = new Map();
+  for (const offer of offers) {
+    if (!usableOffer(offer) || !offer.retailer || !offer.color || offer.color === 'unknown') continue;
+    const groupKey = [offer.retailer, configurationKey(offer)].join('\u0000');
+    if (!groups.has(groupKey)) groups.set(groupKey, new Map());
+    const colors = groups.get(groupKey);
+    const current = colors.get(offer.color);
+    if (!current || offer.price < current.price) colors.set(offer.color, offer);
+  }
+
+  const lowTrust = new Map();
+  for (const colors of groups.values()) {
+    if (colors.size < 2) continue;
+    const comparisonPrice = Math.max(...[...colors.values()].map(offer => offer.price));
+    for (const offer of colors.values()) {
+      if (offer.price >= comparisonPrice) continue;
+      lowTrust.set(colorPriceTrustKey(offer, configurationKey), {
+        level: 'low',
+        label: 'низкий',
+        price: offer.price,
+        comparisonPrice,
+        reason: `Цвет ${offer.color} стоит дешевле другого цвета той же конфигурации`,
+      });
+    }
+  }
+  return lowTrust;
+}
+
+export function calculateRetailAnalytics(offers, { undercutRub = 500, additionalLowTrust = new Map() } = {}) {
   const procurement = lowestByRetailer(offers, PROCUREMENT_RETAILERS);
   const nizhny = lowestByRetailer(offers, NIZHNY_RETAILERS);
-  const trustedNizhny = [...nizhny.values()].filter(offer => RETAILER_TRUST[offer.retailer]?.level !== 'low');
-  const averageProcurement = average([...procurement.values()].map(offer => offer.price));
+  const staticallyTrustedNizhny = [...nizhny.values()].filter(offer => RETAILER_TRUST[offer.retailer]?.level !== 'low' && !additionalLowTrust.has(offer.retailer));
+  const nizhnyReferenceAverage = average(staticallyTrustedNizhny.map(offer => offer.price));
+  const dynamicallyLowTrust = new Set(staticallyTrustedNizhny
+    .filter(offer => nizhnyReferenceAverage != null && offer.price < nizhnyReferenceAverage * 0.95)
+    .map(offer => offer.retailer));
+  const trustedNizhny = staticallyTrustedNizhny.filter(offer => !dynamicallyLowTrust.has(offer.retailer));
+  const procurementBenchmark = [...procurement.values()].sort((a, b) => a.price - b.price)[0] || null;
+  const minimumProcurement = procurementBenchmark?.price ?? null;
   const averageRetail = average(trustedNizhny.map(offer => offer.price));
-  const averageDifference = averageProcurement == null || averageRetail == null ? null : averageRetail - averageProcurement;
-  const averageMarkupPercent = averageDifference == null || !averageProcurement ? null : averageDifference / averageProcurement * 100;
+  const difference = minimumProcurement == null || averageRetail == null ? null : averageRetail - minimumProcurement;
+  const markupPercent = difference == null || !minimumProcurement ? null : difference / minimumProcurement * 100;
   const benchmark = trustedNizhny.sort((a, b) => a.price - b.price)[0] || null;
   const recommendedPrice = benchmark ? Math.max(0, benchmark.price - undercutRub) : null;
+  const lowTrustRetailers = new Set([
+    ...[...nizhny.values()].filter(offer => RETAILER_TRUST[offer.retailer]?.level === 'low').map(offer => offer.retailer),
+    ...[...additionalLowTrust.keys()].filter(retailer => nizhny.has(retailer)),
+    ...dynamicallyLowTrust,
+  ]);
+  const lowTrustReasons = new Map([...lowTrustRetailers].map(retailer => [retailer,
+    RETAILER_TRUST[retailer]?.reason
+      || additionalLowTrust.get(retailer)?.reason
+      || 'Цена ниже среднего ориентира по Нижнему Новгороду более чем на 5%',
+  ]));
 
   return {
-    averageProcurement,
+    minimumProcurement,
+    procurementBenchmark,
     averageRetail,
-    averageDifference,
-    averageMarkupPercent,
+    difference,
+    markupPercent,
     recommendedPrice,
     benchmark,
+    nizhnyReferenceAverage,
+    lowTrustRetailers,
+    lowTrustReasons,
     procurementCount: procurement.size,
     retailCount: trustedNizhny.length,
-    ignoredLowTrustCount: [...nizhny.values()].filter(offer => RETAILER_TRUST[offer.retailer]?.level === 'low').length,
+    ignoredLowTrustCount: lowTrustRetailers.size,
   };
 }

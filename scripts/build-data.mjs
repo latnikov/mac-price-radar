@@ -1,7 +1,7 @@
 import { readFile, writeFile, rename, mkdir, open, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { parseProduct, price } from './offer-normalization.mjs';
-import { findRifaCategoryUrls, findRifaPageUrls, parseRifaCategory } from './rifastore.mjs';
+import { findRifaCategoryUrls, findRifaPageUrls, parseRifaCategory, deduplicateRifaOffers } from './rifastore.mjs';
 import { fetchTechnichnoOffers } from './technichno.mjs';
 import { fetchBsaOffers } from './bsa.mjs';
 import { fetchDimaOffers } from './dima.mjs';
@@ -16,6 +16,7 @@ import { extractProductPrice } from './structured-price.mjs';
 import { openMasterStore } from './master-store.mjs';
 import { inPublicSourceScope } from './domain.mjs';
 import { fetchResponseWithRetry } from './fetch-text.mjs';
+import { collectSources } from './collection-runner.mjs';
 
 const privateDir = 'data/private';
 await mkdir(`${privateDir}/backups`, { recursive: true, mode: 0o700 });
@@ -68,8 +69,10 @@ try {
     const block = reference.match(new RegExp(`var\\s+${name}\\s*=\\s*\\{([\\s\\S]*?)\\n\\};`))?.[1] || '';
     return [...block.matchAll(/['"]([A-Z0-9]+)['"]\s*:\s*['"]([^'"]+)['"]/g)].map(match => match[2]);
   };
+  const previousOffers = store.getOffers({ includeRejected: true, summary: true });
   const runSignal = AbortSignal.timeout(12 * 60_000);
   const fetchResponse = (url, options = {}) => fetchResponseWithRetry(url, {
+    signal: runSignal,
     attempts: options.attempts || 1,
     baseDelayMs: options.baseDelayMs || 500,
     maxDelayMs: options.maxDelayMs || 5000,
@@ -136,9 +139,10 @@ try {
           for (const next of findRifaPageUrls(html, url)) if (!seen.has(next)) queue.push(next);
         } catch (error) { failures.push(error.message); }
       }
-      return { offers: out, failures, counts: { pagesFetched: seen.size, found: out.length } };
+      const unique = deduplicateRifaOffers(out);
+      return { offers: unique, failures, counts: { pagesFetched: seen.size, found: out.length, unique: unique.length, duplicateCards: out.length - unique.length } };
     }
-    const urls = knownProductUrls(store.getOffers({ includeRejected: true }), retailer);
+    const urls = knownProductUrls(previousOffers, retailer);
     for (const slug of slugs(retailer === 'BigGeek' ? 'SLUGS_BIGGEEK' : 'SLUGS_IPHORIYA')) {
       urls.add((retailer === 'BigGeek' ? 'https://biggeek.ru/products/' : 'https://iphoriya.ru/product/') + slug);
     }
@@ -158,18 +162,22 @@ try {
     return { offers: out, failures, counts: { found: urls.size, parsed: out.filter(o => o.price).length, rejected: out.filter(o => !o.price).length } };
   }
   if (process.env.LIVE === '1') {
-    for (const retailer of selected) {
-      await atomicJson('data/status.json', { state: 'running', stage: 'fetching', source: retailer, completed: sources.length, total: selected.length, runId, startedAt, sources });
-      try {
-        const result = await collect(retailer);
-        const assessment = assessCollection(store.getOffers({ includeRejected: true }).filter(o => o.retailer === retailer && o.visibility !== 'private'), result.offers, result.failures);
-        sources.push({ retailer, status: assessment.status, counts: { ...result.counts, ...assessment.counts }, error: assessment.error });
-        observations.push(...assessment.observations.map(offer => ({ ...offer, visibility: 'public', dataKind: 'live' })));
-      } catch (error) { sources.push({ retailer, status: 'failed', error: error.message, counts: { published: 0 } }); }
+    const collected = await collectSources(selected, collect, {
+      concurrency: 3,
+      onProgress: progress => atomicJson('data/status.json', {
+        state: 'running', stage: 'fetching', source: progress.active.join(', '),
+        ...progress, runId, startedAt,
+      }),
+    });
+    for (const { retailer, value: result, error } of collected) {
+      if (error) { sources.push({ retailer, status: 'failed', error: error.message, counts: { published: 0 } }); continue; }
+      const assessment = assessCollection(previousOffers.filter(o => o.retailer === retailer && o.visibility !== 'private'), result.offers, result.failures);
+      sources.push({ retailer, status: assessment.status, counts: { ...result.counts, ...assessment.counts }, error: assessment.error });
+      observations.push(...assessment.observations.map(offer => ({ ...offer, visibility: 'public', dataKind: 'live' })));
     }
     store.ingestRun({ runId, startedAt, observations, sources, actor: 'parser', reason: 'Обновление публичных наблюдений' });
   }
-  const result = buildCatalogRows(catalog, store.getOffers({ includeRejected: true }).filter(offer => offer.visibility !== 'private' && inPublicSourceScope(offer)).map(({ raw, evidence, ...summary }) => summary));
+  const result = buildCatalogRows(catalog, store.getOffers({ includeRejected: true, summary: true }).filter(offer => offer.visibility !== 'private' && inPublicSourceScope(offer)));
   await atomicJson('data/cheapest.json', result);
   const failures = sources.filter(source => ['failed', 'degraded', 'partial'].includes(source.status));
   await atomicJson('data/status.json', { state: failures.length ? 'degraded' : 'ready', stage: 'complete', completed: sources.length, total: sources.length, sources, runId, startedAt, updatedAt: new Date().toISOString(), error: failures.length ? failures.map(x => `${x.retailer}: ${x.error || x.status}`).join('; ') : null });

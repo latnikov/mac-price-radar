@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProduct, price } from '../scripts/offer-normalization.mjs';
-import { findRifaCategoryUrls, findRifaNextPage, findRifaPageUrls, parseRifaCategory } from '../scripts/rifastore.mjs';
+import { deduplicateRifaOffers, findRifaCategoryUrls, findRifaNextPage, findRifaPageUrls, parseRifaCategory } from '../scripts/rifastore.mjs';
 
 const title = 'MacBook Air 13, M4 (10c CPU, 10c GPU) RAM 24 ГБ, SSD 1 ТБ, Starlight (Сияющая звезда), английская раскладка (KB-US)';
 const productUrl = 'https://rifastore.ru/products/macbook-air-13-m4-10c-cpu-10c-gpu-ram-24-gb-ssd-1-tb-starlight';
@@ -32,4 +32,13 @@ test('parses an Angular RifaStore card into the catalog format', () => {
   assert.equal(offer.color, 'Starlight');
   assert.equal(offer.cpuCores, 10);
   assert.equal(offer.gpuCores, 10);
+});
+
+
+test('overlapping Rifa categories do not duplicate history, but price conflicts remain', () => {
+  const offer = { url: productUrl, title, price: 142000 };
+  const result = deduplicateRifaOffers([offer, { ...offer, fetchedAt: 'later' }, { ...offer, price: 145000 }]);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].fetchedAt, 'later');
+  assert.deepEqual(result.map(item => item.price), [142000, 145000]);
 });

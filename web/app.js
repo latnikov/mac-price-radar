@@ -1,4 +1,4 @@
-import { calculateRetailAnalytics, RETAILER_TRUST } from './retail-analytics.js';
+import { calculateRetailAnalytics, colorPriceTrustKey, findColorPriceLowTrust, RETAILER_TRUST } from './retail-analytics.js';
 
 const $ = id => document.getElementById(id);
 const state = {
@@ -22,7 +22,10 @@ const RETAILER_GROUPS = [
 const CONFIGURED_RETAILERS = RETAILER_GROUPS.flatMap(group => group.retailers.map(retailer => retailer.name));
 const text = (tag, value, cls) => { const node = document.createElement(tag); if (value != null) node.textContent = String(value); if (cls) node.className = cls; return node; };
 const date = value => Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString('ru-RU') : 'Дата не указана';
-const number = value => Number(value).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+const numberFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 });
+const sortCollator = new Intl.Collator('ru', { numeric: true });
+const moscowDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit' });
+const number = value => numberFormat.format(Number(value));
 const plural = (n, forms) => forms[n % 100 >= 11 && n % 100 <= 14 ? 2 : n % 10 === 1 ? 0 : n % 10 >= 2 && n % 10 <= 4 ? 1 : 2];
 const storage = value => value >= 1024 && value % 1024 === 0 ? `${value / 1024} TB` : value >= 1000 && value % 1000 === 0 ? `${value / 1000} TB` : value ? `${value} GB` : '—';
 const amount = offer => `${number(offer.price)} ₽`;
@@ -32,12 +35,40 @@ const compareOffers = (a, b) => a.price - b.price || String(a.url).localeCompare
 const model = offer => String(offer.model || offer.title || 'Не распознано').replace(/\s+/g, ' ').trim();
 const family = offer => /^Mac mini/i.test(model(offer)) ? 'mini' : /^Mac Studio/i.test(model(offer)) ? 'studio' : /MacBook\s+Air/i.test(model(offer)) ? 'air' : /MacBook\s+Pro/i.test(model(offer)) ? 'pro' : /MacBook\s+Neo/i.test(model(offer)) ? 'neo' : /^iMac\b/i.test(model(offer)) ? 'imac' : 'other';
 const screen = offer => offer.screenIn || Number(model(offer).match(/\b(13|14|15|16|24|27)\b/)?.[1]) || null;
-const key = offer => [model(offer), offer.chip, offer.ramGb, offer.storageGb, offer.color].join('|');
-const characteristics = offer => [offer.cpuCores ? `CPU ${offer.cpuCores}` : null, offer.gpuCores ? `GPU ${offer.gpuCores}` : null, offer.keyboard && offer.keyboard !== 'unknown' ? `KB ${offer.keyboard}` : null, offer.region && offer.region !== 'unknown' ? offer.region : null].filter(Boolean).join(' · ');
+const canonicalStorage = value => ({ 1024: 1000, 2048: 2000, 4096: 4000, 8192: 8000, 16384: 16000 })[Number(value)] ?? value;
+// Only comparable hardware configurations belong to the same analytics row.
+const colorConfigurationKey = offer => [model(offer), offer.chip, screen(offer), offer.cpuCores, offer.gpuCores, offer.ramGb, canonicalStorage(offer.storageGb)].map(value => value ?? 'unknown').join('|');
+const key = offer => [colorConfigurationKey(offer), offer.color ?? 'unknown'].join('|');
+const characteristics = offer => [offer.keyboard && offer.keyboard !== 'unknown' ? `KB ${offer.keyboard}` : null, offer.region && offer.region !== 'unknown' ? offer.region : null].filter(Boolean).join(' · ');
 const message = value => { $('message').textContent = value; $('message').hidden = !value; };
 
+function trustForRetailer(retailer, analytics, colorTrust) {
+  const configured = RETAILER_TRUST[retailer];
+  if (configured) return configured;
+  if (colorTrust) return colorTrust;
+  if (!analytics?.lowTrustRetailers.has(retailer)) return null;
+  return { level: 'low', label: 'низкий', reason: analytics.lowTrustReasons.get(retailer) };
+}
+
+function configurationCell(offer) {
+  const cell = text('td', null, 'configuration-cell');
+  cell.append(text('span', model(offer), 'configuration-model'));
+  const badges = text('span', null, 'configuration-badges');
+  const values = [
+    screen(offer) ? `${screen(offer)}″` : null,
+    offer.chip || null,
+    offer.cpuCores && offer.gpuCores ? `CPU ${offer.cpuCores} · GPU ${offer.gpuCores}` : 'CPU/GPU не указаны',
+    offer.ramGb ? `RAM ${offer.ramGb} GB` : null,
+    offer.storageGb ? `SSD ${storage(offer.storageGb)}` : null,
+    offer.color && offer.color !== 'unknown' ? offer.color : null,
+  ];
+  for (const value of values.filter(Boolean)) badges.append(text('span', value, `configuration-badge${value === 'CPU/GPU не указаны' ? ' incomplete' : ''}`));
+  cell.append(badges);
+  return cell;
+}
+
 async function api(path, body) {
-  const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : { 'content-type': 'application/json', 'x-csrf-token': state.csrf }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const response = await fetch(path, { signal: AbortSignal.timeout(30000), method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : { 'content-type': 'application/json', 'x-csrf-token': state.csrf }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const value = await response.json();
   if (!response.ok) throw new Error(value.error || `HTTP ${response.status}`);
   return value;
@@ -74,7 +105,7 @@ function choiceButton(label, filter, value, active, current = false) {
 function renderOptions(id, filter, values, format, anyLabel = 'Любой') {
   const selected = state.filters[filter];
   const nodes = [choiceButton(anyLabel, filter, '', selected === '')];
-  for (const value of [...new Set(values.filter(item => item != null && item !== '' && item !== 'unknown'))].sort((a, b) => typeof a === 'number' ? a - b : String(a).localeCompare(String(b), 'ru', { numeric: true }))) {
+  for (const value of [...new Set(values.filter(item => item != null && item !== '' && item !== 'unknown'))].sort((a, b) => typeof a === 'number' ? a - b : sortCollator.compare(String(a), String(b)))) {
     nodes.push(choiceButton(format(value), filter, value, String(selected) === String(value)));
   }
   $(id).replaceChildren(...nodes);
@@ -97,7 +128,7 @@ function renderControls() {
   $('chip-step').hidden = state.filters.family === null;
   if (state.filters.family === null) { $('spec-step').hidden = true; return; }
 
-  const chips = [...new Set(familyOffers().map(offer => offer.chip).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }));
+  const chips = [...new Set(familyOffers().map(offer => offer.chip).filter(Boolean))].sort((a, b) => sortCollator.compare(a, b));
   const currentSet = state.filters.family === '*' ? new Set(Object.values(CURRENT_CHIPS).flatMap(set => [...set])) : (CURRENT_CHIPS[state.filters.family] || new Set());
   const current = chips.filter(chip => currentSet.has(chip));
   const older = chips.filter(chip => !currentSet.has(chip));
@@ -146,7 +177,9 @@ function retailerGroups() {
   return other.length ? [...RETAILER_GROUPS, { key: 'other', label: 'Другие', retailers: other }] : RETAILER_GROUPS;
 }
 
-function render() {
+let renderVersion = 0;
+async function render() {
+  const version = ++renderVersion;
   const ready = state.filters.family !== null && state.filters.chip !== null;
   $('sort').disabled = !ready; $('export').disabled = !ready;
   $('selection-prompt').hidden = ready;
@@ -161,22 +194,28 @@ function render() {
   const offers = filtered();
   const desktop = ['desktops', 'mini', 'studio'].includes(state.filters.family);
   $('desktop-note').hidden = !desktop;
-  $('footer-note').textContent = desktop ? 'Показаны исходные суммы из Excel. Для цены в рублях откройте сайт заказов.' : 'В ячейке — цена на сайте магазина. Нажмите на ценник, чтобы открыть страницу товара.';
+  $('table-note').textContent = desktop ? 'Показаны исходные суммы из Excel. Для цены в рублях откройте сайт заказов.' : 'Цена в ячейке ведёт на карточку магазина.';
   $('analytics-method').hidden = desktop;
   if (desktop) { renderDesktop(offers); return; }
+  const colorPriceTrust = findColorPriceLowTrust(familyOffers(), colorConfigurationKey);
   const groups = new Map();
   for (const offer of offers) { const id = key(offer); if (!groups.has(id)) groups.set(id, { sample: offer, offers: [] }); groups.get(id).offers.push(offer); }
-  const groupsSorted = [...groups.values()].sort((a, b) => {
-    const mode = $('sort').value;
-    const priceA = Math.min(...a.offers.map(offer => offer.price), Infinity), priceB = Math.min(...b.offers.map(offer => offer.price), Infinity);
-    return mode === 'price-up' ? priceA - priceB : mode === 'price-down' ? priceB - priceA : mode === 'fresh' ? Math.max(...b.offers.map(offer => Date.parse(offer.fetchedAt) || 0)) - Math.max(...a.offers.map(offer => Date.parse(offer.fetchedAt) || 0)) : key(a.sample).localeCompare(key(b.sample), 'ru', { numeric: true });
-  });
+  const mode = $('sort').value;
+  for (const group of groups.values()) {
+    group.sortKey = key(group.sample);
+    group.minimumPrice = Math.min(...group.offers.map(offer => offer.price));
+    group.latestAt = Math.max(...group.offers.map(offer => Date.parse(offer.fetchedAt) || 0));
+    group.byRetailer = new Map();
+    for (const offer of group.offers) {
+      const items = group.byRetailer.get(offer.retailer) || [];
+      items.push(offer); group.byRetailer.set(offer.retailer, items);
+    }
+  }
+  const groupsSorted = [...groups.values()].sort((a, b) => mode === 'price-up' ? a.minimumPrice - b.minimumPrice : mode === 'price-down' ? b.minimumPrice - a.minimumPrice : mode === 'fresh' ? b.latestAt - a.latestAt : sortCollator.compare(a.sortKey, b.sortKey));
   const priceGroups = retailerGroups();
   const groupHeading = text('tr', null, 'column-groups');
-  for (const name of ['Модель', 'Чип', 'RAM', 'SSD', 'Цвет']) {
-    const cell = text('th', name, name === 'Модель' ? 'model-heading' : null);
-    cell.rowSpan = 2; cell.scope = 'col'; groupHeading.append(cell);
-  }
+  const modelHeading = text('th', 'Модель и конфигурация', 'model-heading');
+  modelHeading.rowSpan = 2; modelHeading.scope = 'col'; groupHeading.append(modelHeading);
   const bestHeading = text('th', 'Лучшая цена', 'best-price-heading');
   bestHeading.rowSpan = 2; bestHeading.scope = 'col'; groupHeading.append(bestHeading);
   const analyticsHeading = text('th', 'Ритейл-аналитика', 'retailer-group-heading retailer-group-analytics');
@@ -186,7 +225,7 @@ function render() {
     cell.colSpan = group.retailers.length; cell.scope = 'colgroup'; groupHeading.append(cell);
   }
   const retailerHeading = text('tr', null, 'retailer-headings');
-  for (const [label, extraClass] of [['Средняя закупка', ''], ['Средняя цена НН', ''], ['Средняя разница', ''], ['Рекоменд. цена', ' recommended-heading']]) {
+  for (const [label, extraClass] of [['Мин. закупка', ''], ['Средняя цена НН', ''], ['Разница', ''], ['Рекоменд. цена', ' recommended-heading']]) {
     const cell = text('th', label, `retailer-heading retailer-analytics${extraClass}`); cell.scope = 'col'; retailerHeading.append(cell);
   }
   for (const group of priceGroups) {
@@ -199,13 +238,17 @@ function render() {
     }
   }
   $('head').replaceChildren(groupHeading, retailerHeading);
+  $('count').textContent = `${groupsSorted.length} ${plural(groupsSorted.length, ['строка', 'строки', 'строк'])} · ${offers.length} ${plural(offers.length, ['предложение', 'предложения', 'предложений'])} · ${state.retailers.length} ${plural(state.retailers.length, ['магазин', 'магазина', 'магазинов'])}`;
+  $('rows').replaceChildren();
+  $('empty').hidden = groupsSorted.length > 0;
   const fragment = document.createDocumentFragment();
+  let rendered = 0;
   for (const group of groupsSorted) {
     const row = text('tr'), sample = group.sample;
-    for (const value of [model(sample), sample.chip || '—', sample.ramGb ? `${sample.ramGb} GB` : '—', storage(sample.storageGb), sample.color && sample.color !== 'unknown' ? sample.color : '—']) row.append(text('td', value));
+    row.append(configurationCell(sample));
     const displayed = new Map();
     for (const retailerGroup of priceGroups) for (const retailer of retailerGroup.retailers) {
-      const items = group.offers.filter(offer => offer.retailer === retailer.name).sort(compareOffers);
+      const items = (group.byRetailer.get(retailer.name) || []).sort(compareOffers);
       displayed.set(retailer.name, { items, first: items[0] });
     }
     const bestCell = text('td', null, 'price-cell best-price-cell');
@@ -218,25 +261,31 @@ function render() {
       else if (Date.now() - Date.parse(best.fetchedAt) > 4 * 3600000) bestCell.append(text('span', 'Старая проверка', 'tag warn'));
     }
     row.append(bestCell);
-    const analytics = calculateRetailAnalytics(group.offers);
+    const colorLowTrustByRetailer = new Map();
+    for (const [retailer, { first }] of displayed) {
+      if (!first) continue;
+      const colorTrust = colorPriceTrust.get(colorPriceTrustKey(first, colorConfigurationKey));
+      if (colorTrust) colorLowTrustByRetailer.set(retailer, colorTrust);
+    }
+    const analytics = calculateRetailAnalytics(group.offers, { additionalLowTrust: colorLowTrustByRetailer });
     const procurementCell = text('td', null, 'analytics-cell retailer-analytics');
-    procurementCell.append(text('span', rubles(analytics.averageProcurement), analytics.averageProcurement == null ? 'empty-cell' : 'price'));
-    if (analytics.procurementCount) procurementCell.append(text('span', `${analytics.procurementCount} ${plural(analytics.procurementCount, ['источник', 'источника', 'источников'])}`, 'variant'));
+    procurementCell.append(text('span', rubles(analytics.minimumProcurement), analytics.minimumProcurement == null ? 'empty-cell' : 'price'));
+    if (analytics.procurementBenchmark) procurementCell.append(text('span', `минимум · ${analytics.procurementBenchmark.retailer}`, 'variant'));
     row.append(procurementCell);
     const retailCell = text('td', null, 'analytics-cell retailer-analytics');
     retailCell.append(text('span', rubles(analytics.averageRetail), analytics.averageRetail == null ? 'empty-cell' : 'price'));
     if (analytics.retailCount) retailCell.append(text('span', `${analytics.retailCount} ${plural(analytics.retailCount, ['магазин', 'магазина', 'магазинов'])}`, 'variant'));
     row.append(retailCell);
-    const differenceClass = analytics.averageDifference == null ? '' : analytics.averageDifference >= 0 ? ' positive' : ' negative';
+    const differenceClass = analytics.difference == null ? '' : analytics.difference >= 0 ? ' positive' : ' negative';
     const differenceCell = text('td', null, `analytics-cell retailer-analytics analytics-difference${differenceClass}`);
-    const differenceText = analytics.averageDifference == null ? '—' : `${analytics.averageDifference >= 0 ? '+' : ''}${rubles(analytics.averageDifference)}`;
-    differenceCell.append(text('span', differenceText, analytics.averageDifference == null ? 'empty-cell' : 'price'));
-    if (analytics.averageMarkupPercent != null) differenceCell.append(text('span', `${analytics.averageMarkupPercent >= 0 ? '+' : ''}${number(analytics.averageMarkupPercent)}%`, 'variant'));
+    const differenceText = analytics.difference == null ? '—' : `${analytics.difference >= 0 ? '+' : ''}${rubles(analytics.difference)}`;
+    differenceCell.append(text('span', differenceText, analytics.difference == null ? 'empty-cell' : 'price'));
+    if (analytics.markupPercent != null) differenceCell.append(text('span', `${analytics.markupPercent >= 0 ? '+' : ''}${number(analytics.markupPercent)}%`, 'variant'));
     row.append(differenceCell);
     const recommendedCell = text('td', null, 'analytics-cell retailer-analytics recommended-cell');
     recommendedCell.append(text('span', rubles(analytics.recommendedPrice), analytics.recommendedPrice == null ? 'empty-cell' : 'price'));
     if (analytics.benchmark) recommendedCell.append(text('span', `на 500 ₽ ниже ${analytics.benchmark.retailer}`, 'variant'));
-    if (analytics.recommendedPrice != null && analytics.averageProcurement != null && analytics.recommendedPrice <= analytics.averageProcurement) recommendedCell.append(text('span', 'Ниже средней закупки', 'tag warn'));
+    if (analytics.recommendedPrice != null && analytics.minimumProcurement != null && analytics.recommendedPrice <= analytics.minimumProcurement) recommendedCell.append(text('span', 'Ниже минимальной закупки', 'tag warn'));
     row.append(recommendedCell);
     for (const retailerGroup of priceGroups) for (const [index, retailer] of retailerGroup.retailers.entries()) {
       const cell = text('td', null, `price-cell retailer-${retailerGroup.key}${index === 0 ? ' retailer-group-start' : ''}`);
@@ -245,22 +294,27 @@ function render() {
       else {
         cell.append(safeLink(first));
         const details = characteristics(first); if (details) cell.append(text('span', details, 'variant'));
-        const trust = RETAILER_TRUST[retailer.name]; if (trust) { const badge = text('span', `Trust: ${trust.label}`, 'trust-badge'); badge.title = trust.reason; cell.append(badge); }
+        const trust = trustForRetailer(retailer.name, analytics, colorLowTrustByRetailer.get(retailer.name));
+        if (trust) { cell.classList.add('low-trust-price'); const badge = text('span', `Trust: ${trust.label}`, 'trust-badge'); badge.title = trust.reason; cell.append(badge); }
         if (stock(first) === 'out') cell.append(text('span', 'Нет в наличии', 'tag')); else if (retailerGroup.key === 'procurement') cell.append(text('span', procurementAge(first), 'tag')); else if (Date.now() - Date.parse(first.fetchedAt) > 4 * 3600000) cell.append(text('span', 'Старая проверка', 'tag warn'));
       }
       row.append(cell);
     }
     fragment.append(row);
+    if (++rendered % 40 === 0) {
+      $('rows').append(fragment);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      if (version !== renderVersion) return;
+    }
   }
-  $('rows').replaceChildren(fragment);
-  $('count').textContent = `${groupsSorted.length} ${plural(groupsSorted.length, ['строка', 'строки', 'строк'])} · ${offers.length} ${plural(offers.length, ['предложение', 'предложения', 'предложений'])} · ${state.retailers.length} ${plural(state.retailers.length, ['магазин', 'магазина', 'магазинов'])}`;
+  $('rows').append(fragment);
   $('empty').hidden = groupsSorted.length > 0;
 }
 
 function procurementAge(offer) {
   const source = offer.validFrom || offer.fetchedAt;
   if (!source || !Number.isFinite(Date.parse(source))) return 'Дата прайса неизвестна';
-  const day = value => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
+  const day = value => moscowDay.format(new Date(value));
   const sourceDay = /^\d{4}-\d{2}-\d{2}$/.test(source) ? source : day(source);
   if (sourceDay === day(Date.now())) return 'Сегодняшний ценник';
   if (sourceDay === day(Date.now() - 86400000)) return 'Вчерашний ценник';
@@ -269,7 +323,7 @@ function procurementAge(offer) {
 
 function renderDesktop(offers) {
   const mode = $('sort').value;
-  const sorted = [...offers].sort((a, b) => mode === 'price-up' ? a.price - b.price : mode === 'price-down' ? b.price - a.price : a.listingId.localeCompare(b.listingId, 'ru', { numeric: true }));
+  const sorted = [...offers].sort((a, b) => mode === 'price-up' ? a.price - b.price : mode === 'price-down' ? b.price - a.price : sortCollator.compare(a.listingId, b.listingId));
   const heading = text('tr', null, 'column-groups');
   for (const label of ['Модель', 'Чип · CPU / GPU', 'Память', 'SSD', 'Apple, $', 'Вес, кг', 'Доставка, $', 'Таможня, $', 'Организация и сопровождение, $', 'Итого покупателю, $']) heading.append(text('th', label));
   $('head').replaceChildren(heading);
@@ -285,25 +339,59 @@ function renderDesktop(offers) {
 
 function resetSpecs() { Object.assign(state.filters, { screen: '', ram: '', ssd: '', color: '', stock: '' }); $('min-price').value = ''; $('max-price').value = ''; }
 
-async function reload() {
-  const data = await api('/api/master');
-  const offers = data.rows.flatMap(row => row.offers).filter(offer => offer.visibility !== 'private' && Number.isFinite(offer.price) && offer.price > 0);
-  const latest = new Map();
-  for (const offer of offers) { const id = offer.listingId || [offer.retailer, offer.externalId || offer.sourceVariantId || '', offer.url, offer.keyboard, offer.paymentMethod, offer.minimumQuantity].join('|'); const prior = latest.get(id); if (!prior || Date.parse(offer.fetchedAt) >= Date.parse(prior.fetchedAt)) latest.set(id, offer); }
-  const desktop = await api('/api/desktop-prices');
-  const desktopOffers = desktop.rows.map((row, i) => ({ ...row, desktop: true, currency: 'USD', price: row.totalUsd, retailer: 'Прайс под заказ', stock: 'unknown', listingId: `desktop-${i}`, fetchedAt: desktop.sourceDate, title: `${row.model} ${row.chip}`, url: 'https://order.macbookbro.ru' }));
-  state.offers = [...latest.values(), ...desktopOffers];
-  const discovered = [...new Set(state.offers.filter(offer => !offer.desktop).map(offer => offer.retailer))];
-  state.retailers = [...CONFIGURED_RETAILERS, ...discovered.filter(retailer => !CONFIGURED_RETAILERS.includes(retailer)).sort((a, b) => a.localeCompare(b, 'ru'))];
+let reloadPending;
+function updateOffers(market, desktop) {
+  state.offers = [...market, ...desktop];
+  const discovered = [...new Set(market.map(offer => offer.retailer))];
+  state.retailers = [...CONFIGURED_RETAILERS, ...discovered.filter(retailer => !CONFIGURED_RETAILERS.includes(retailer)).sort(sortCollator.compare)];
   renderControls(); render();
 }
+function reload() {
+  if (reloadPending) return reloadPending;
+  // The opening desktop table is usable while market prices load independently.
+  const desktopTask = api('/api/desktop-prices').then(desktop => {
+    state.desktopOffers = desktop.rows.map((row, i) => ({ ...row, desktop: true, currency: 'USD', price: row.totalUsd, retailer: 'Прайс под заказ', stock: 'unknown', listingId: `desktop-${i}`, fetchedAt: desktop.sourceDate, title: `${row.model} ${row.chip}`, url: 'https://order.macbookbro.ru' }));
+    if (['desktops', 'mini', 'studio'].includes(state.filters.family)) {
+      updateOffers(state.marketOffers || [], state.desktopOffers);
+      document.body.classList.remove('is-loading');
+      $('filters').removeAttribute('aria-busy');
+    }
+  });
+  const marketTask = api('/api/table').then(data => { state.marketOffers = data.offers; });
+  reloadPending = Promise.allSettled([desktopTask, marketTask]).then(results => {
+    updateOffers(state.marketOffers || [], state.desktopOffers || []);
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
+  }).finally(() => { reloadPending = null; });
+  return reloadPending;
+}
 
-async function poll() {
+async function poll(reloadOnChange = true) {
   const status = await api('/api/status'); const running = status.state === 'running';
   $('status').textContent = running ? `Обновление: ${status.source || 'источники'}${status.total ? ` · ${status.completed}/${status.total}` : ''}` : status.error ? 'Часть источников не обновилась' : status.updatedAt ? `Последний сбор: ${date(status.updatedAt)}` : 'Цены из сохранённой базы';
   if (status.autoRefreshIntervalMs) $('status').textContent += ` · Автоматически каждый час${status.nextRefreshAt ? ` · Следующий сбор: ${date(status.nextRefreshAt)}` : ''}`;
-  message(status.error || ''); if (!running && (state.wasRunning || (status.updatedAt && state.updatedAt !== status.updatedAt))) await reload(); state.wasRunning = running; state.updatedAt = status.updatedAt;
+  message(status.error || '');
+  if (reloadOnChange && !running && (state.wasRunning || (status.updatedAt && state.updatedAt !== status.updatedAt))) await reload();
+  state.wasRunning = running; state.updatedAt = status.updatedAt;
 }
+
+let pollTimer;
+let pollPending = false;
+async function pollLoop() {
+  if (pollPending) return;
+  clearTimeout(pollTimer);
+  if (document.hidden) return;
+  pollPending = true;
+  try { await poll(); } catch (error) { message(error.message); }
+  finally {
+    pollPending = false;
+    if (!document.hidden) pollTimer = setTimeout(pollLoop, state.wasRunning ? 5000 : 30000);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  clearTimeout(pollTimer);
+  if (!document.hidden && state.ready) void pollLoop();
+});
 
 $('filters').addEventListener('click', event => {
   const button = event.target.closest('button[data-filter]'); if (!button) return;
@@ -316,7 +404,25 @@ $('filters').addEventListener('click', event => {
 });
 $('min-price').addEventListener('input', render); $('max-price').addEventListener('input', render); $('sort').addEventListener('change', render);
 $('reset').addEventListener('click', () => { Object.assign(state.filters, { family: 'desktops', chip: '*', screen: '', ram: '', ssd: '', color: '', stock: '' }); $('sort').value = 'model'; resetSpecs(); renderControls(); render(); track('filter_reset'); });
-$('export').addEventListener('click', () => { const value = { generatedAt: new Date().toISOString(), filters: { ...state.filters, minPrice: $('min-price').value, maxPrice: $('max-price').value }, offers: filtered() }; const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' })); const link = text('a'); link.href = url; link.download = `prices-${new Date().toISOString().slice(0, 10)}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); track('export'); });
+$('export').addEventListener('click', async () => {
+  const button = $('export');
+  button.disabled = true;
+  const selected = filtered();
+  const filters = { ...state.filters, minPrice: $('min-price').value, maxPrice: $('max-price').value };
+  try {
+    let offers = selected;
+    if (selected.some(offer => !offer.desktop)) {
+      const ids = new Set(selected.map(offer => offer.listingId));
+      const full = await api('/api/master');
+      offers = full.rows.flatMap(row => row.offers).filter(offer => ids.has(offer.listingId) && offer.visibility !== 'private');
+    }
+    const value = { generatedAt: new Date().toISOString(), filters, offers };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+    const link = text('a'); link.href = url; link.download = `prices-${new Date().toISOString().slice(0, 10)}.json`; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000); track('export');
+  } catch (error) { message(error.message); }
+  finally { button.disabled = false; }
+});
 document.addEventListener('click', event => { const link = event.target.closest('[data-analytics]'); if (link) track(link.dataset.analytics); });
 
 try {
@@ -338,7 +444,12 @@ async function init() {
       for (const price of data.prices) { if (Date.parse(price.validUntil) <= Date.now()) continue; const row = text('tr'); for (const value of [price.title, `${number(price.priceMinor / 100)} ₽`, price.city]) row.append(text('td', value)); $('rows').append(row); }
       $('status').textContent = `Выгрузка: ${date(data.generatedAt)}`; $('count').textContent = 'Публичный каталог'; $('empty').hidden = !!$('rows').children.length; return;
     }
-    const session = await api('/api/session'); state.csrf = session.csrfToken; await reload(); await poll(); track('page_view'); setInterval(() => poll().catch(error => message(error.message)), 5000);
+    const sessionTask = api('/api/session').then(session => { state.csrf = session.csrfToken; track('page_view'); });
+    const results = await Promise.allSettled([reload(), poll(false), sessionTask]);
+    state.ready = true;
+    pollTimer = setTimeout(pollLoop, state.wasRunning ? 5000 : 30000);
+    const failed = results.find(result => result.status === 'rejected');
+    if (failed) throw failed.reason;
   } catch (error) { $('status').textContent = 'Не удалось загрузить цены'; message(error.message); }
   finally { document.body.classList.remove('is-loading'); $('filters').removeAttribute('aria-busy'); }
 }

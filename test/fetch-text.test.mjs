@@ -24,3 +24,13 @@ test('does not retry permanent HTTP failures', async () => {
   }), /HTTP 404/);
   assert.equal(calls, 1);
 });
+
+test('aborted collection starts no new request and terminal errors release the response body', async () => {
+  let calls = 0, cancelled = false;
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(fetchTextWithRetry('https://shop.test', { signal: controller.signal, fetchImpl: async () => { calls++; } }), { name: 'AbortError' });
+  assert.equal(calls, 0);
+  await assert.rejects(fetchTextWithRetry('https://shop.test', { fetchImpl: async () => ({ ok: false, status: 404, body: { cancel: async () => { cancelled = true; } } }) }), /404/);
+  assert.equal(cancelled, true);
+});

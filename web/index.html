@@ -21,6 +21,7 @@
   <link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="modulepreload" href="./retail-analytics.js">
   <script type="module" src="./app.js"></script>
 </head>
 <body>
@@ -73,17 +74,14 @@
 </section>
 <p id="desktop-note" hidden>Прайс под заказ из Excel от 26.08.2026. Все суммы в долларах США; вес — транспортный. Итог включает доставку, таможню, организацию и сопровождение. <a href="https://order.macbookbro.ru" target="_blank" rel="noopener">Цена в рублях и заказ</a></p>
 <div class="table-meta"><span id="count"></span><div><label>Сортировать <select id="sort"><option value="model">По модели</option><option value="price-up">Сначала дешевле</option><option value="price-down">Сначала дороже</option><option value="fresh">Сначала свежие</option></select></label><button id="export" class="secondary">Скачать срез JSON</button></div></div>
+<div class="table-intro">
+  <p id="table-note">Цена в ячейке ведёт на карточку магазина.</p>
+  <details id="analytics-method" hidden><summary>Как считаются аналитика и Trust</summary><p>Закупка — минимальная актуальная цена закупочного источника. Разница считается между ней и средней доверенной ценой НН. Низкий Trust получает цена магазина НН ниже среднего ориентира более чем на 5%, а также более дешёвый цвет той же конфигурации в одном магазине. Такие цены не влияют на среднюю и рекомендацию. ReSale имеет низкий Trust по умолчанию.</p></details>
+</div>
 <p id="message" role="alert" hidden></p>
 <p id="selection-prompt" class="selection-prompt">Выберите модель, затем процессор — после этого покажем подходящие цены.</p>
 <main class="table-wrap" id="table-wrap" hidden><table><thead id="head"></thead><tbody id="rows"></tbody></table></main>
 <p id="empty" hidden>По этим фильтрам предложений нет.</p>
-<footer>
-  <div class="divider" aria-hidden="true"></div>
-  <p id="footer-note">В ячейке — цена на сайте магазина. Нажмите на ценник, чтобы открыть страницу товара.</p>
-  <p id="analytics-method" class="small" hidden>Средние считаются по минимальной актуальной цене каждого магазина. Рекомендация — на 500 ₽ ниже минимальной цены НН с обычным Trust. ReSale имеет низкий Trust и в расчёты не входит.</p>
-  <p class="badges"><span>MADE WITH &hearts; &amp; HTML</span> <span>TIMES INSIDE</span></p>
-  <address>Макбучная · Нижний Новгород, ул. Грузинская, 41А</address>
-</footer>
 <a class="mobile-cta" data-analytics="order_cta_mobile" href="https://order.macbookbro.ru">Заказать Mac →</a>
 <aside id="cookie-banner" class="cookie-banner" aria-label="Настройки конфиденциальности" hidden>
   <p><b>О cookie и статистике.</b> Мы не ставим рекламные cookie. Сайт хранит только ваше согласие на этом устройстве и считает обезличенные просмотры без IP-адресов.</p>

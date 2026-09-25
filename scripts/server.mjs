@@ -7,6 +7,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { buildCatalogRows } from './catalog-rows.mjs';
 import { ingestBusinessUpdate, startBsaBusinessPolling } from './telegram-business.mjs';
 import { inPublicSourceScope } from './domain.mjs';
+import { createResponseCache, cachedFile, sendCached } from './response-cache.mjs';
 
 const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'RifaStore', 'BSA', 'Дима'];
 const STATIC_FILES = new Map([
@@ -69,6 +70,8 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
   const { calculateEconomics } = await import('./procurement.mjs');
   const csrfToken = randomBytes(32).toString('hex');
   const previews = new Map();
+  const responseCache = createResponseCache();
+  const cachedReply = (req, res, value, type = 'application/json; charset=utf-8') => sendCached(req, res, value, type, SECURITY_HEADERS);
   let activeJob = null;
   let jobStatus = null;
   let bsaWebhookQueue = Promise.resolve();
@@ -197,16 +200,30 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       if (path === '/web/public-config.json') return send(res, 200, { mode: 'local' });
       if (path === '/api/session') return send(res, 200, { mode: 'local', csrfToken, retailers: RETAILERS });
       if (path === '/status' || path === '/api/status') return send(res, 200, { ...await status(), autoRefreshIntervalMs, nextRefreshAt });
-      if (path === '/api/desktop-prices') return send(res, 200, JSON.parse(await readFile(join(root, 'data/desktop-prices.json'), 'utf8')));
+      if (path === '/api/desktop-prices') return cachedReply(req, res, await cachedFile(responseCache, join(root, 'data/desktop-prices.json')));
+      if (path === '/api/table') {
+        const snapshot = await responseCache('table', store.getRevision(), () => {
+          const fields = ['listingId', 'retailer', 'title', 'model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color', 'cpuCores', 'gpuCores', 'keyboard', 'region', 'price', 'currency', 'stock', 'url', 'fetchedAt', 'validFrom', 'validUntil', 'condition', 'paymentMethod', 'minimumQuantity', 'priceType', 'validationStatus', 'qualityWarnings'];
+          const offers = store.getOffers({ includeRejected: true, summary: true })
+            .filter(offer => offer.visibility !== 'private' && !offer.isDemo && offer.dataKind !== 'demo' && inPublicSourceScope(offer) && Number.isFinite(offer.price) && offer.price > 0)
+            .map(offer => Object.fromEntries(fields.filter(field => offer[field] !== undefined).map(field => [field, offer[field]])));
+          return { schemaVersion: 1, offers };
+        });
+        return cachedReply(req, res, snapshot);
+      }
       if (path === '/api/master') {
-        const catalog = JSON.parse(await readFile(join(root, 'data/catalog.json'), 'utf8'));
-        const offers = store.getOffers({ includeRejected: true }).filter(inPublicSourceScope).map(({ raw, evidence, ...summary }) => summary);
-        const rows = buildCatalogRows(catalog, offers);
-        for (const quote of store.listQuotes()) {
-          if (rows.some(row => row.productKey === quote.variantId || row.product.id === quote.variantId || row.offers.some(offer => offer.listingId === quote.listingId))) continue;
-          rows.push({ productKey: quote.variantId || quote.id, product: { id: quote.variantId || quote.id, ...quote.variant, name: quote.title || quote.variantId || 'Ручная котировка', reviewStatus: quote.status==='confirmed'?'exact':'needs_review' }, color: quote.variant?.color || null, offers: [], best: null, emptyReason: 'Нет наблюдений рынка; вариант из ручной котировки' });
-        }
-        return send(res, 200, { schemaVersion: 1, generatedAt: new Date().toISOString(), rows });
+        const catalogFile = await cachedFile(responseCache, join(root, 'data/catalog.json'));
+        const snapshot = await responseCache('master', `${store.getRevision()}:${catalogFile.etag}:${Math.floor(Date.now() / 30000)}`, () => {
+          const catalog = JSON.parse(catalogFile.body);
+          const offers = store.getOffers({ includeRejected: true, summary: true }).filter(inPublicSourceScope);
+          const rows = buildCatalogRows(catalog, offers);
+          for (const quote of store.listQuotes()) {
+            if (rows.some(row => row.productKey === quote.variantId || row.product.id === quote.variantId || row.offers.some(offer => offer.listingId === quote.listingId))) continue;
+            rows.push({ productKey: quote.variantId || quote.id, product: { id: quote.variantId || quote.id, ...quote.variant, name: quote.title || quote.variantId || 'Ручная котировка', reviewStatus: quote.status==='confirmed'?'exact':'needs_review' }, color: quote.variant?.color || null, offers: [], best: null, emptyReason: 'Нет наблюдений рынка; вариант из ручной котировки' });
+          }
+          return { schemaVersion: 1, generatedAt: new Date().toISOString(), rows };
+        });
+        return cachedReply(req, res, snapshot);
       }
       if (path === '/api/offers') return send(res, 200, store.getOffers({ includeRejected: true }).filter(inPublicSourceScope));
       if (path === '/api/history') {
@@ -226,7 +243,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
         if (path.startsWith('/api/')) return send(res, 404, { error: 'Не найдено' });
         return send(res, 404, await readFile(join(root, 'web/404.html')), 'text/html; charset=utf-8');
       }
-      try { return send(res, 200, await readFile(join(root, asset[0])), asset[1]); }
+      try { return cachedReply(req, res, await cachedFile(responseCache, join(root, asset[0])), asset[1]); }
       catch { return send(res, 404, { error: 'Не найдено' }); }
     } catch (error) {
       const code = error.statusCode || (/version|conflict|конфликт/i.test(error.message) ? 409 : 400);

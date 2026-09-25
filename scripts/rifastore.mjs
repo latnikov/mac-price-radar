@@ -45,3 +45,14 @@ export function parseRifaCategory(html, pageUrl) {
   }
   return products;
 }
+
+// The same card appears in overlapping categories. Keep one observation for
+// identical product/price pairs, but retain conflicts for the existing review.
+export function deduplicateRifaOffers(offers) {
+  const unique = new Map();
+  for (const offer of offers) {
+    const key = JSON.stringify([offer.url, offer.title, offer.price, offer.validationStatus]);
+    unique.set(key, offer);
+  }
+  return [...unique.values()];
+}
