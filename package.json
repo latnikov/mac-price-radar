@@ -12,7 +12,9 @@
     "export:public": "node scripts/export-public.mjs",
     "backup": "node scripts/backup.mjs",
     "telegram:poll": "node scripts/telegram-business-poll.mjs",
-    "telegram:webhook": "node scripts/telegram-business-webhook.mjs"
+    "telegram:webhook": "node scripts/telegram-business-webhook.mjs",
+    "dev:orders": "node order-site/server.mjs",
+    "test:orders": "node --test order-site/test/*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",

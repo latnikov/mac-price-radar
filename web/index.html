@@ -1,16 +1,49 @@
 <!doctype html>
 <html lang="ru">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mac Price Radar — цены по магазинам</title><link rel="stylesheet" href="./styles.css"><script type="module" src="./app.js"></script></head>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mac Price Radar — цены Mac и ритейл-аналитика в Нижнем Новгороде</title>
+  <meta name="description" content="Живая таблица закупочных и розничных цен на Mac, аналитика маржи и рекомендованная цена для Нижнего Новгорода.">
+  <meta name="theme-color" content="#7200cb">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="Mac Price Radar — цены и ритейл-аналитика">
+  <meta property="og:description" content="Сравниваем закупку и цены магазинов Нижнего Новгорода, считаем разницу и рекомендованную цену.">
+  <meta property="og:url" content="https://dev.macbookbro.ru/web/">
+  <meta property="og:image" content="https://dev.macbookbro.ru/web/og-image.jpg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Ретро-баннер Mac Price Radar с таблицей цен и видом Нижнего Новгорода">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://dev.macbookbro.ru/web/">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
 <body>
-<header><div><h1>Mac Price Radar</h1><p>Цены по российским магазинам</p></div><div class="header-actions"><span id="status">Загружаем цены…</span><button id="refresh">Обновить цены</button></div></header>
+<header>
+  <p class="welcome">Добро пожаловать в</p>
+  <h1>Mac Price Radar!</h1>
+  <p class="city">Закупка и розничные цены · Нижний Новгород</p>
+  <div class="divider" aria-hidden="true"></div>
+  <p class="announcement"><b>ЦЕНОВОЙ РАДАР</b> <span>Сравниваем магазины и считаем лучшую цену.</span></p>
+  <div class="header-actions"><span id="status" role="status">Загружаем цены…</span></div>
+  <a class="cta" data-analytics="order_cta" href="https://order.macbookbro.ru">Заказать Mac по лучшей цене →</a>
+</header>
 <section class="filters" id="filters">
   <div class="filter-top">
-    <label class="search">Поиск<input id="search" type="search" placeholder="Модель, чип, цвет или магазин…"></label>
+    <strong>Выберите Mac и конфигурацию</strong>
     <button id="reset" class="secondary">Сбросить выбор</button>
   </div>
   <div class="filter-step">
     <div class="step-label"><strong>1. Модель</strong><span>Выберите линейку устройств</span></div>
     <div class="choice-group" id="family-options" aria-label="Линейка Apple Mac">
+      <button type="button" class="choice" data-filter="family" data-value="desktops">Новые mini и Studio</button>
+      <button type="button" class="choice" data-filter="family" data-value="mini">Mac mini</button>
+      <button type="button" class="choice" data-filter="family" data-value="studio">Mac Studio</button>
       <button type="button" class="choice" data-filter="family" data-value="air">MacBook Air</button>
       <button type="button" class="choice" data-filter="family" data-value="pro">MacBook Pro</button>
       <button type="button" class="choice" data-filter="family" data-value="neo">MacBook Neo</button>
@@ -38,10 +71,22 @@
     <div class="price-range"><label>Цена от<input id="min-price" type="number" min="0" placeholder="₽"></label><label>Цена до<input id="max-price" type="number" min="0" placeholder="₽"></label></div>
   </div>
 </section>
+<p id="desktop-note" hidden>Прайс под заказ из Excel от 26.08.2026. Все суммы в долларах США; вес — транспортный. Итог включает доставку, таможню, организацию и сопровождение. <a href="https://order.macbookbro.ru" target="_blank" rel="noopener">Цена в рублях и заказ</a></p>
 <div class="table-meta"><span id="count"></span><div><label>Сортировать <select id="sort"><option value="model">По модели</option><option value="price-up">Сначала дешевле</option><option value="price-down">Сначала дороже</option><option value="fresh">Сначала свежие</option></select></label><button id="export" class="secondary">Скачать срез JSON</button></div></div>
 <p id="message" role="alert" hidden></p>
 <p id="selection-prompt" class="selection-prompt">Выберите модель, затем процессор — после этого покажем подходящие цены.</p>
 <main class="table-wrap" id="table-wrap" hidden><table><thead id="head"></thead><tbody id="rows"></tbody></table></main>
 <p id="empty" hidden>По этим фильтрам предложений нет.</p>
-<footer>В ячейке — цена на сайте магазина. Нажмите на ценник, чтобы открыть страницу товара.</footer>
+<footer>
+  <div class="divider" aria-hidden="true"></div>
+  <p id="footer-note">В ячейке — цена на сайте магазина. Нажмите на ценник, чтобы открыть страницу товара.</p>
+  <p id="analytics-method" class="small" hidden>Средние считаются по минимальной актуальной цене каждого магазина. Рекомендация — на 500 ₽ ниже минимальной цены НН с обычным Trust. ReSale имеет низкий Trust и в расчёты не входит.</p>
+  <p class="badges"><span>MADE WITH &hearts; &amp; HTML</span> <span>TIMES INSIDE</span></p>
+  <address>Макбучная · Нижний Новгород, ул. Грузинская, 41А</address>
+</footer>
+<a class="mobile-cta" data-analytics="order_cta_mobile" href="https://order.macbookbro.ru">Заказать Mac →</a>
+<aside id="cookie-banner" class="cookie-banner" aria-label="Настройки конфиденциальности" hidden>
+  <p><b>О cookie и статистике.</b> Мы не ставим рекламные cookie. Сайт хранит только ваше согласие на этом устройстве и считает обезличенные просмотры без IP-адресов.</p>
+  <button id="cookie-accept" type="button">Понятно</button>
+</aside>
 </body></html>

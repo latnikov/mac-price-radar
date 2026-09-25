@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { buildCatalogRows } from './catalog-rows.mjs';
@@ -14,7 +14,15 @@ const STATIC_FILES = new Map([
   ['/web/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/index.html', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/app.js', ['web/app.js', 'text/javascript; charset=utf-8']],
+  ['/web/retail-analytics.js', ['web/retail-analytics.js', 'text/javascript; charset=utf-8']],
   ['/web/styles.css', ['web/styles.css', 'text/css; charset=utf-8']],
+  ['/web/favicon.svg', ['web/favicon.svg', 'image/svg+xml']],
+  ['/web/favicon-32.png', ['web/favicon-32.png', 'image/png']],
+  ['/web/apple-touch-icon.png', ['web/apple-touch-icon.png', 'image/png']],
+  ['/web/og-image.jpg', ['web/og-image.jpg', 'image/jpeg']],
+  ['/robots.txt', ['web/robots.txt', 'text/plain; charset=utf-8']],
+  ['/sitemap.xml', ['web/sitemap.xml', 'application/xml; charset=utf-8']],
+  ['/thank-you.html', ['web/thank-you.html', 'text/html; charset=utf-8']],
 ]);
 const SECURITY_HEADERS = {
   'cache-control': 'no-store',
@@ -52,7 +60,7 @@ function runCollector({ root, retailers, timeoutMs }) {
   }, error => error ? reject(new Error(error.killed ? 'Превышен срок выполнения сбора' : 'Сбор завершился с ошибкой; сохранён последний успешный снимок')) : resolveJob()));
 }
 
-export async function createMasterServer({ root = process.cwd(), store, refreshRunner = runCollector, refreshTimeoutMs = 15 * 60 * 1000, telegramRefreshDelayMs = 1500, env = process.env } = {}) {
+export async function createMasterServer({ root = process.cwd(), store, refreshRunner = runCollector, refreshTimeoutMs = 15 * 60 * 1000, telegramRefreshDelayMs = 1500, autoRefreshIntervalMs = 0, analyticsPath = join(root, 'data/private/analytics.ndjson'), env = process.env } = {}) {
   const ownsStore = !store;
   if (!store) {
     const { openMasterStore } = await import('./master-store.mjs');
@@ -65,6 +73,8 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
   let jobStatus = null;
   let bsaWebhookQueue = Promise.resolve();
   let telegramRefreshTimer = null;
+  let autoRefreshTimer = null;
+  let nextRefreshAt = null;
   const pendingTelegramRetailers = new Set();
 
   async function status() {
@@ -141,13 +151,27 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       if (req.method === 'POST') {
         const token = Buffer.from(String(req.headers['x-csrf-token'] || ''));
         const expected = Buffer.from(csrfToken);
-        if (req.headers.origin !== `http://${req.headers.host}` || token.length !== expected.length || !timingSafeEqual(token, expected)) return send(res, 403, { error: 'Откройте локальную мастер-таблицу и повторите действие' });
+        const allowedOrigins = new Set([`http://${req.headers.host}`, String(env.PUBLIC_ORIGIN || 'https://dev.macbookbro.ru').replace(/\/$/, '')]);
+        if (!allowedOrigins.has(req.headers.origin) || token.length !== expected.length || !timingSafeEqual(token, expected)) return send(res, 403, { error: 'Откройте мастер-таблицу и повторите действие' });
         const body = await jsonBody(req);
         if (path === '/api/refresh' || path === '/refresh') {
           const retailer = body.retailer || url.searchParams.get('retailer');
           if (retailer && !RETAILERS.includes(retailer)) return send(res, 400, { error: 'Неизвестный источник' });
           const started = refresh(retailer ? [retailer] : RETAILERS);
           return send(res, started ? 202 : 409, started ? { started: true } : { error: 'Сбор уже выполняется' });
+        }
+        if (path === '/api/analytics') {
+          const allowedEvents = new Set(['page_view', 'order_cta', 'order_cta_mobile', 'filter_change', 'filter_reset', 'export']);
+          if (!allowedEvents.has(body.event)) return send(res, 400, { error: 'Неизвестное событие аналитики' });
+          const record = {
+            recordedAt: new Date().toISOString(),
+            event: body.event,
+            path: String(body.path || '').slice(0, 200),
+            properties: body.properties && typeof body.properties === 'object' && !Array.isArray(body.properties) ? body.properties : {},
+          };
+          await mkdir(dirname(analyticsPath), { recursive: true, mode: 0o700 });
+          await appendFile(analyticsPath, `${JSON.stringify(record)}\n`, { encoding: 'utf8', mode: 0o600 });
+          return send(res, 200, { accepted: true });
         }
         if (path === '/api/quotes') return send(res, 200, store.saveQuote(body));
         if (path === '/api/calculations') return send(res, 200, store.saveCalculation(body));
@@ -172,7 +196,8 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       }
       if (path === '/web/public-config.json') return send(res, 200, { mode: 'local' });
       if (path === '/api/session') return send(res, 200, { mode: 'local', csrfToken, retailers: RETAILERS });
-      if (path === '/status' || path === '/api/status') return send(res, 200, await status());
+      if (path === '/status' || path === '/api/status') return send(res, 200, { ...await status(), autoRefreshIntervalMs, nextRefreshAt });
+      if (path === '/api/desktop-prices') return send(res, 200, JSON.parse(await readFile(join(root, 'data/desktop-prices.json'), 'utf8')));
       if (path === '/api/master') {
         const catalog = JSON.parse(await readFile(join(root, 'data/catalog.json'), 'utf8'));
         const offers = store.getOffers({ includeRejected: true }).filter(inPublicSourceScope).map(({ raw, evidence, ...summary }) => summary);
@@ -197,7 +222,10 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       if (path === '/') { res.writeHead(302, { ...SECURITY_HEADERS, location: '/web/' }); return res.end(); }
       if (path === '/api/audit') return send(res, 200, store.getAudit());
       const asset = STATIC_FILES.get(path);
-      if (!asset) return send(res, 404, { error: 'Не найдено' });
+      if (!asset) {
+        if (path.startsWith('/api/')) return send(res, 404, { error: 'Не найдено' });
+        return send(res, 404, await readFile(join(root, 'web/404.html')), 'text/html; charset=utf-8');
+      }
       try { return send(res, 200, await readFile(join(root, asset[0])), asset[1]); }
       catch { return send(res, 404, { error: 'Не найдено' }); }
     } catch (error) {
@@ -205,7 +233,21 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       send(res, code, { error: error.message || 'Не удалось выполнить действие' });
     }
   });
+  // The server owns the schedule: it works without an open browser, and shares
+  // the same lock with manual and Telegram-triggered collection.
+  if (autoRefreshIntervalMs > 0) {
+    const tick = () => {
+      nextRefreshAt = new Date(Date.now() + autoRefreshIntervalMs).toISOString();
+      refresh(RETAILERS);
+    };
+    server.once('listening', () => {
+      tick();
+      autoRefreshTimer = setInterval(tick, autoRefreshIntervalMs);
+      autoRefreshTimer.unref?.();
+    });
+  }
   server.on('close', () => {
+    if (autoRefreshTimer) clearInterval(autoRefreshTimer);
     if (telegramRefreshTimer) clearTimeout(telegramRefreshTimer);
     if (ownsStore) store.close();
   });
@@ -214,7 +256,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 4173);
-  const server = await createMasterServer();
+  const server = await createMasterServer({ autoRefreshIntervalMs: Number(process.env.AUTO_REFRESH_INTERVAL_MS ?? 3600000) });
   const bsaPolling = startBsaBusinessPolling();
   server.on('close', () => { void bsaPolling.stop(); });
   server.listen(port, '127.0.0.1', () => console.log(`Мастер-таблица: http://127.0.0.1:${port}/web/`));

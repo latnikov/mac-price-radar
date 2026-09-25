@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Макбучная — Mac mini и Mac Studio на заказ</title>
+  <meta name="description" content="Выберите конфигурацию Mac mini или Mac Studio и оставьте заявку в Макбучной. Нижний Новгород.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%237200cb'/%3E%3Ctext x='4' y='25' font-family='serif' font-weight='bold' font-size='28' fill='%23ffff00'%3EМ%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header>
+    <p class="welcome">Добро пожаловать в</p>
+    <h1>Макбучную!</h1>
+    <p class="city">Компьютеры Mac на заказ · Нижний Новгород</p>
+    <div class="divider" aria-hidden="true"></div>
+    <p class="announcement"><b>НОВИНКИ APPLE</b> <span>Большие возможности. Маленькие компьютеры.</span></p>
+  </header>
+  <main>
+    <nav aria-label="Выбор компьютера" class="models">
+      <button type="button" data-model="mini" aria-pressed="true">Mac mini</button>
+      <button type="button" data-model="studio" aria-pressed="false">Mac Studio</button>
+    </nav>
+    <form id="configuration">
+      <fieldset>
+        <legend>1. Соберите свой <span id="model-name">Mac mini</span></legend>
+        <div class="fields">
+          <div class="option-block">
+            <p id="chip-label" class="option-label">Процессор <span>(чип и количество ядер)</span></p>
+            <div id="chip-options" class="option-buttons" role="radiogroup" aria-labelledby="chip-label"></div>
+          </div>
+          <div class="option-block">
+            <p id="memory-label" class="option-label">Оперативная память</p>
+            <div id="memory-options" class="option-buttons" role="radiogroup" aria-labelledby="memory-label"></div>
+          </div>
+          <div class="option-block">
+            <p id="storage-label" class="option-label">Накопитель SSD</p>
+            <div id="storage-options" class="option-buttons" role="radiogroup" aria-labelledby="storage-label"></div>
+          </div>
+          <div class="option-block" id="ethernet-block">
+            <p id="ethernet-label" class="option-label">Подключение Ethernet</p>
+            <div id="ethernet-options" class="option-buttons" role="radiogroup" aria-labelledby="ethernet-label"></div>
+          </div>
+        </div>
+        <p id="studio-note" class="small" hidden>512 ГБ памяти: Apple заявляет доступность в конце октября. Пока этот вариант нельзя выбрать.</p>
+      </fieldset>
+      <section class="summary" aria-labelledby="summary-title">
+        <h2 id="summary-title">Ваш будущий Mac</h2>
+        <p id="selection" aria-live="polite"></p>
+        <p id="price" class="price" aria-live="polite"></p>
+        <p>Это предварительная цена. Точную стоимость и срок привоза в Нижний Новгород подтвердим по телефону.</p>
+      </section>
+      <button class="primary" id="continue-order" type="submit">Оформить заказ</button>
+      <p class="small centered">Без оплаты на сайте. Сначала всё обсудим.</p>
+    </form>
+    <section id="contact-step" hidden aria-labelledby="contact-title">
+      <h2 id="contact-title" tabindex="-1">2. Как с вами связаться?</h2>
+      <p id="contact-selection"></p>
+      <p id="contact-price" class="price"></p>
+      <form id="order">
+        <label for="phone">Номер телефона <b aria-hidden="true">*</b></label>
+        <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="+7 (999) 123-45-67" maxlength="24" required>
+        <label for="customer-name">Как вас зовут <span>(необязательно)</span></label>
+        <input id="customer-name" name="name" autocomplete="name" maxlength="100" placeholder="Имя или ФИО">
+        <div class="trap" aria-hidden="true"><label for="website">Ваш сайт</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+        <label class="consent"><input id="consent" name="consent" type="checkbox" required> <span>Согласен на обработку имени и телефона для связи по этой заявке. <a href="/privacy.html" target="_blank">Подробнее</a></span></label>
+        <p id="form-error" role="alert" hidden></p>
+        <p id="availability" role="status"></p>
+        <button class="primary" id="submit-order" type="submit">Отправить заявку</button>
+        <button class="back" type="button" id="back">← Изменить конфигурацию</button>
+      </form>
+    </section>
+    <section id="success" hidden aria-labelledby="success-title" role="status">
+      <h2 id="success-title" tabindex="-1">Спасибо! Заявка принята.</h2>
+      <p>Номер заявки: <strong id="order-number"></strong></p>
+      <p>Мы свяжемся с вами по указанному телефону и подтвердим стоимость и срок привоза.</p>
+      <p id="success-selection"></p>
+      <p id="success-price" class="price"></p>
+      <button type="button" id="new-order">Выбрать ещё один Mac</button>
+    </section>
+    <noscript>Для выбора конфигурации и отправки заявки включите JavaScript в браузере.</noscript>
+  </main>
+  <footer>
+    <div class="divider" aria-hidden="true"></div>
+    <p><b>Макбучная</b> · Нижний Новгород</p>
+    <p class="badges"><span>MADE WITH ♥ &amp; HTML</span> <span>MAC INSIDE</span></p>
+    <p class="small">Предварительные цены по прайсу. Конфигурации проверены 24.09.2026. <a href="/privacy.html">Обработка данных</a></p>
+  </footer>
+</body>
+</html>

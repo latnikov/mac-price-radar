@@ -1,0 +1,6 @@
+order.macbookbro.ru {
+    request_body {
+        max_size 8KB
+    }
+    reverse_proxy 127.0.0.1:4180
+}

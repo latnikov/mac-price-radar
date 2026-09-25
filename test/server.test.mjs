@@ -33,6 +33,49 @@ test('AC17 project files and cross-site mutation are blocked; reading never refr
   assert.equal((await app.post('/api/refresh',{retailer:'ReSale'})).status,202);
   assert.equal(app.refreshes(),1);
 });
+test('desktop price API preserves 50 workbook totals and separate CPU/GPU configurations', async t => {
+  const app = await setup(t);
+  const data = await (await app.request('/api/desktop-prices')).json();
+  assert.equal(data.currency, 'USD');
+  assert.equal(data.rows.length, 50);
+  assert.equal(new Set(data.rows.map(row => [row.model, row.chip, row.cpuCores, row.gpuCores, row.ramGb, row.storageGb].join('|'))).size, 50);
+  for (const row of data.rows) assert.equal(row.appleUsd + row.deliveryUsd + row.customsUsd + row.serviceUsd, row.totalUsd);
+  assert.equal(data.rows[0].totalUsd, 1189);
+  assert.equal(data.rows.at(-1).totalUsd, 14404);
+});
+test('SEO assets, custom 404 and privacy-preserving analytics are served', async t => {
+  const directory = await mkdtemp(`${tmpdir()}/server-analytics-`);
+  t.after(async()=>{await rm(directory,{recursive:true,force:true});});
+  const analyticsPath = `${directory}/analytics.ndjson`;
+  const app = await setup(t, { analyticsPath });
+  assert.match(await (await app.request('/robots.txt')).text(), /Sitemap: https:\/\/dev\.macbookbro\.ru\/sitemap\.xml/);
+  assert.match(await (await app.request('/sitemap.xml')).text(), /<loc>https:\/\/dev\.macbookbro\.ru\/web\/<\/loc>/);
+  assert.equal((await app.request('/web/og-image.jpg')).headers.get('content-type'), 'image/jpeg');
+  const missing = await app.request('/definitely-missing');
+  assert.equal(missing.status, 404);
+  assert.match(await missing.text(), /<h1>404!<\/h1>/);
+  assert.equal((await app.post('/api/analytics', { event: 'page_view', path: '/web/' })).status, 200);
+  const records = (await readFile(analyticsPath, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.equal(records[0].event, 'page_view');
+  assert.equal(records[0].path, '/web/');
+  assert.equal(Object.hasOwn(records[0], 'ip'), false);
+});
+test('automatic collection runs without browser input and shares the active-job lock', async t => {
+  let runs = 0;
+  let release;
+  const app = await setup(t, { autoRefreshIntervalMs: 25, refreshRunner: () => { runs++; return new Promise(resolve => { release = resolve; }); } });
+  assert.equal(runs, 1);
+  await new Promise(resolve => setTimeout(resolve, 80));
+  assert.equal(runs, 1);
+  assert.equal((await app.post('/api/refresh', {})).status, 409);
+  const status = await (await app.request('/api/status')).json();
+  assert.equal(status.autoRefreshIntervalMs, 25);
+  assert.ok(Date.parse(status.nextRefreshAt));
+  release();
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal(runs, 2);
+  release();
+});
 test('Telegram webhook requires its secret and bypasses browser CSRF only for that route',async t=>{
   const directory = await mkdtemp(`${tmpdir()}/server-webhook-`);
   t.after(async()=>{await rm(directory,{recursive:true,force:true});});

@@ -1,0 +1,23 @@
+[Unit]
+Description=Makbuchnaya order website
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=radar
+Group=radar
+WorkingDirectory=/srv/macbookbro-orders
+EnvironmentFile=/etc/macbookbro-orders.env
+ExecStart=/usr/bin/node /srv/macbookbro-orders/server.mjs
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/macbookbro-orders
+
+[Install]
+WantedBy=multi-user.target
