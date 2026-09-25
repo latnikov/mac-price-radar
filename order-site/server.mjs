@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { validateConfiguration, describeConfiguration } from './catalog.mjs';
 import { formatPublicPrice, pricingInfo, quoteConfigurator, quoteCustomerPrice } from './pricing.mjs';
+import { representation, sendRepresentation } from './http-cache.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const fault = (status, message) => Object.assign(new Error(message), { status });
@@ -89,8 +90,12 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
   const staticFiles = new Map([
     ['/', ['public/index.html', 'text/html']], ['/style.css', ['public/style.css', 'text/css']],
     ['/app.js', ['public/app.js', 'text/javascript']], ['/catalog.mjs', ['catalog.mjs', 'text/javascript']],
+    ['/quote-client.mjs', ['public/quote-client.mjs', 'text/javascript']],
     ['/privacy.html', ['public/privacy.html', 'text/html']],
   ]);
+  // Deployments restart the service: load immutable assets once per process.
+  const assets = new Map([...staticFiles].map(([path, [file, type]]) => [path, { ...representation(readFileSync(resolve(root, file))), type }]));
+  const quotes = new Map();
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -102,9 +107,8 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
       const url = new URL(req.url, 'http://localhost');
       const path = url.pathname;
       if ((req.method === 'GET' || req.method === 'HEAD') && staticFiles.has(path)) {
-        const [file, type] = staticFiles.get(path);
-        res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8` });
-        res.end(req.method === 'HEAD' ? undefined : readFileSync(resolve(root, file))); return;
+        const asset = assets.get(path);
+        sendRepresentation(req, res, asset, asset.type); return;
       }
       if (req.method === 'GET' && path === '/api/status') { json(200, { acceptingOrders }); return; }
       if (req.method === 'GET' && path === '/api/quote') {
@@ -113,9 +117,15 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
           memory: Number(url.searchParams.get('memory')), storage: Number(url.searchParams.get('storage')),
           ethernet: Number(url.searchParams.get('ethernet')),
         };
-        let quote;
-        try { quote = quoteConfigurator(configuration); } catch (e) { throw fault(400, e.message); }
-        json(200, { ...quote, currency: 'RUB' }); return;
+        let normalized;
+        try { normalized = validateConfiguration(configuration); } catch (e) { throw fault(400, e.message); }
+        // Only valid catalogue keys enter this bounded cache, never raw URLs.
+        const key = JSON.stringify(normalized);
+        if (!quotes.has(key)) {
+          try { quotes.set(key, representation({ ...quoteConfigurator(normalized), currency: 'RUB' })); }
+          catch (e) { throw fault(400, e.message); }
+        }
+        sendRepresentation(req, res, quotes.get(key), 'application/json'); return;
       }
       if (req.method === 'GET' && path === '/healthz') { db.prepare('SELECT 1').get(); json(200, { ok: true }); return; }
       if (path === '/api/relay/claim' || path === '/api/relay/ack') {

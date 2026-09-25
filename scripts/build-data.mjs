@@ -10,6 +10,7 @@ import { fetchResale52Offers } from './resale52.mjs';
 import { fetchAppleStoreOffers } from './apple-store-nn.mjs';
 import { fetchRebroOffers } from './rebro.mjs';
 import { fetchIphoriyaOffers } from './iphoriya.mjs';
+import { fetchMadstoreOffers } from './madstore.mjs';
 import { buildCatalogRows } from './catalog-rows.mjs';
 import { assessCollection, knownProductUrls } from './collection-policy.mjs';
 import { extractProductPrice } from './structured-price.mjs';
@@ -17,6 +18,7 @@ import { openMasterStore } from './master-store.mjs';
 import { inPublicSourceScope } from './domain.mjs';
 import { fetchResponseWithRetry } from './fetch-text.mjs';
 import { collectSources } from './collection-runner.mjs';
+import { crawlQueue } from './crawl-queue.mjs';
 
 const privateDir = 'data/private';
 await mkdir(`${privateDir}/backups`, { recursive: true, mode: 0o700 });
@@ -59,7 +61,7 @@ try {
     });
     store.ingestRun({ runId: 'legacy-migration-v1', observations, sources: [...new Set(observations.map(o => o.retailer))].map(retailer => ({ retailer, status: 'partial' })), actor: 'migration', reason: 'Сохранение исходного снимка; прежние предположения требуют проверки' });
   }
-  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'BSA', 'Дима'];
+  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'BSA', 'Дима'];
   const selected = process.env.RETAILER && process.env.RETAILER !== 'all' ? [...new Set(process.env.RETAILER.split(',').map(x => x.trim() === 'Iphoriya' ? 'Айфория' : x.trim()))] : retailers;
   if (selected.some(x => !retailers.includes(x))) throw new Error('Неизвестный источник RETAILER');
   const runId = randomUUID(), startedAt = new Date().toISOString();
@@ -119,26 +121,39 @@ try {
       const result = await fetchRebroOffers({ fetchPage });
       return { offers: result.offers, failures, counts: result.stats };
     }
+    if (retailer === 'Madstore') {
+      const result = await fetchMadstoreOffers({ fetchPage });
+      return { offers: result.offers, failures: result.failures, counts: result.stats };
+    }
     if (retailer === 'Айфория') {
       const result = await fetchIphoriyaOffers({ fetchPage: url => fetchResponse(url, iphoriyaFetchOptions) });
       return { offers: result.offers, failures: result.failures, counts: result.stats };
     }
     if (retailer === 'RifaStore') {
       const home = 'https://rifastore.ru/';
-      const queue = findRifaCategoryUrls(await fetchPage(home), home), seen = new Set();
-      while (queue.length) {
-        const url = queue.shift(); if (seen.has(url)) continue;
-        if (seen.size >= 400) { failures.push('Достигнут лимит страниц'); break; }
-        seen.add(url);
+      const initial = findRifaCategoryUrls(await fetchPage(home), home), seen = new Set();
+      let limitReached = false;
+      const enqueue = (url, add) => {
+        if (seen.has(url)) return;
+        if (seen.size >= 400) {
+          if (!limitReached) failures.push('Достигнут лимит страниц');
+          limitReached = true;
+          return;
+        }
+        seen.add(url); add(url);
+      };
+      const queue = [];
+      for (const url of initial) enqueue(url, url => queue.push(url));
+      await crawlQueue(queue, async (url, add) => {
         try {
           const html = await fetchPage(url);
           for (const item of parseRifaCategory(html, url)) {
             const offer = parseProduct(item.title, item.url, retailer, price(item.priceText), undefined, { rawPrice: item.priceText, evidence: { method: 'rifastore-category-card-v1', categoryUrl: url, rawPrice: item.priceText } });
             out.push(offer || failedObservation(retailer, item.url, item.title, 'Не распознана цена/конфигурация'));
           }
-          for (const next of findRifaPageUrls(html, url)) if (!seen.has(next)) queue.push(next);
+          for (const next of findRifaPageUrls(html, url)) enqueue(next, add);
         } catch (error) { failures.push(error.message); }
-      }
+      });
       const unique = deduplicateRifaOffers(out);
       return { offers: unique, failures, counts: { pagesFetched: seen.size, found: out.length, unique: unique.length, duplicateCards: out.length - unique.length } };
     }
@@ -169,10 +184,10 @@ try {
         ...progress, runId, startedAt,
       }),
     });
-    for (const { retailer, value: result, error } of collected) {
-      if (error) { sources.push({ retailer, status: 'failed', error: error.message, counts: { published: 0 } }); continue; }
+    for (const { retailer, value: result, error, durationMs } of collected) {
+      if (error) { sources.push({ retailer, durationMs, status: 'failed', error: error.message, counts: { published: 0 } }); continue; }
       const assessment = assessCollection(previousOffers.filter(o => o.retailer === retailer && o.visibility !== 'private'), result.offers, result.failures);
-      sources.push({ retailer, status: assessment.status, counts: { ...result.counts, ...assessment.counts }, error: assessment.error });
+      sources.push({ retailer, durationMs, status: assessment.status, counts: { ...result.counts, ...assessment.counts }, error: assessment.error });
       observations.push(...assessment.observations.map(offer => ({ ...offer, visibility: 'public', dataKind: 'live' })));
     }
     store.ingestRun({ runId, startedAt, observations, sources, actor: 'parser', reason: 'Обновление публичных наблюдений' });

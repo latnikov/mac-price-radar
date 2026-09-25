@@ -1,3 +1,4 @@
+import { crawlQueue } from './crawl-queue.mjs';
 import { decode, parseProduct, price } from './offer-normalization.mjs';
 
 const origin = 'https://nn.technichno.ru';
@@ -56,10 +57,10 @@ function macUrl(value, pageUrl) {
   } catch { return null; }
 }
 
-export function discoverTechnichnoLinks(html, pageUrl = rootUrl) {
+export function discoverTechnichnoLinks(html, pageUrl = rootUrl, document = documentElements(html)) {
   const products = new Set();
   const pages = new Set();
-  for (const node of documentElements(html).nodes) {
+  for (const node of document.nodes) {
     if (!['a', 'link'].includes(node.tag) || !node.attrs.href) continue;
     const url = macUrl(node.attrs.href, pageUrl);
     if (!url) continue;
@@ -82,8 +83,8 @@ export function discoverTechnichnoLinks(html, pageUrl = rootUrl) {
   return { products: [...products], pages: [...pages] };
 }
 
-function productOffer(html, url) {
-  const { nodes, source } = documentElements(html);
+function productOffer(html, url, document = documentElements(html)) {
+  const { nodes, source } = document;
   const products = nodes.filter(node => isType(node, 'Product'));
   const product = products.find(node => hasToken(node.attrs.class, 'product-details__content'))
     ?? products.find(node => nodes.some(child => child.tag === 'h1' && isWithin(child, node)));
@@ -135,49 +136,40 @@ function productOffer(html, url) {
 /** Fetches all discovered variants or fails; never returns a silently partial refresh. */
 export async function fetchTechnichnoOffers({ fetchPage = url => fetch(url), maxPages = 200 } = {}) {
   if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 200) throw new Error('Technichno maxPages must be between 1 and 200');
-  const queue = [{ url: rootUrl, product: false }];
   const seen = new Set([rootUrl]);
   const productUrls = new Set();
   const offers = [];
   const stats = { pagesFetched: 0, catalogPagesFetched: 0, catalogCards: 0, productsDiscovered: 0, productsFetched: 0, offers: 0 };
-  const enqueue = (url, product) => {
+  const enqueue = (url, product, add) => {
     if (product) productUrls.add(url);
     if (seen.has(url)) return;
     if (seen.size >= maxPages) throw new Error(`Technichno incomplete crawl: more than ${maxPages} pages discovered`);
     seen.add(url);
-    queue.push({ url, product });
+    add({ url, product });
   };
-  while (queue.length) {
-    const batch = queue.splice(0, 3);
-    const results = await Promise.allSettled(batch.map(async item => {
-      try {
-        const response = await fetchPage(item.url);
-        let html;
-        if (typeof response === 'string') html = response;
-        else {
-          if (!response?.ok) throw new Error(`HTTP ${response?.status ?? 'unknown'}`);
-          if (response.url && !macUrl(response.url, item.url)) throw new Error('redirect outside Mac catalogue');
-          html = await response.text();
-        }
-        const links = discoverTechnichnoLinks(html, item.url);
-        return { item, links, offer: item.product ? productOffer(html, item.url) : null, html };
-      } catch (error) { throw new Error(`${item.url}: ${error.message}`); }
-    }));
-    const errors = results.filter(result => result.status === 'rejected').map(result => result.reason.message);
-    if (errors.length) throw new Error(`Technichno incomplete crawl: ${errors.join('; ')}`);
-    for (const { value } of results) {
+  await crawlQueue([{ url: rootUrl, product: false }], async (item, add) => {
+    try {
+      const response = await fetchPage(item.url);
+      let html;
+      if (typeof response === 'string') html = response;
+      else {
+        if (!response?.ok) throw new Error(`HTTP ${response?.status ?? 'unknown'}`);
+        if (response.url && !macUrl(response.url, item.url)) throw new Error('redirect outside Mac catalogue');
+        html = await response.text();
+      }
+      // Tokenize once: discovery and product parsing share the same document.
+      const document = documentElements(html);
+      const links = discoverTechnichnoLinks(html, item.url, document);
       stats.pagesFetched += 1;
-      if (value.item.product) { stats.productsFetched += 1; offers.push(value.offer); }
+      if (item.product) { stats.productsFetched += 1; offers.push(productOffer(html, item.url, document)); }
       else {
         stats.catalogPagesFetched += 1;
-        if (value.item.url === rootUrl) {
-          stats.catalogCards = documentElements(value.html).nodes.filter(node => node.tag === 'a' && hasToken(node.attrs.class, 'product-card__name')).length;
-        }
+        if (item.url === rootUrl) stats.catalogCards = document.nodes.filter(node => node.tag === 'a' && hasToken(node.attrs.class, 'product-card__name')).length;
       }
-      for (const url of value.links.products) enqueue(url, true);
-      for (const url of value.links.pages) enqueue(url, false);
-    }
-  }
+      for (const url of links.products) enqueue(url, true, add);
+      for (const url of links.pages) enqueue(url, false, add);
+    } catch (error) { throw new Error(`Technichno incomplete crawl: ${item.url}: ${error.message}`); }
+  });
   if (!offers.length) throw new Error('Technichno incomplete crawl: no priced products discovered');
   stats.productsDiscovered = productUrls.size;
   stats.offers = offers.length;

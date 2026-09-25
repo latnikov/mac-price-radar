@@ -1,3 +1,4 @@
+import { crawlQueue } from './crawl-queue.mjs';
 import { decode, parseProduct, price } from './offer-normalization.mjs';
 
 const origin = 'https://imobile.market';
@@ -91,44 +92,36 @@ export function parseImobileProducts(html, pageUrl) {
 /** Crawls the current MacBook catalogue and fails rather than publishing a partial refresh. */
 export async function fetchImobileOffers({ fetchPage = url => fetch(url), maxPages = 100 } = {}) {
   if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 100) throw new Error('iMobile maxPages must be between 1 and 100');
-  const queue = [rootUrl];
   const seen = new Set([rootUrl]);
   const byVariant = new Map();
   const stats = { pagesFetched: 0, productPages: 0, variants: 0 };
-  const enqueue = url => {
+  const enqueue = (url, add) => {
     if (seen.has(url)) return;
     if (seen.size >= maxPages) throw new Error(`iMobile incomplete crawl: more than ${maxPages} pages discovered`);
     seen.add(url);
-    queue.push(url);
+    add(url);
   };
-  while (queue.length) {
-    const batch = queue.splice(0, 3);
-    const results = await Promise.allSettled(batch.map(async url => {
-      try {
-        const response = await fetchPage(url);
-        let html;
-        if (typeof response === 'string') html = response;
-        else {
-          if (!response?.ok) throw new Error(`HTTP ${response?.status ?? 'unknown'}`);
-          if (response.url && new URL(response.url).origin !== origin) throw new Error('redirect outside iMobile');
-          html = await response.text();
-        }
-        return { url, links: discoverImobileLinks(html, url), offers: parseImobileProducts(html, url) };
-      } catch (error) { throw new Error(`${url}: ${error.message}`); }
-    }));
-    const errors = results.filter(result => result.status === 'rejected').map(result => result.reason.message);
-    if (errors.length) throw new Error(`iMobile incomplete crawl: ${errors.join('; ')}`);
-    for (const { value } of results) {
+  await crawlQueue([rootUrl], async (url, add) => {
+    try {
+      const response = await fetchPage(url);
+      let html;
+      if (typeof response === 'string') html = response;
+      else {
+        if (!response?.ok) throw new Error(`HTTP ${response?.status ?? 'unknown'}`);
+        if (response.url && new URL(response.url).origin !== origin) throw new Error('redirect outside iMobile');
+        html = await response.text();
+      }
+      const offers = parseImobileProducts(html, url);
       stats.pagesFetched += 1;
-      if (value.offers.length) stats.productPages += 1;
-      for (const offer of value.offers) {
+      if (offers.length) stats.productPages += 1;
+      for (const offer of offers) {
         const prior = byVariant.get(offer.externalId);
         if (prior && (prior.url !== offer.url || prior.price !== offer.price || prior.title !== offer.title)) throw new Error(`iMobile variant ${offer.externalId} is inconsistent across pages`);
         byVariant.set(offer.externalId, offer);
       }
-      for (const url of value.links) enqueue(url);
-    }
-  }
+      for (const next of discoverImobileLinks(html, url)) enqueue(next, add);
+    } catch (error) { throw new Error(`iMobile incomplete crawl: ${url}: ${error.message}`); }
+  });
   const offers = [...byVariant.values()];
   if (!offers.length) throw new Error('iMobile incomplete crawl: no priced MacBook variants discovered');
   stats.variants = offers.length;

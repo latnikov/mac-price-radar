@@ -138,6 +138,12 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
     db.prepare('INSERT INTO sources VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json').run(sourceId, sellerId, JSON.stringify(source));
     return { sourceId, sellerId, retailer, sourceType };
   }
+  const ingestStatements = {
+    listing: db.prepare('SELECT source_id FROM listings WHERE id=?'),
+    saveListing: db.prepare('INSERT INTO listings VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET external_id=excluded.external_id,url=excluded.url,json=excluded.json'),
+    observation: db.prepare('SELECT run_id,json FROM observations WHERE id=?'),
+    saveObservation: db.prepare('INSERT INTO observations(id,run_id,listing_id,observed_at,received_at,rejected,json) VALUES (?,?,?,?,?,?,?)'),
+  };
   function ingestRun(input) {
     if (!Array.isArray(input.observations ?? [])) throw new TypeError('observations must be an array');
     const payload = sanitize(input);
@@ -172,10 +178,10 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
           registerSource({ retailer: ids.retailer, sellerId: ids.sellerId, sourceId: ids.sourceId, sourceType: ids.sourceType, visibility: offer.visibility, lastAttemptAt: receivedAt, lastRunId: runId });
           knownSources.set(ids.sourceId, { ...ids, status: 'partial' });
         }
-        const existingListing = db.prepare('SELECT source_id FROM listings WHERE id=?').get(ids.listingId);
+        const existingListing = ingestStatements.listing.get(ids.listingId);
         if (existingListing && existingListing.source_id !== ids.sourceId) throw new Error('listingId cannot move between sources');
         const listing = { ...ids, title: offer.title ?? null, variantId: offer.variantId ?? null, matchStatus: offer.matchStatus ?? 'needs_review' };
-        db.prepare('INSERT INTO listings VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET external_id=excluded.external_id,url=excluded.url,json=excluded.json').run(ids.listingId, ids.sourceId, ids.externalId, ids.url, JSON.stringify(listing));
+        ingestStatements.saveListing.run(ids.listingId, ids.sourceId, ids.externalId, ids.url, JSON.stringify(listing));
         const observedAt = date(offer.observedAt ?? offer.fetchedAt, startedAt);
         let rejected = isRejected(offer);
         const amountMinor = offer.priceMinor ?? minorUnits(offer.price);
@@ -183,13 +189,13 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
         if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) { rejected = true; validationIssues.push('invalid_price'); }
         const observationId = offer.observationId ?? id('observation', [runId, ids.listingId, observedAt, digest(offer)]);
         const observation = { ...offer, ...ids, observationId, offerId: ids.listingId, runId, observedAt, fetchedAt: observedAt, receivedAt, visibility: offer.visibility ?? (ids.sourceType === 'private_price_list' ? 'private' : 'public'), priceMinor: Number.isSafeInteger(amountMinor) ? amountMinor : null, validationStatus: rejected ? 'rejected' : offer.validationStatus ?? 'needs_review', rejected, validationIssues, raw: offer.raw ?? offer, provenance: { ...offer.provenance, runId, sourceId: ids.sourceId, receivedAt, adapterVersion: offer.adapterVersion ?? offer.normalizationVersion ?? 'unknown' } };
-        const priorObservation = db.prepare('SELECT run_id,json FROM observations WHERE id=?').get(observationId);
+        const priorObservation = ingestStatements.observation.get(observationId);
         if (priorObservation) {
           if (priorObservation.run_id !== runId || rowJSON(priorObservation).listingId !== ids.listingId) throw new Error('observationId collision');
           run.counts.duplicates++;
           continue;
         }
-        db.prepare('INSERT INTO observations(id,run_id,listing_id,observed_at,received_at,rejected,json) VALUES (?,?,?,?,?,?,?)').run(observationId, runId, ids.listingId, observedAt, receivedAt, rejected ? 1 : 0, JSON.stringify(observation));
+        ingestStatements.saveObservation.run(observationId, runId, ids.listingId, observedAt, receivedAt, rejected ? 1 : 0, JSON.stringify(observation));
         run.counts[rejected ? 'rejected' : 'accepted']++;
       }
       run.sources = [...knownSources.values()];

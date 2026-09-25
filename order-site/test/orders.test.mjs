@@ -126,3 +126,30 @@ test('quotes both surcharges and savings relative to the current selection', () 
   assert.equal(quote.stepPricesRub.storage[512], 0);
   assert.equal(quote.stepPricesRub.chip['m6-12-12'], 0);
 });
+
+test('assets and quotes revalidate without caching orders, status or relay responses', async t => {
+  const { base, post } = await setup(t);
+  for (const path of ['/', '/app.js', '/quote-client.mjs', '/catalog.mjs', '/style.css', '/api/quote?model=mini&chip=m6-12-12&memory=16&storage=256&ethernet=2.5']) {
+    const first = await fetch(base + path);
+    assert.equal(first.status, 200);
+    assert.equal(first.headers.get('cache-control'), 'private, no-cache');
+    const etag = first.headers.get('etag');
+    const bytes = await first.arrayBuffer();
+    assert.equal(Number(first.headers.get('content-length')), bytes.byteLength);
+    const second = await fetch(base + path, { headers: { 'If-None-Match': `"other", W/${etag}` } });
+    assert.equal(second.status, 304);
+    assert.equal(await second.text(), '');
+    if (!path.startsWith('/api/')) {
+      const head = await fetch(base + path, { method: 'HEAD' });
+      assert.equal(head.headers.get('etag'), etag);
+      assert.equal(Number(head.headers.get('content-length')), bytes.byteLength);
+      assert.equal(await head.text(), '');
+    }
+  }
+  for (const path of ['/api/status', '/api/relay/claim', '/http-cache.mjs', '/api/quote?model=invalid']) {
+    const response = await fetch(base + path);
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('etag'), null);
+  }
+  assert.equal((await post()).headers.get('cache-control'), 'no-store');
+});

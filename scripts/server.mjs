@@ -9,7 +9,7 @@ import { ingestBusinessUpdate, startBsaBusinessPolling } from './telegram-busine
 import { inPublicSourceScope } from './domain.mjs';
 import { createResponseCache, cachedFile, sendCached } from './response-cache.mjs';
 
-const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'RifaStore', 'BSA', 'Дима'];
+const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'RifaStore', 'BSA', 'Дима'];
 const STATIC_FILES = new Map([
   ['/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/', ['web/index.html', 'text/html; charset=utf-8']],

@@ -15,8 +15,10 @@ export async function collectSources(retailers, collect, { concurrency = 3, onPr
       const index = next++, retailer = retailers[index];
       active.add(retailer);
       await report();
+      const started = performance.now();
       try { results[index] = { retailer, value: await collect(retailer) }; }
       catch (error) { results[index] = { retailer, error }; }
+      results[index].durationMs = Math.round(performance.now() - started);
       active.delete(retailer);
       completed++;
       await report();

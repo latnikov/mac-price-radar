@@ -1,4 +1,6 @@
 import { catalog, capacity, describeConfiguration } from '/catalog.mjs';
+import { createQuoteLoader } from '/quote-client.mjs';
+const loadQuote = createQuoteLoader();
 const $ = id => document.getElementById(id);
 let model = catalog.models[0];
 let requestId = crypto.randomUUID();
@@ -76,10 +78,7 @@ async function refreshQuote(configuration) {
   $('price').textContent = 'Считаем предварительную цену…';
   setStepPricesLoading();
   try {
-    const query = new URLSearchParams(Object.entries(configuration).map(([key, value]) => [key, String(value)]));
-    const response = await fetch(`/api/quote?${query}`, { signal: AbortSignal.timeout(10000) });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Не удалось рассчитать цену.');
+    const data = await loadQuote(configuration);
     if (version !== quoteVersion) return;
     currentQuoteRub = data.priceRub;
     showStepPrices(data.stepPricesRub, currentQuoteRub);
@@ -132,7 +131,7 @@ $('configuration').addEventListener('submit', async e => {
   $('contact-title').focus();
   $('availability').textContent = '';
   try {
-    const response = await fetch('/api/status');
+    const response = await fetch('/api/status', { signal: AbortSignal.timeout(10000) });
     const status = await response.json();
     if (!status.acceptingOrders) $('availability').textContent = 'Форма пока в режиме просмотра: приём заявок ещё не подключён.';
     $('submit-order').disabled = !status.acceptingOrders;

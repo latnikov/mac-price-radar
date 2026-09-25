@@ -29,7 +29,11 @@ jobs:
           node-version-file: .node-version
           cache: npm
       - run: npm ci
-      - run: npm test
+      - name: Validate parser and order service
+        run: |
+          npm test
+          npm run test:orders
+          npm run typecheck
       - name: Build public artifact
         run: |
           npm run export:public
