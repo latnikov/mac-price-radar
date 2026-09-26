@@ -1,5 +1,5 @@
 export const PROCUREMENT_RETAILERS = ['Дима', 'BSA'];
-export const NIZHNY_RETAILERS = ['Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore'];
+export const NIZHNY_RETAILERS = ['Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device'];
 
 export const RETAILER_TRUST = Object.freeze({
   ReSale: Object.freeze({

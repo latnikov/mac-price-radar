@@ -11,6 +11,7 @@ import { fetchAppleStoreOffers } from './apple-store-nn.mjs';
 import { fetchRebroOffers } from './rebro.mjs';
 import { fetchIphoriyaOffers } from './iphoriya.mjs';
 import { fetchMadstoreOffers } from './madstore.mjs';
+import { fetchSmartDeviceOffers } from './smart-device.mjs';
 import { buildCatalogRows } from './catalog-rows.mjs';
 import { assessCollection, knownProductUrls } from './collection-policy.mjs';
 import { extractProductPrice } from './structured-price.mjs';
@@ -61,7 +62,7 @@ try {
     });
     store.ingestRun({ runId: 'legacy-migration-v1', observations, sources: [...new Set(observations.map(o => o.retailer))].map(retailer => ({ retailer, status: 'partial' })), actor: 'migration', reason: 'Сохранение исходного снимка; прежние предположения требуют проверки' });
   }
-  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'BSA', 'Дима'];
+  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'BSA', 'Дима'];
   const selected = process.env.RETAILER && process.env.RETAILER !== 'all' ? [...new Set(process.env.RETAILER.split(',').map(x => x.trim() === 'Iphoriya' ? 'Айфория' : x.trim()))] : retailers;
   if (selected.some(x => !retailers.includes(x))) throw new Error('Неизвестный источник RETAILER');
   const runId = randomUUID(), startedAt = new Date().toISOString();
@@ -120,6 +121,10 @@ try {
     if (retailer === 'Rebro') {
       const result = await fetchRebroOffers({ fetchPage });
       return { offers: result.offers, failures, counts: result.stats };
+    }
+    if (retailer === 'Smart Device') {
+      const result = await fetchSmartDeviceOffers({ fetchPage });
+      return { offers: result.offers, failures: result.failures, counts: result.stats };
     }
     if (retailer === 'Madstore') {
       const result = await fetchMadstoreOffers({ fetchPage });

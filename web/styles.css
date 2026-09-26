@@ -25,7 +25,7 @@ h1 {
 .divider { height: 7px; background: linear-gradient(90deg, #111 0 11%, #d62c16 11% 14%, #111 14% 16%, #d62c16 16% 18%, #111 18% 82%, #d62c16 82% 84%, #111 84% 86%, #d62c16 86% 89%, #111 89%); }
 .announcement { margin: 18px 0 14px; line-height: 1.5; }
 .announcement b { display: inline-block; margin-right: 5px; padding: 3px 7px; background: #ffed00; }
-.header-actions { display: flex; justify-content: center; margin: 0 0 20px; }
+.header-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin: 0 0 20px; }
 #status { display: inline-block; padding: 6px 10px; border: 2px inset #bbb; background: #f5f5f5; font-size: 14px; line-height: 1.45; }
 .cta {
   display: inline-block;

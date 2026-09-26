@@ -2,7 +2,7 @@ import { calculateRetailAnalytics, catalogConfigurationKey, colorPriceTrustKey, 
 
 const $ = id => document.getElementById(id);
 const state = {
-  offers: [], retailers: [], csrf: '', wasRunning: false,
+  offers: [], retailers: [], csrf: '', wasRunning: false, refreshPending: false,
   filters: { family: 'desktops', chip: '*', screen: '', ram: '', ssd: '', color: '', stock: '' },
 };
 const CURRENT_CHIPS = {
@@ -17,7 +17,7 @@ const CURRENT_CHIPS = {
 const RETAILER_GROUPS = [
   { key: 'procurement', label: 'Закупка', retailers: [{ name: 'Дима', label: 'Дима' }, { name: 'BSA', label: 'BSA' }] },
   { key: 'moscow', label: 'МСК / РФ', retailers: [{ name: 'BigGeek', label: 'BigGeek' }, { name: 'RifaStore', label: 'Rifa' }] },
-  { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }, { name: 'iMobile', label: 'iMobile' }, { name: 'ReSale', label: 'ReSale' }, { name: 'Apple Store', label: 'Apple Store' }, { name: 'Rebro', label: 'Rebro' }, { name: 'Madstore', label: 'Madstore' }] },
+  { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }, { name: 'iMobile', label: 'iMobile' }, { name: 'ReSale', label: 'ReSale' }, { name: 'Apple Store', label: 'Apple Store' }, { name: 'Rebro', label: 'Rebro' }, { name: 'Madstore', label: 'Madstore' }, { name: 'Smart Device', label: 'Smart Device' }] },
 ];
 const CONFIGURED_RETAILERS = RETAILER_GROUPS.flatMap(group => group.retailers.map(retailer => retailer.name));
 const text = (tag, value, cls) => { const node = document.createElement(tag); if (value != null) node.textContent = String(value); if (cls) node.className = cls; return node; };
@@ -369,6 +369,8 @@ async function poll(reloadOnChange = true) {
   const status = await api('/api/status'); const running = status.state === 'running';
   $('status').textContent = running ? `Обновление: ${status.source || 'источники'}${status.total ? ` · ${status.completed}/${status.total}` : ''}` : status.error ? 'Часть источников не обновилась' : status.updatedAt ? `Последний сбор: ${date(status.updatedAt)}` : 'Цены из сохранённой базы';
   if (status.autoRefreshIntervalMs) $('status').textContent += ` · Автоматически каждый час${status.nextRefreshAt ? ` · Следующий сбор: ${date(status.nextRefreshAt)}` : ''}`;
+  $('refresh').disabled = !state.csrf || running || state.refreshPending;
+  $('refresh').textContent = running || state.refreshPending ? 'Обновляем цены…' : 'Обновить цены';
   message(status.error || '');
   if (reloadOnChange && !running && (state.wasRunning || (status.updatedAt && state.updatedAt !== status.updatedAt))) await reload();
   state.wasRunning = running; state.updatedAt = status.updatedAt;
@@ -390,6 +392,25 @@ async function pollLoop() {
 document.addEventListener('visibilitychange', () => {
   clearTimeout(pollTimer);
   if (!document.hidden && state.ready) void pollLoop();
+});
+
+$('refresh').addEventListener('click', async () => {
+  if (state.refreshPending || state.wasRunning) return;
+  state.refreshPending = true;
+  $('refresh').disabled = true;
+  $('refresh').textContent = 'Обновляем цены…';
+  try {
+    await api('/api/refresh', {});
+    state.wasRunning = true;
+    await poll();
+    clearTimeout(pollTimer);
+    pollTimer = setTimeout(pollLoop, 1000);
+  } catch (error) { message(error.message); }
+  finally {
+    state.refreshPending = false;
+    $('refresh').disabled = !state.csrf || state.wasRunning;
+    $('refresh').textContent = state.wasRunning ? 'Обновляем цены…' : 'Обновить цены';
+  }
 });
 
 $('filters').addEventListener('click', event => {
@@ -443,7 +464,7 @@ async function init() {
       for (const price of data.prices) { if (Date.parse(price.validUntil) <= Date.now()) continue; const row = text('tr'); for (const value of [price.title, `${number(price.priceMinor / 100)} ₽`, price.city]) row.append(text('td', value)); $('rows').append(row); }
       $('status').textContent = `Выгрузка: ${date(data.generatedAt)}`; $('count').textContent = 'Публичный каталог'; $('empty').hidden = !!$('rows').children.length; return;
     }
-    const sessionTask = api('/api/session').then(session => { state.csrf = session.csrfToken; track('page_view'); });
+    const sessionTask = api('/api/session').then(session => { state.csrf = session.csrfToken; $('refresh').hidden = false; $('refresh').disabled = state.wasRunning; track('page_view'); });
     const results = await Promise.allSettled([reload(), poll(false), sessionTask]);
     state.ready = true;
     pollTimer = setTimeout(pollLoop, state.wasRunning ? 5000 : 30000);

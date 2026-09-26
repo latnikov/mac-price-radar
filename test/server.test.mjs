@@ -28,6 +28,7 @@ test('AC17 project files and cross-site mutation are blocked; reading never refr
   assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Apple Store'));
   assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Rebro'));
   assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Madstore'));
+  assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Smart Device'));
   assert.equal((await app.request('/api/quotes',{method:'POST',headers:{origin:'https://evil.test','content-type':'application/json'},body:'{}'})).status,403);
   const hostileHostStatus = await new Promise((resolve,reject)=>{const request=httpRequest(app.origin+'/api/session',{headers:{host:'evil.test'}},response=>{response.resume();resolve(response.statusCode);});request.on('error',reject);request.end();});
   assert.equal(hostileHostStatus,403);
@@ -139,4 +140,14 @@ test('import commit applies only the reviewed payload, with a one-use expiring t
   assert.equal((await app.post('/api/imports/commit',{token:result.token,rows:[{price:1}]})).status,200);
   assert.equal(app.store.getOffers()[0].price,100000);
   assert.equal((await app.post('/api/imports/commit',{token:result.token})).status,409);
+});
+
+
+test('manual refresh includes Smart Device and accepts a source-only refresh', async t => {
+  const runs=[];
+  const app=await setup(t,{refreshRunner:async ({retailers})=>{runs.push(retailers);}});
+  assert.equal((await app.post('/api/refresh',{})).status,202);
+  assert.ok(runs[0].includes('Smart Device'));
+  assert.equal((await app.post('/api/refresh',{retailer:'Smart Device'})).status,202);
+  assert.deepEqual(runs[1],['Smart Device']);
 });

@@ -26,7 +26,7 @@ export function parseProduct(title, url, retailer, amount, fetchedAt = new Date(
   catch { slug = ''; }
   const combined = `${decodedTitle} ${slug}`;
   const chip = (combined.match(/\b(A18 Pro|M\d+(?:\s+(?:Pro|Max|Ultra))?)\b/i) || [])[1];
-  const modelMatch = normalizedTitle.match(/((?:MacBook\s+(?:Air|Pro|Neo)(?:\s+(?:13|14|15|16)\s*(?:["”]|дюйм)?|\s*\d{2}\s*Early\s*\d{4})?)|(?:iMac(?:\s+(?:24|27)\s*(?:["”]|дюйм)?)?))/i);
+  const modelMatch = normalizedTitle.match(/((?:MacBook\s+(?:Air|Pro|Neo)(?:\s+(?:13|14|15|16)\s*(?:["”]|дюйм)?|\s*\d{2}\s*Early\s*\d{4})?)|(?:iMac(?:\s+(?:24|27)\s*(?:["”]|дюйм)?)?)|(?:Mac\s+(?:mini|Studio)\b))/i);
   if (!chip || !modelMatch) return null;
 
   let model = modelMatch[1]
