@@ -1,6 +1,6 @@
 """Install a prepared /srv/macbookbro-shop build on the existing server.
 Preserves legacy services and reuses the existing main-domain CRM credentials.
-Run as root only after uploading the reviewed storefront and retail-analytics.js.
+Run as root only after uploading the reviewed storefront and its shared web modules.
 """
 import os
 import re
@@ -13,7 +13,9 @@ from pathlib import Path
 if os.geteuid() != 0:
     raise SystemExit('Run on the deployment server as root')
 base=Path('/srv/macbookbro-shop')
-assert (base/'storefront/server.mjs').is_file()
+for required in ['storefront/server.mjs', 'package.json', 'web/retail-analytics.js', 'web/price-table.js', 'web/avito-columns.js']:
+    if not (base/required).is_file():
+        raise SystemExit(f'Missing release file: {required}; no changes made')
 caddy=Path('/etc/caddy/Caddyfile')
 original=caddy.read_text()
 match=re.search(r'(?ms)^macbookbro\.ru\s*\{.*?(?=^dev\.macbookbro\.ru\s*\{)',original)
@@ -82,7 +84,6 @@ main='''macbookbro.ru {
         redir @pricesRoot /prices/web/ 308
         reverse_proxy 127.0.0.1:4173 {
             header_up Host 127.0.0.1:4173
-            header_up Origin http://127.0.0.1:4173
             header_up -X-Store-Admin-Key
         }
     }

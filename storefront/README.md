@@ -43,7 +43,7 @@ npm run test:shop
 
 ## Установка и откат
 
-Поставляются каталог `storefront` и файл `web/retail-analytics.js`. Сервис `deploy/macbookbro-shop.service` использует `/srv/macbookbro-shop`, данные `/var/lib/macbookbro-shop`, настройки `/etc/macbookbro-shop.env`. Старый сервис заказов остаётся на `order.macbookbro.ru`; его формы, API и сохранённые заказы не переносятся и не удаляются.
+Поставляются каталог `storefront`, корневой `package.json` (ES modules) и файлы `web/retail-analytics.js`, `web/price-table.js`, `web/avito-columns.js`. Сервис `deploy/macbookbro-shop.service` использует `/srv/macbookbro-shop`, данные `/var/lib/macbookbro-shop`, настройки `/etc/macbookbro-shop.env`. Старый сервис заказов остаётся на `order.macbookbro.ru`; его формы, API и сохранённые заказы не переносятся и не удаляются.
 
 Перед сменой маршрута сохранить Caddyfile и проверить новую конфигурацию. CRM может использовать существующий вход Caddy: секрет proxy-header добавляется только после basic auth; клиентский заголовок на всех остальных маршрутах удаляется. Основной домен направляется на 4190, старый защищённый парсер сохраняется под `/prices/`.
 

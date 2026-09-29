@@ -33,6 +33,7 @@ jobs:
         run: |
           npm test
           npm run test:orders
+          npm run test:shop
           npm run typecheck
       - name: Build public artifact
         run: |

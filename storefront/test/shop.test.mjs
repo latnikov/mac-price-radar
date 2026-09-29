@@ -25,6 +25,25 @@ test('uses dev recommended price, preserves Trust, never uses lowest or discount
   assert.equal(buildRecommendations([offer({keyboard:'RU'}),offer({retailer:'Technichno',keyboard:'US'})],{now:clock})[0].priceRub,null);
 });
 
+test('storefront excludes the same rejected and conditional prices as the dev table', () => {
+  const invalid = offer({ rejected: true, validationStatus: 'rejected', priceType: 'installment', minimumQuantity: 5 });
+  const row = buildRecommendations([invalid], { now: clock })[0];
+  assert.equal(row.priceRub, null);
+  assert.equal(row.recommendedRub, null);
+  assert.equal(buildRecommendations([offer({ displayType: 'standard' }), offer({ retailer: 'Technichno', displayType: 'nano-texture' })], { now: clock })[0].priceRub, null);
+});
+
+test('commercial specifications changing after checkout require a fresh confirmation', t => {
+  const { store } = setup(t);
+  const original = productInput();
+  const p = store.saveProduct(original, { publish: true });
+  const s = store.session(); store.setCart(s, { [p.id]: 1 });
+  const quote = store.checkout(s);
+  store.saveProduct({ ...original, specification: 'Другая клавиатура' }, { id: p.id, publish: true, expectedRevision: p.revision });
+  assert.throws(() => store.placeOrder(s, { checkoutId: quote.id, phone: '+79991234567', consent: 'on' }), error => error.status === 409);
+  assert.equal(store.db.prepare('SELECT COUNT(*) AS n FROM orders').get().n, 0);
+});
+
 test('draft does not publish; publication queues atomically; price change and withdrawal supersede old work',t=>{
   const {store}=setup(t);const draft=store.saveProduct(productInput());
   assert.equal(store.publicProduct(draft),null);assert.equal(store.db.prepare('SELECT COUNT(*) n FROM jobs').get().n,0);
@@ -90,6 +109,7 @@ test('HTTP checkout without JS; receipt isolation, CSRF, CRM auth and rate limit
   const savedCookie=cookie;cookie='';r=await request(receipt);assert.equal(r.response.status,404);cookie=savedCookie;
   r=await request('/crm');assert.equal(r.response.status,303);
   r=await request('/crm/login',{csrf:token,password:env.STORE_ADMIN_PASSWORD});assert.equal(r.response.status,303);
+  r=await request('/crm');assert.match(r.text,/Старейший новый заказ ожидает 0 мин/);
   r=await request('/crm/orders');assert.match(r.text,/\+79991234567/);
   r=await request('/data/private/shop.sqlite');assert.equal(r.response.status,404);
 });

@@ -120,7 +120,14 @@ export function openShopStore(path, { now = Date.now } = {}) {
   }
   function setCart(s, cart) { db.prepare('UPDATE sessions SET cart=? WHERE id=?').run(JSON.stringify(cart),s.id); s.cart=cart; }
   function cartLines(s) { return Object.entries(s.cart).map(([id,qty]) => { const p = publicProduct(product(id)); return { id,qty,title:p?.title || 'Предложение закрыто',priceRub:p?.priceRub ?? null,active:Boolean(p) }; }); }
-  function checkout(s) { const lines = cartLines(s); if (!lines.length || lines.some(l=>!l.active)) throw fail(400,'Проверьте товары в корзине.'); const id=opaque(); db.prepare('INSERT INTO checkouts VALUES(?,?,?,?)').run(id,s.id,JSON.stringify(lines),now()+20*60000); return {id,lines}; }
+  function checkoutLines(s) { return cartLines(s).map(line => {
+    const p = product(line.id), d = p?.published;
+    return { ...line, revision: p?.revision ?? null, specification: d?.specification ?? null,
+      warranty: d?.warranty ?? null, recommendationKey: d?.recommendationKey ?? null,
+      moyskladId: d?.moyskladId ?? null, moyskladType: d?.moyskladType ?? null,
+      individual: d?.individual ?? false };
+  }); }
+  function checkout(s) { const lines = checkoutLines(s); if (!lines.length || lines.some(l=>!l.active)) throw fail(400,'Проверьте товары в корзине.'); const id=opaque(); db.prepare('INSERT INTO checkouts VALUES(?,?,?,?)').run(id,s.id,JSON.stringify(lines),now()+20*60000); return {id,lines}; }
   function placeOrder(s, input) {
     const phone = bounded(input.phone,24,'Телефон').replace(/\D/g,'').replace(/^8(?=\d{10}$)/,'7');
     const normalizedPhone = phone.length===10 ? `7${phone}` : phone;
@@ -135,9 +142,8 @@ export function openShopStore(path, { now = Date.now } = {}) {
       if(existing) { if(existing.session_id!==s.id || existing.fingerprint!==fingerprint) throw fail(409,'Этот заказ уже отправлен с другими данными.'); return existing.id; }
       const quote=db.prepare('SELECT * FROM checkouts WHERE id=? AND session_id=? AND expires>?').get(String(input.checkoutId),s.id,now());
       if(!quote) throw fail(409,'Срок подтверждения истёк. Проверьте корзину ещё раз.');
-      let lines=cartLines(s);
+      const lines=checkoutLines(s);
       if(JSON.stringify(lines)!==quote.snapshot) throw fail(409,'Цена или состав заказа изменились. Проверьте новый итог перед отправкой.');
-      lines=lines.map(line=>{const d=product(line.id).published;return {...line,specification:d.specification,recommendationKey:d.recommendationKey,moyskladId:d.moyskladId,moyskladType:d.moyskladType,individual:d.individual};});
       const id=`MB-${randomBytes(6).toString('hex').toUpperCase()}`;
       const data={...contact,lines,totalRub:lines.every(l=>l.priceRub!=null)?lines.reduce((n,l)=>n+l.qty*l.priceRub,0):null};
       db.prepare('INSERT INTO orders(id,checkout_id,session_id,fingerprint,data,created_at) VALUES(?,?,?,?,?,?)').run(id,input.checkoutId,s.id,fingerprint,JSON.stringify(data),now());
