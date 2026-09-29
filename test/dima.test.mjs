@@ -45,3 +45,14 @@ test('latest Dima post wins for the same SKU and keeps the source timestamp', ()
   assert.equal(result.offers[0].price, 130000);
   assert.equal(result.offers[0].fetchedAt, '2026-09-29T11:00:00.000Z');
 });
+
+test('Dima uses bot submission time for an old pinned post and never collection time', () => {
+  const message = { id: '634', date: '2026-01-23T08:06:31Z', submittedAt: '2026-09-29T10:00:00Z', receivedAt: '2026-09-29T10:01:00Z', text: price };
+  const result = parseDimaMessages([message], { now: '2026-09-29T11:00:00Z' });
+  assert.equal(result.offers.length, 4);
+  assert.equal(result.offers[0].fetchedAt, '2026-09-29T10:00:00.000Z');
+  assert.equal(result.offers[0].evidence.sourcePostDate, message.date);
+  assert.equal(parseDimaMessages([message], { now: '2026-09-30T11:00:00Z' }).offers.length, 0);
+  const { submittedAt, ...legacy } = message;
+  assert.equal(parseDimaMessages([legacy], { now: '2026-09-29T11:00:00Z' }).offers[0].fetchedAt, '2026-09-29T10:01:00.000Z');
+});

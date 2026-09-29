@@ -186,3 +186,15 @@ test('Webhook setup registers only the expected URL and update types', async () 
   assert.equal(calls[0].body.secret_token, env.TELEGRAM_BUSINESS_WEBHOOK_SECRET);
   assert.equal(calls[0].body.ip_address, env.TELEGRAM_BUSINESS_WEBHOOK_IP);
 });
+
+test('new forwarding of the same post records submission time but webhook retry does not', () => {
+  const update = (id, date) => ({ update_id: id, message: { message_id: id, date, chat: { id: 42, type: 'private' }, forward_origin: { type: 'channel', chat: { id: -1003421701174, title: 'Dima' }, message_id: 634, date: 1769155591 }, text: 'unchanged price' } });
+  const first = applyBusinessUpdates(null, [update(10, 1790672400)]);
+  const again = applyBusinessUpdates(first.state, [update(11, 1790676000)]);
+  assert.equal(again.acceptedMessages, 1);
+  assert.equal(again.state.messages.length, 1);
+  assert.equal(again.state.messages[0].submittedAt, new Date(1790676000 * 1000).toISOString());
+  const retry = applyBusinessUpdates(again.state, [update(11, 1790676000)]);
+  assert.equal(retry.acceptedMessages, 0);
+  assert.equal(retry.state.messages[0].receivedAt, again.state.messages[0].receivedAt);
+});

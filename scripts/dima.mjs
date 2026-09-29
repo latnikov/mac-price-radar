@@ -41,9 +41,12 @@ export function parseDimaMessages(messages, { now = new Date(), timeZone = 'Euro
   const today = dateInTimeZone(now, timeZone);
   const offers = [], failures = [], seen = new Set();
   let eligibleMessages = 0, candidates = 0;
-  const ordered = [...messages].sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || Number(b.id) - Number(a.id));
+  // Dima prices are confirmed by sending the post to our bot, even when the
+  // supplier edits an old pinned post. Legacy cache records retain receivedAt.
+  const submittedAt = message => message.submittedAt || message.receivedAt || message.date;
+  const ordered = [...messages].sort((a, b) => Date.parse(submittedAt(b)) - Date.parse(submittedAt(a)) || Number(b.id) - Number(a.id));
   for (const message of ordered) {
-    const observed = Date.parse(message.date);
+    const observed = Date.parse(submittedAt(message));
     const messageDate = Number.isFinite(observed) ? dateInTimeZone(observed, timeZone) : null;
     if (!messageDate || messageDate !== today || observed > new Date(now).getTime() + 60_000) continue;
     eligibleMessages++;
@@ -72,7 +75,7 @@ export function parseDimaMessages(messages, { now = new Date(), timeZone = 'Euro
         buyerType: 'retail',
         minimumQuantity: 1,
         ...source,
-        evidence: { method: 'telegram-forward-v2', sourceTitle: source.sourceTitle, sourceUsername: source.sourceUsername, sourceChatId: message.sourceChatId || null, postId, messageDate, rawLine: rawLine.trim() },
+        evidence: { method: 'telegram-forward-v3', sourceTitle: source.sourceTitle, sourceUsername: source.sourceUsername, sourceChatId: message.sourceChatId || null, postId, messageDate, sourcePostDate: message.date, submittedAt: new Date(observed).toISOString(), timestampBasis: message.submittedAt ? 'telegram-message' : message.receivedAt ? 'legacy-received' : 'source-date', rawLine: rawLine.trim() },
       });
       if (!parsed) {
         failures.push(`Дима ${postId}, строка ${lineIndex + 1}: не распознана конфигурация`);

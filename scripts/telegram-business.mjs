@@ -66,6 +66,7 @@ function cachedMessage(update) {
     id: String(origin.postId),
     text,
     date: Number.isSafeInteger(origin.date) ? new Date(origin.date * 1000).toISOString() : null,
+    submittedAt: Number.isSafeInteger(message.date) ? new Date(message.date * 1000).toISOString() : null,
     sourceChatId: String(origin.chatId ?? ''),
     sourceUsername: origin.username ? String(origin.username).replace(/^@/, '') : null,
     sourceTitle: origin.title ? String(origin.title) : null,
@@ -111,7 +112,7 @@ export function applyBusinessUpdates(previous, updates, { maxMessages = 500 } = 
     const prior = state.messages[existing];
     if (Number.isSafeInteger(prior?.updateId) && message.updateId <= prior.updateId) continue;
     // Telegram retries and forwarding the same post must not make its price fresh.
-    if (prior?.text === message.text && prior.sourceTitle === message.sourceTitle && prior.sourceUsername === message.sourceUsername && prior.date === message.date) continue;
+    if (prior?.text === message.text && prior.sourceTitle === message.sourceTitle && prior.sourceUsername === message.sourceUsername && prior.date === message.date && prior.submittedAt === message.submittedAt) continue;
     if (existing >= 0) state.messages.splice(existing, 1, message);
     else state.messages.push(message);
     acceptedSources.set(message.sourceChatId, {
