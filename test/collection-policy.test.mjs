@@ -34,3 +34,17 @@ test('repeated HTTP failures are summarized without dumping product URLs',()=>{
   assert.equal(summary,'Магазин временно отклонил запросы: 2 (HTTP 503); Магазин ограничил частоту запросов: 1 (HTTP 429)');
   assert.doesNotMatch(summary,/iphoriya|product/);
 });
+
+test('variants sharing a URL retain their own coverage and price baseline', () => {
+  const base = { url: 'https://imobile.market/mac/air', price: 80000, sourceVariantId: 'small' };
+  const large = { ...base, sourceVariantId: 'large', price: 200000 };
+  const result = assessCollection([base, large], [large, base]);
+  assert.equal(result.counts.previous, 2);
+  assert.equal(result.counts.parsed, 2);
+  assert.equal(result.counts.published, 2);
+  assert.ok(result.observations.every(offer => offer.qualityWarnings.length === 0));
+  const changed = assessCollection([base, large], [{ ...large, price: 80000 }, base]);
+  assert.equal(changed.observations[0].validationStatus, 'rejected');
+  const variants = Array.from({ length: 20 }, (_, i) => ({ ...base, sourceVariantId: String(i) }));
+  assert.equal(assessCollection(variants, variants.slice(0, 3)).status, 'degraded');
+});

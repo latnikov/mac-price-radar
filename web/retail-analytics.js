@@ -1,13 +1,10 @@
 export const PROCUREMENT_RETAILERS = ['Дима', 'BSA'];
-export const NIZHNY_RETAILERS = ['Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device'];
+export const isProcurementOffer = offer => PROCUREMENT_RETAILERS.includes(offer?.retailer) || offer?.sourceType === 'telegram_channel';
+export const NIZHNY_RETAILERS = ['Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM'];
 
-export const RETAILER_TRUST = Object.freeze({
-  ReSale: Object.freeze({
-    level: 'low',
-    label: 'низкий',
-    reason: 'Цена и наличие на сайте требуют ручной проверки',
-  }),
-});
+const percentFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+const belowPercent = (price, reference) => percentFormat.format((1 - price / reference) * 100);
+export const belowMarketReason = (price, reference) => `Ниже рынка на ~${belowPercent(price, reference)}%`;
 
 const average = values => values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : null;
 const canonicalStorage = value => ({ 1024: 1000, 2048: 2000, 4096: 4000, 8192: 8000, 16384: 16000 })[Number(value)] ?? value;
@@ -62,7 +59,7 @@ export function findColorPriceLowTrust(offers, configurationKey) {
         label: 'низкий',
         price: offer.price,
         comparisonPrice,
-        reason: `Цвет ${offer.color} стоит дешевле другого цвета той же конфигурации`,
+        reason: `Этот цвет дешевле другого на ~${belowPercent(offer.price, comparisonPrice)}%`,
       });
     }
   }
@@ -70,14 +67,14 @@ export function findColorPriceLowTrust(offers, configurationKey) {
 }
 
 export function calculateRetailAnalytics(offers, { undercutRub = 500, additionalLowTrust = new Map() } = {}) {
-  const procurement = lowestByRetailer(offers, PROCUREMENT_RETAILERS);
+  const procurement = lowestByRetailer(offers, offers.filter(isProcurementOffer).map(offer => offer.retailer));
   const nizhny = lowestByRetailer(offers, NIZHNY_RETAILERS);
-  const staticallyTrustedNizhny = [...nizhny.values()].filter(offer => RETAILER_TRUST[offer.retailer]?.level !== 'low' && !additionalLowTrust.has(offer.retailer));
-  const nizhnyReferenceAverage = average(staticallyTrustedNizhny.map(offer => offer.price));
-  const dynamicallyLowTrust = new Set(staticallyTrustedNizhny
+  const comparisonNizhny = [...nizhny.values()].filter(offer => !additionalLowTrust.has(offer.retailer));
+  const nizhnyReferenceAverage = average(comparisonNizhny.map(offer => offer.price));
+  const dynamicallyLowTrust = new Set(comparisonNizhny
     .filter(offer => nizhnyReferenceAverage != null && offer.price < nizhnyReferenceAverage * 0.95)
     .map(offer => offer.retailer));
-  const trustedNizhny = staticallyTrustedNizhny.filter(offer => !dynamicallyLowTrust.has(offer.retailer));
+  const trustedNizhny = comparisonNizhny.filter(offer => !dynamicallyLowTrust.has(offer.retailer));
   const procurementBenchmark = [...procurement.values()].sort((a, b) => a.price - b.price)[0] || null;
   const minimumProcurement = procurementBenchmark?.price ?? null;
   const averageRetail = average(trustedNizhny.map(offer => offer.price));
@@ -86,14 +83,12 @@ export function calculateRetailAnalytics(offers, { undercutRub = 500, additional
   const benchmark = trustedNizhny.sort((a, b) => a.price - b.price)[0] || null;
   const recommendedPrice = benchmark ? Math.max(0, benchmark.price - undercutRub) : null;
   const lowTrustRetailers = new Set([
-    ...[...nizhny.values()].filter(offer => RETAILER_TRUST[offer.retailer]?.level === 'low').map(offer => offer.retailer),
     ...[...additionalLowTrust.keys()].filter(retailer => nizhny.has(retailer)),
     ...dynamicallyLowTrust,
   ]);
   const lowTrustReasons = new Map([...lowTrustRetailers].map(retailer => [retailer,
-    RETAILER_TRUST[retailer]?.reason
-      || additionalLowTrust.get(retailer)?.reason
-      || 'Цена ниже среднего ориентира по Нижнему Новгороду более чем на 5%',
+    additionalLowTrust.get(retailer)?.reason
+      || belowMarketReason(nizhny.get(retailer).price, nizhnyReferenceAverage),
   ]));
 
   return {

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateRetailAnalytics, catalogConfigurationKey, colorPriceTrustKey, findColorPriceLowTrust, RETAILER_TRUST } from '../web/retail-analytics.js';
+import { calculateRetailAnalytics, catalogConfigurationKey, colorPriceTrustKey, findColorPriceLowTrust } from '../web/retail-analytics.js';
 
 test('catalogue grouping ignores missing CPU/GPU core details', () => {
   const base = { model: 'MacBook Air 15"', chip: 'M5', screenIn: 15, ramGb: 16, storageGb: 512 };
@@ -30,10 +30,10 @@ test('retail analytics compares the minimum procurement with trusted Nizhny pric
   assert.equal(analytics.recommendedPrice, 119500);
   assert.equal(analytics.benchmark.retailer, 'Айфория');
   assert.equal(analytics.ignoredLowTrustCount, 1);
-  assert.equal(RETAILER_TRUST.ReSale.level, 'low');
+  assert.equal(analytics.lowTrustReasons.get('ReSale'), 'Ниже рынка на ~18,7%');
 });
 
-test('out-of-stock and low-trust prices do not set the recommendation', () => {
+test('ReSale participates normally when its price has no dynamic warning', () => {
   const analytics = calculateRetailAnalytics([
     { retailer: 'Дима', price: 100000, stock: 'source_reported' },
     { retailer: 'Айфория', price: 110000, stock: 'OutOfStock' },
@@ -41,9 +41,11 @@ test('out-of-stock and low-trust prices do not set the recommendation', () => {
   ]);
 
   assert.equal(analytics.minimumProcurement, 100000);
-  assert.equal(analytics.averageRetail, null);
-  assert.equal(analytics.difference, null);
-  assert.equal(analytics.recommendedPrice, null);
+  assert.equal(analytics.averageRetail, 105000);
+  assert.equal(analytics.difference, 5000);
+  assert.equal(analytics.recommendedPrice, 104500);
+  assert.equal(analytics.benchmark.retailer, 'ReSale');
+  assert.equal(analytics.lowTrustRetailers.has('ReSale'), false);
 });
 
 test('only the lowest usable offer from each retailer contributes to its average', () => {
@@ -69,6 +71,7 @@ test('every Nizhny price more than five percent below the average gets low trust
   ]);
 
   assert.equal(analytics.nizhnyReferenceAverage, 93333);
+  assert.equal(analytics.lowTrustReasons.get('iMobile'), 'Ниже рынка на ~14,3%');
   assert.deepEqual([...analytics.lowTrustRetailers], ['iMobile']);
   assert.equal(analytics.averageRetail, 100000);
   assert.equal(analytics.retailCount, 2);
@@ -95,7 +98,7 @@ test('a cheaper color of the same retailer configuration gets low trust', () => 
   const lowTrust = findColorPriceLowTrust([silver, midnight, otherRetailer], configurationKey);
 
   assert.equal(lowTrust.get(colorPriceTrustKey(silver, configurationKey)).comparisonPrice, 134900);
-  assert.match(lowTrust.get(colorPriceTrustKey(silver, configurationKey)).reason, /Silver/);
+  assert.equal(lowTrust.get(colorPriceTrustKey(silver, configurationKey)).reason, 'Этот цвет дешевле другого на ~3,6%');
   assert.equal(lowTrust.has(colorPriceTrustKey(midnight, configurationKey)), false);
   assert.equal(lowTrust.has(colorPriceTrustKey(otherRetailer, configurationKey)), false);
 });

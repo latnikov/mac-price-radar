@@ -1,5 +1,15 @@
 // Bound simultaneous sources; each adapter retains its own per-site page limit.
 // Progress writes are serialized so atomic-file writers cannot race each other.
+export function collectionFailures(sources) {
+  return sources.filter(source => source.status !== 'success');
+}
+
+// Start the long sources first without changing their request concurrency.
+export function scheduleSources(retailers, previous = []) {
+  const durations = new Map(previous.map(source => [source.retailer, source.durationMs || 0]));
+  return [...retailers].sort((a, b) => (durations.get(b) || 0) - (durations.get(a) || 0));
+}
+
 export async function collectSources(retailers, collect, { concurrency = 3, onProgress = async () => {} } = {}) {
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new TypeError('Invalid collection concurrency');
   const results = new Array(retailers.length);

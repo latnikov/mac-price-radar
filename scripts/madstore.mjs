@@ -1,4 +1,5 @@
 import { decode, parseProduct, price } from './offer-normalization.mjs';
+import { crawlQueue } from './crawl-queue.mjs';
 
 const origin = 'https://madstore.ru';
 const catalogUrl = `${origin}/macbook`;
@@ -205,10 +206,10 @@ export async function fetchMadstoreOffers({ fetchPage = url => fetch(url), pageS
   const categoryUrls = discoverMadstoreCategoryUrls(rootHtml);
   if (categoryUrls.length > maxCategoryPages) throw new Error(`Madstore incomplete crawl: more than ${maxCategoryPages} category pages`);
   const references = [];
-  for (const url of categoryUrls) {
+  await crawlQueue(categoryUrls, async url => {
     const html = await responseText(await fetchPage(url), url);
     for (const reference of discoverMadstoreStoreParts(html)) references.push({ ...reference, categoryUrl: url });
-  }
+  });
   const uniqueReferences = [...new Map(references.map(reference => [`${reference.recid}:${reference.storepartuid}`, reference])).values()];
   if (uniqueReferences.length > maxStoreParts) throw new Error(`Madstore incomplete crawl: more than ${maxStoreParts} catalogue sections`);
 
@@ -216,7 +217,7 @@ export async function fetchMadstoreOffers({ fetchPage = url => fetch(url), pageS
   const sections = new Map();
   let apiPagesFetched = 0;
   let sectionProducts = 0;
-  for (const reference of uniqueReferences) {
+  await crawlQueue(uniqueReferences, async reference => {
     let total = null;
     const sectionIds = new Set();
     for (let slice = 1; slice <= maxSlices; slice += 1) {
@@ -247,7 +248,9 @@ export async function fetchMadstoreOffers({ fetchPage = url => fetch(url), pageS
     }
     if (sectionIds.size !== total) throw new Error(`Madstore incomplete crawl: received ${sectionIds.size} of ${total} products in section ${reference.storepartuid}`);
     sectionProducts += total;
-  }
+  });
+  // Keep evidence stable regardless of network completion order.
+  for (const pages of sections.values()) pages.sort((a, b) => categoryUrls.indexOf(a) - categoryUrls.indexOf(b));
   const fetchedAt = new Date().toISOString();
   const offers = parseMadstoreProducts([...products.values()], { fetchedAt, sections });
   if (!offers.length) throw new Error('Madstore incomplete crawl: no priced MacBook products discovered');

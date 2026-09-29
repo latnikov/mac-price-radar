@@ -6,16 +6,25 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { buildCatalogRows } from './catalog-rows.mjs';
 import { ingestBusinessUpdate, startBsaBusinessPolling } from './telegram-business.mjs';
+import { telegramSource, telegramSources } from './telegram-sources.mjs';
 import { inPublicSourceScope } from './domain.mjs';
 import { createResponseCache, cachedFile, sendCached } from './response-cache.mjs';
+import { AVITO, visibleAvitoOffer } from './avito-policy.mjs';
+import { rankAvitoOffers } from './avito-ranking.mjs';
+import { publicAvitoState } from './avito-access.mjs';
 
-const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'RifaStore', 'BSA', 'Дима'];
+const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'RifaStore', 'BSA', 'Дима', AVITO];
 const STATIC_FILES = new Map([
   ['/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/index.html', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/app.js', ['web/app.js', 'text/javascript; charset=utf-8']],
   ['/web/retail-analytics.js', ['web/retail-analytics.js', 'text/javascript; charset=utf-8']],
+  ['/web/price-status.js', ['web/price-status.js', 'text/javascript; charset=utf-8']],
+  ['/web/avito-status.js', ['web/avito-status.js', 'text/javascript; charset=utf-8']],
+  ['/web/avito-columns.js', ['web/avito-columns.js', 'text/javascript; charset=utf-8']],
+  ['/web/view-state.js', ['web/view-state.js', 'text/javascript; charset=utf-8']],
+  ['/web/price-table.js', ['web/price-table.js', 'text/javascript; charset=utf-8']],
   ['/web/styles.css', ['web/styles.css', 'text/css; charset=utf-8']],
   ['/web/favicon.svg', ['web/favicon.svg', 'image/svg+xml']],
   ['/web/favicon-32.png', ['web/favicon-32.png', 'image/png']],
@@ -54,9 +63,9 @@ async function jsonBody(req) {
   } catch { throw Object.assign(new Error('Некорректный объект JSON'), { statusCode: 400 }); }
 }
 
-function runCollector({ root, retailers, timeoutMs }) {
+function runCollector({ root, retailers, timeoutMs, env = process.env }) {
   return new Promise((resolveJob, reject) => execFile(process.execPath, ['scripts/build-data.mjs'], {
-    cwd: root, env: { ...process.env, LIVE: '1', RETAILER: retailers.join(',') },
+    cwd: root, env: { ...env, LIVE: '1', RETAILER: retailers.join(',') },
     timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 4 * 1024 * 1024,
   }, error => error ? reject(new Error(error.killed ? 'Превышен срок выполнения сбора' : 'Сбор завершился с ошибкой; сохранён последний успешный снимок')) : resolveJob()));
 }
@@ -71,6 +80,16 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
   const csrfToken = randomBytes(32).toString('hex');
   const previews = new Map();
   const responseCache = createResponseCache();
+  let tableSource;
+  let channels = { etag: '', sources: [] };
+  async function channelSnapshot() {
+    try {
+      const file = await cachedFile(responseCache, resolve(root, env.TELEGRAM_BSA_STATE_PATH || 'data/private/bsa-business.json'));
+      if (channels.etag !== file.etag) channels = { etag: file.etag, sources: telegramSources(JSON.parse(file.body), env) };
+    } catch (error) { if (error.code !== 'ENOENT') throw error; }
+    return channels;
+  }
+  const availableRetailers = async () => [...new Set([...RETAILERS, ...(await channelSnapshot()).sources.map(source => source.retailer)])];
   const cachedReply = (req, res, value, type = 'application/json; charset=utf-8') => sendCached(req, res, value, type, SECURITY_HEADERS);
   let activeJob = null;
   let jobStatus = null;
@@ -94,7 +113,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
   function refresh(selected) {
     if (activeJob) return false;
     jobStatus = { state: 'running', stage: 'starting', retailers: selected, startedAt: new Date().toISOString(), completed: 0, total: selected.length };
-    activeJob = Promise.resolve().then(() => refreshRunner({ root, retailers: selected, timeoutMs: refreshTimeoutMs }))
+    activeJob = Promise.resolve().then(() => refreshRunner({ root, retailers: selected, timeoutMs: refreshTimeoutMs, env }))
       .then(() => { jobStatus = { ...jobStatus, state: 'ready', stage: 'complete', updatedAt: new Date().toISOString() }; })
       .catch(error => { jobStatus = { ...jobStatus, state: 'error', stage: 'failed', error: error.message, updatedAt: new Date().toISOString() }; })
       .finally(() => {
@@ -105,14 +124,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
   }
 
   function telegramRetailers(sources) {
-    const bsaUsername = String(env.TELEGRAM_BSA_CHANNEL || 'BigSaleApple').replace(/^@/, '').toLowerCase();
-    const dimaChatId = String(env.TELEGRAM_DIMA_CHAT_ID || '-1003421701174');
-    const selected = new Set();
-    for (const source of sources || []) {
-      if (String(source.sourceUsername || '').replace(/^@/, '').toLowerCase() === bsaUsername) selected.add('BSA');
-      if (String(source.sourceChatId || '') === dimaChatId) selected.add('Дима');
-    }
-    return [...selected];
+    return [...new Set((sources || []).map(source => telegramSource(source, env)?.retailer).filter(Boolean))];
   }
 
   function scheduleTelegramRefresh(retailers) {
@@ -159,8 +171,9 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
         const body = await jsonBody(req);
         if (path === '/api/refresh' || path === '/refresh') {
           const retailer = body.retailer || url.searchParams.get('retailer');
-          if (retailer && !RETAILERS.includes(retailer)) return send(res, 400, { error: 'Неизвестный источник' });
-          const started = refresh(retailer ? [retailer] : RETAILERS);
+          const retailers = await availableRetailers();
+          if (retailer && !retailers.includes(retailer)) return send(res, 400, { error: 'Неизвестный источник' });
+          const started = refresh(retailer ? [retailer] : retailers);
           return send(res, started ? 202 : 409, started ? { started: true } : { error: 'Сбор уже выполняется' });
         }
         if (path === '/api/analytics') {
@@ -198,16 +211,28 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
         return send(res, 404, { error: 'Не найдено' });
       }
       if (path === '/web/public-config.json') return send(res, 200, { mode: 'local' });
-      if (path === '/api/session') return send(res, 200, { mode: 'local', csrfToken, retailers: RETAILERS });
-      if (path === '/status' || path === '/api/status') return send(res, 200, { ...await status(), autoRefreshIntervalMs, nextRefreshAt });
+      if (path === '/api/session') return send(res, 200, { mode: 'local', csrfToken, retailers: await availableRetailers() });
+      if (path === '/status' || path === '/api/status') {
+        const avito = await readFile(join(resolve(root, env.AVITO_DATA_DIR || 'data/private/avito'), 'state.json'), 'utf8').then(JSON.parse)
+          .catch(() => ({ state: 'not_configured', message: 'Доступ серверного сборщика к Авито ещё не подтверждён' }));
+        return send(res, 200, { ...await status(), autoRefreshIntervalMs, nextRefreshAt, avito: publicAvitoState(avito) });
+      }
       if (path === '/api/desktop-prices') return cachedReply(req, res, await cachedFile(responseCache, join(root, 'data/desktop-prices.json')));
       if (path === '/api/table') {
-        const snapshot = await responseCache('table', store.getRevision(), () => {
-          const fields = ['listingId', 'retailer', 'title', 'model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color', 'cpuCores', 'gpuCores', 'keyboard', 'region', 'price', 'currency', 'stock', 'url', 'fetchedAt', 'validFrom', 'validUntil', 'condition', 'paymentMethod', 'minimumQuantity', 'priceType', 'validationStatus', 'qualityWarnings'];
+        const revision = store.getRevision();
+        const channelData = await channelSnapshot();
+        if (tableSource?.revision !== revision) {
           const offers = store.getOffers({ includeRejected: true, summary: true })
-            .filter(offer => offer.visibility !== 'private' && !offer.isDemo && offer.dataKind !== 'demo' && inPublicSourceScope(offer) && Number.isFinite(offer.price) && offer.price > 0)
+            .filter(offer => offer.visibility !== 'private' && !offer.isDemo && offer.dataKind !== 'demo' && inPublicSourceScope(offer) && Number.isFinite(offer.price) && offer.price > 0);
+          tableSource = { revision, offers, hasAvito: offers.some(offer => offer.retailer === AVITO) };
+        }
+        const source = tableSource;
+        const snapshot = await responseCache('table', `${revision}:${channelData.etag}:${source.hasAvito ? Math.floor(Date.now() / 60000) : ''}`, () => {
+          const fields = ['listingId', 'sourceVariantId', 'optionId', 'sku', 'article', 'displayType', 'bundle', 'retailer', 'title', 'model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color', 'cpuCores', 'gpuCores', 'keyboard', 'region', 'price', 'currency', 'stock', 'url', 'fetchedAt', 'validFrom', 'validUntil', 'condition', 'paymentMethod', 'minimumQuantity', 'priceType', 'validationStatus', 'qualityWarnings', 'marketplaceSellerId', 'sellerName', 'matchedRetailer', 'sourceCity', 'avitoRank'];
+          fields.push('sourceType', 'sourceTitle', 'sourceChatId', 'sourceUsername');
+          const offers = rankAvitoOffers(source.offers)
             .map(offer => Object.fromEntries(fields.filter(field => offer[field] !== undefined).map(field => [field, offer[field]])));
-          return { schemaVersion: 1, offers };
+          return { schemaVersion: 1, offers, telegramSources: channelData.sources };
         });
         return cachedReply(req, res, snapshot);
       }
@@ -215,7 +240,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
         const catalogFile = await cachedFile(responseCache, join(root, 'data/catalog.json'));
         const snapshot = await responseCache('master', `${store.getRevision()}:${catalogFile.etag}:${Math.floor(Date.now() / 30000)}`, () => {
           const catalog = JSON.parse(catalogFile.body);
-          const offers = store.getOffers({ includeRejected: true, summary: true }).filter(inPublicSourceScope);
+          const offers = rankAvitoOffers(store.getOffers({ includeRejected: true, summary: true }).filter(inPublicSourceScope));
           const rows = buildCatalogRows(catalog, offers);
           for (const quote of store.listQuotes()) {
             if (rows.some(row => row.productKey === quote.variantId || row.product.id === quote.variantId || row.offers.some(offer => offer.listingId === quote.listingId))) continue;
@@ -225,7 +250,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
         });
         return cachedReply(req, res, snapshot);
       }
-      if (path === '/api/offers') return send(res, 200, store.getOffers({ includeRejected: true }).filter(inPublicSourceScope));
+      if (path === '/api/offers') return send(res, 200, store.getOffers({ includeRejected: true }).filter(inPublicSourceScope).filter(visibleAvitoOffer));
       if (path === '/api/history') {
         const listingId = url.searchParams.get('listingId') || url.searchParams.get('offerId');
         if (!listingId) return send(res, 400, { error: 'Не указан listingId' });
@@ -255,7 +280,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
   if (autoRefreshIntervalMs > 0) {
     const tick = () => {
       nextRefreshAt = new Date(Date.now() + autoRefreshIntervalMs).toISOString();
-      refresh(RETAILERS);
+      void availableRetailers().then(retailers => refresh(retailers)).catch(error => console.error('Telegram sources:', error.message));
     };
     server.once('listening', () => {
       tick();
@@ -263,6 +288,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       autoRefreshTimer.unref?.();
     });
   }
+  server.acceptTelegramSources = sources => scheduleTelegramRefresh(telegramRetailers(sources));
   server.on('close', () => {
     if (autoRefreshTimer) clearInterval(autoRefreshTimer);
     if (telegramRefreshTimer) clearTimeout(telegramRefreshTimer);
@@ -274,7 +300,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const port = Number(process.env.PORT || 4173);
   const server = await createMasterServer({ autoRefreshIntervalMs: Number(process.env.AUTO_REFRESH_INTERVAL_MS ?? 3600000) });
-  const bsaPolling = startBsaBusinessPolling();
+  const bsaPolling = startBsaBusinessPolling({ onSources: server.acceptTelegramSources });
   server.on('close', () => { void bsaPolling.stop(); });
   server.listen(port, '127.0.0.1', () => console.log(`Мастер-таблица: http://127.0.0.1:${port}/web/`));
 }

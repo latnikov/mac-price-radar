@@ -25,6 +25,16 @@ test('does not retry permanent HTTP failures', async () => {
   assert.equal(calls, 1);
 });
 
+test('long Retry-After stops this refresh instead of retrying before the cooldown', async () => {
+  let calls = 0;
+  await assert.rejects(fetchTextWithRetry('https://shop.test', {
+    attempts: 3, maxDelayMs: 5000,
+    fetchImpl: async () => { calls++; return new Response('busy', { status: 429, headers: { 'retry-after': '3600' } }); },
+    sleep: async () => assert.fail('must not shorten cooldown'),
+  }), /Retry-After/);
+  assert.equal(calls, 1);
+});
+
 test('aborted collection starts no new request and terminal errors release the response body', async () => {
   let calls = 0, cancelled = false;
   const controller = new AbortController();

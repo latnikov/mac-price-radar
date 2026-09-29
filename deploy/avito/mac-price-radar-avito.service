@@ -1,0 +1,20 @@
+# Live HTTP stops on the first access restriction and respects retryAfter.
+[Unit]
+Description=Mac Price Radar Avito collector (dev)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=radar
+Group=radar
+WorkingDirectory=/srv/mac-price-radar/dev
+EnvironmentFile=-/etc/mac-price-radar/avito-dev.env
+ExecStart=/usr/bin/node scripts/avito-collector.mjs
+TimeoutStartSec=56min
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/mac-price-radar/dev/data/private/avito

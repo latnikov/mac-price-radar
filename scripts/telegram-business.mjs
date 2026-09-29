@@ -34,6 +34,7 @@ function messageOrigin(message) {
       title: forward.chat.title,
       chatId: forward.chat.id,
       postId: forward.message_id,
+      date: forward.date ?? message.date,
     };
   }
   if (message?.chat?.type === 'channel') {
@@ -42,6 +43,7 @@ function messageOrigin(message) {
       title: message.chat.title,
       chatId: message.chat.id,
       postId: message.message_id,
+      date: message.edit_date ?? message.date,
     };
   }
   return null;
@@ -60,9 +62,10 @@ function cachedMessage(update) {
   const text = String(message.text || message.caption || '').trim();
   if (!text || !Number.isSafeInteger(Number(origin.postId))) return null;
   return {
+    updateId: Number(update.update_id),
     id: String(origin.postId),
     text,
-    date: Number.isSafeInteger(message.date) ? new Date(message.date * 1000).toISOString() : null,
+    date: Number.isSafeInteger(origin.date) ? new Date(origin.date * 1000).toISOString() : null,
     sourceChatId: String(origin.chatId ?? ''),
     sourceUsername: origin.username ? String(origin.username).replace(/^@/, '') : null,
     sourceTitle: origin.title ? String(origin.title) : null,
@@ -89,6 +92,7 @@ export function applyBusinessUpdates(previous, updates, { maxMessages = 500 } = 
   state.schemaVersion = 2;
   let changed = false;
   const acceptedSources = new Map();
+  let acceptedMessages = 0;
   for (const update of updates) {
     const updateId = Number(update?.update_id);
     if (Number.isSafeInteger(updateId) && updateId >= state.lastUpdateId) {
@@ -102,22 +106,26 @@ export function applyBusinessUpdates(previous, updates, { maxMessages = 500 } = 
     }
     const message = cachedMessage(update);
     if (!message) continue;
-    const sourceKey = `${message.sourceChatId}:${username(message.sourceUsername)}`;
-    acceptedSources.set(sourceKey, {
+    const key = `${message.sourceChatId}:${message.id}`;
+    const existing = state.messages.findIndex(item => `${item.sourceChatId}:${item.id}` === key);
+    const prior = state.messages[existing];
+    if (Number.isSafeInteger(prior?.updateId) && message.updateId <= prior.updateId) continue;
+    // Telegram retries and forwarding the same post must not make its price fresh.
+    if (prior?.text === message.text && prior.sourceTitle === message.sourceTitle && prior.sourceUsername === message.sourceUsername && prior.date === message.date) continue;
+    if (existing >= 0) state.messages.splice(existing, 1, message);
+    else state.messages.push(message);
+    acceptedSources.set(message.sourceChatId, {
       sourceChatId: message.sourceChatId,
       sourceUsername: message.sourceUsername,
       sourceTitle: message.sourceTitle,
     });
-    const key = `${message.sourceChatId}:${message.id}`;
-    const existing = state.messages.findIndex(item => `${item.sourceChatId}:${item.id}` === key);
-    if (existing >= 0) state.messages.splice(existing, 1, message);
-    else state.messages.push(message);
+    acceptedMessages++;
     changed = true;
   }
   state.messages.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.id) - Number(a.id));
   state.messages = state.messages.slice(0, maxMessages);
   if (changed) state.updatedAt = new Date().toISOString();
-  return { state, changed, acceptedMessages: acceptedSources.size ? updates.map(cachedMessage).filter(Boolean).length : 0, acceptedSources: [...acceptedSources.values()] };
+  return { state, changed, acceptedMessages, acceptedSources: acceptedMessages ? [...acceptedSources.values()] : [] };
 }
 
 export async function readBusinessState(path = DEFAULT_STATE_PATH) {
@@ -200,7 +208,7 @@ const wait = (milliseconds, signal) => new Promise((resolve, reject) => {
   signal?.addEventListener('abort', onAbort, { once: true });
 });
 
-export function startBsaBusinessPolling({ env = process.env, logger = console } = {}) {
+export function startBsaBusinessPolling({ env = process.env, logger = console, onSources = () => {} } = {}) {
   if (businessDeliveryMode(env) === 'webhook') {
     return { enabled: false, mode: 'webhook', stop: async () => {} };
   }
@@ -211,7 +219,8 @@ export function startBsaBusinessPolling({ env = process.env, logger = console } 
   const done = (async () => {
     while (!controller.signal.aborted) {
       try {
-        await pollBusinessUpdates({ env, timeout: 45, signal: controller.signal });
+        const result = await pollBusinessUpdates({ env, timeout: 45, signal: controller.signal });
+        if (result.acceptedSources.length) await onSources(result.acceptedSources);
       } catch (error) {
         if (controller.signal.aborted) break;
         logger.error(`BSA Business API: ${error.message}`);

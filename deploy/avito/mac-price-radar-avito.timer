@@ -1,0 +1,12 @@
+# The hourly tick respects the collector's six-hour access cooldown.
+[Unit]
+Description=Hourly Avito observation refresh
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=60
+Persistent=true
+Unit=mac-price-radar-avito.service
+
+[Install]
+WantedBy=timers.target

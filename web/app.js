@@ -1,12 +1,29 @@
-import { calculateRetailAnalytics, catalogConfigurationKey, colorPriceTrustKey, findColorPriceLowTrust, RETAILER_TRUST } from './retail-analytics.js';
+import { priceStatus } from './price-status.js';
+import { isProcurementOffer } from './retail-analytics.js';
+import { AVITO, avitoSellerColumns, priceColumnKey, groupOffersByPriceColumn } from './avito-columns.js';
+import { emptyFilters, readView, writeView, searchTerms, offerSearchText, matchesSearch } from './view-state.js';
+import { prepareTableOffers, buildPriceTable, selectTablePage, currentPrice, TABLE_PAGE_SIZE } from './price-table.js';
 
 const $ = id => document.getElementById(id);
 const state = {
-  offers: [], retailers: [], csrf: '', wasRunning: false, refreshPending: false,
-  filters: { family: 'desktops', chip: '*', screen: '', ram: '', ssd: '', color: '', stock: '' },
+  offers: [], retailers: [], telegramSources: [], csrf: '', wasRunning: false, refreshPending: false,
+  filters: emptyFilters(), page: 1,
 };
+const searchIndex = new WeakMap();
+function restoreView() {
+  const view = readView(location.hash);
+  state.filters = view.filters;
+  state.page = 1;
+  $('search').value = view.query;
+  $('min-price').value = view.min;
+  $('max-price').value = view.max;
+  $('sort').value = view.sort;
+}
+function saveView() {
+  const hash = writeView({ filters: state.filters, query: $('search').value, min: $('min-price').value, max: $('max-price').value, sort: $('sort').value });
+  if (location.hash !== hash) history.replaceState(null, '', `${location.pathname}${location.search}${hash}`);
+}
 const CURRENT_CHIPS = {
-  desktops: new Set(['M6', 'M5 Pro', 'M5 Max', 'M5 Ultra']),
   mini: new Set(['M6', 'M5 Pro']),
   studio: new Set(['M5 Max', 'M5 Ultra']),
   air: new Set(['M5']),
@@ -17,7 +34,7 @@ const CURRENT_CHIPS = {
 const RETAILER_GROUPS = [
   { key: 'procurement', label: 'Закупка', retailers: [{ name: 'Дима', label: 'Дима' }, { name: 'BSA', label: 'BSA' }] },
   { key: 'moscow', label: 'МСК / РФ', retailers: [{ name: 'BigGeek', label: 'BigGeek' }, { name: 'RifaStore', label: 'Rifa' }] },
-  { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }, { name: 'iMobile', label: 'iMobile' }, { name: 'ReSale', label: 'ReSale' }, { name: 'Apple Store', label: 'Apple Store' }, { name: 'Rebro', label: 'Rebro' }, { name: 'Madstore', label: 'Madstore' }, { name: 'Smart Device', label: 'Smart Device' }] },
+  { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }, { name: 'iMobile', label: 'iMobile' }, { name: 'ReSale', label: 'ReSale' }, { name: 'Apple Store', label: 'Apple Store' }, { name: 'Rebro', label: 'Rebro' }, { name: 'Madstore', label: 'Madstore' }, { name: 'Smart Device', label: 'Smart Device' }, { name: 'AFM', label: 'AFM' }] },
 ];
 const CONFIGURED_RETAILERS = RETAILER_GROUPS.flatMap(group => group.retailers.map(retailer => retailer.name));
 const text = (tag, value, cls) => { const node = document.createElement(tag); if (value != null) node.textContent = String(value); if (cls) node.className = cls; return node; };
@@ -35,31 +52,37 @@ const compareOffers = (a, b) => a.price - b.price || String(a.url).localeCompare
 const model = offer => String(offer.model || offer.title || 'Не распознано').replace(/\s+/g, ' ').trim();
 const family = offer => /^Mac mini/i.test(model(offer)) ? 'mini' : /^Mac Studio/i.test(model(offer)) ? 'studio' : /MacBook\s+Air/i.test(model(offer)) ? 'air' : /MacBook\s+Pro/i.test(model(offer)) ? 'pro' : /MacBook\s+Neo/i.test(model(offer)) ? 'neo' : /^iMac\b/i.test(model(offer)) ? 'imac' : 'other';
 const screen = offer => offer.screenIn || Number(model(offer).match(/\b(13|14|15|16|24|27)\b/)?.[1]) || null;
-// Core counts are display details, not grouping dimensions: procurement feeds
-// often omit them even when they refer to the same model sold by retailers.
-const colorConfigurationKey = offer => catalogConfigurationKey({ ...offer, model: model(offer), screenIn: screen(offer) });
-const key = offer => [colorConfigurationKey(offer), offer.color ?? 'unknown'].join('|');
 const characteristics = offer => [offer.keyboard && offer.keyboard !== 'unknown' ? `KB ${offer.keyboard}` : null, offer.region && offer.region !== 'unknown' ? offer.region : null].filter(Boolean).join(' · ');
-const message = value => { $('message').textContent = value; $('message').hidden = !value; };
+const message = value => {
+  $('message').textContent = value ? 'Не удалось выполнить запрос. Проверьте соединение и попробуйте ещё раз.' : '';
+  $('message').hidden = !value;
+  if (value) $('price-status').dataset.tone = 'warning';
+};
+function renderStatus() {
+  if (!state.latestStatus) return;
+  const summary = priceStatus(state.latestStatus, state.offers);
+  $('status').textContent = summary.title;
+  $('status-detail').textContent = summary.detail;
+  $('status-schedule').textContent = summary.schedule;
+  $('price-status').dataset.tone = summary.tone;
+}
 
 function trustForRetailer(retailer, analytics, colorTrust) {
-  const configured = RETAILER_TRUST[retailer];
-  if (configured) return configured;
   if (colorTrust) return colorTrust;
-  if (!analytics?.lowTrustRetailers.has(retailer)) return null;
+  if (!analytics?.lowTrustRetailers?.has(retailer)) return null;
   return { level: 'low', label: 'низкий', reason: analytics.lowTrustReasons.get(retailer) };
 }
 
-function configurationCell(offer) {
+function configurationCell(offer, variant = false) {
   const cell = text('td', null, 'configuration-cell');
-  cell.append(text('span', model(offer), 'configuration-model'));
+  cell.append(text('span', model(offer).replace(/\s+\d+(?:\.\d+)?["″]$/, ''), 'configuration-model'));
   const badges = text('span', null, 'configuration-badges');
   const values = [
     screen(offer) ? `${screen(offer)}″` : null,
     offer.chip || null,
     offer.ramGb ? `RAM ${offer.ramGb} GB` : null,
     offer.storageGb ? `SSD ${storage(offer.storageGb)}` : null,
-    offer.color && offer.color !== 'unknown' ? offer.color : null,
+    variant ? variantLabel(offer) : null,
   ];
   for (const value of values.filter(Boolean)) badges.append(text('span', value, 'configuration-badge'));
   cell.append(badges);
@@ -67,7 +90,8 @@ function configurationCell(offer) {
 }
 
 async function api(path, body) {
-  const response = await fetch(path, { signal: AbortSignal.timeout(30000), method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : { 'content-type': 'application/json', 'x-csrf-token': state.csrf }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  const target = path.startsWith('/api/') ? new URL(`..${path}`, import.meta.url) : path;
+  const response = await fetch(target, { signal: AbortSignal.timeout(30000), method: body === undefined ? 'GET' : 'POST', headers: body === undefined ? {} : { 'content-type': 'application/json', 'x-csrf-token': state.csrf }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
   const value = await response.json();
   if (!response.ok) throw new Error(value.error || `HTTP ${response.status}`);
   return value;
@@ -75,7 +99,7 @@ async function api(path, body) {
 
 function track(event, properties = {}) {
   if (!state.csrf) return;
-  fetch('/api/analytics', {
+  fetch(new URL('../api/analytics', import.meta.url), {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-csrf-token': state.csrf },
     body: JSON.stringify({ event, path: location.pathname, properties }),
@@ -88,9 +112,60 @@ function safeLink(offer) {
     const url = new URL(offer.url);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return text('span', amount(offer), 'price');
     const link = text('a', amount(offer), 'price');
-    link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.title = `Открыть цену ${offer.retailer} на сайте магазина`;
+    link.href = url.href; link.target = '_blank'; link.rel = 'noopener noreferrer';
+    link.title = offer.retailer === AVITO ? `Открыть объявление «${offer.title}» · ${offer.sellerName}` : `Открыть цену ${offer.retailer} на сайте магазина`;
     return link;
   } catch { return text('span', amount(offer), 'price'); }
+}
+
+function avitoOfferNode(offer) {
+  const item = text('div', null, 'avito-offer');
+  const rank = offer.avitoRank;
+  item.append(safeLink(offer));
+  const specs = characteristics(offer);
+  if (specs) item.append(text('span', specs, 'variant'));
+  const labels = { high: 'высокий', medium: 'средний', low: 'низкий' };
+  const badge = text('span', rank ? `Доверие: ${labels[rank.level]} · ${rank.score}/100` : 'Доверие: не рассчитан', `trust-badge avito-trust-${rank?.level || 'medium'}`);
+  badge.title = rank?.reasons?.join('; ') || 'Оценка сопоставимости цены, свежести и независимых предложений';
+  item.append(badge);
+  if (rank?.level === 'low' && rank.reasons?.length) item.append(text('span', rank.reasons[0], 'avito-reason'));
+  item.append(text('span', `Проверено ${date(offer.fetchedAt)}`, 'variant'));
+  if (stock(offer) === 'out') item.append(text('span', 'Нет в наличии', 'tag'));
+  else if (stock(offer) === 'unknown') item.append(text('span', 'Наличие неизвестно', 'tag'));
+  if (Date.now() - Date.parse(offer.fetchedAt) > 4 * 3600000) item.append(text('span', 'Старая проверка', 'tag warn'));
+  const audit = text('details', null, 'avito-audit');
+  audit.append(text('summary', 'Почему такая оценка'));
+  audit.append(text('span', offer.title, 'variant'), text('span', `${offer.sellerName} · Нижний Новгород · Новое`, 'variant'));
+  if (rank?.position) audit.append(text('span', `Место объявления в рейтинге: ${rank.position}`, 'variant'));
+  if (rank?.referencePrice) {
+    const delta = (offer.price / rank.referencePrice - 1) * 100;
+    audit.append(text('span', `К сравнению: ${rubles(rank.referencePrice)} · ${delta >= 0 ? '+' : ''}${number(delta)}%`, 'variant'));
+  }
+  if (rank?.marketPrice) audit.append(text('span', `Ориентир модели: ${rubles(rank.marketPrice)} · независимых продавцов: ${rank.independentSellers}`, 'variant'));
+  if (rank?.modelRange) audit.append(text('span', `Диапазон модели: ${rubles(rank.modelRange[0])}–${rubles(rank.modelRange[1])}`, 'variant'));
+  for (const reason of rank?.reasons || []) audit.append(text('span', reason, 'avito-reason'));
+  item.append(audit);
+  return item;
+}
+
+function renderAvitoCell(cell, items) {
+  cell.classList.add('avito-cell');
+  if (!items.length) {
+    cell.append(text('span', '—', 'empty-cell'));
+    return;
+  }
+  if (items[0].avitoRank?.level === 'low') cell.classList.add('low-trust-price');
+  cell.append(avitoOfferNode(items[0]));
+  if (items.length === 1) return;
+  const details = text('details', null, 'avito-list');
+  const remaining = items.length - 1;
+  details.append(text('summary', `Ещё ${remaining} ${plural(remaining, ['объявление', 'объявления', 'объявлений'])} продавца`));
+  details.addEventListener('toggle', () => {
+    if (!details.open || details.dataset.loaded) return;
+    details.dataset.loaded = 'true';
+    for (const offer of items.slice(1)) details.append(avitoOfferNode(offer));
+  });
+  cell.append(details);
 }
 
 function choiceButton(label, filter, value, active, current = false) {
@@ -116,7 +191,7 @@ function familyOffers() {
 
 function matchesFamily(offer) {
   const selected = state.filters.family;
-  return selected === 'desktops' ? offer.desktop === true : selected === '*' ? !offer.desktop : ['mini', 'studio'].includes(selected) ? offer.desktop === true && family(offer) === selected : family(offer) === selected;
+  return selected === '*' || family(offer) === selected;
 }
 
 function renderControls() {
@@ -140,9 +215,7 @@ function renderControls() {
   $('spec-step').hidden = state.filters.chip === null;
   if (state.filters.chip === null) return;
   const base = familyOffers().filter(offer => state.filters.chip === '*' || offer.chip === state.filters.chip);
-  const desktop = ['desktops', 'mini', 'studio'].includes(state.filters.family);
-  for (const id of ['screen-options', 'color-options', 'stock-options']) $(id).parentElement.hidden = desktop;
-  $('min-price').placeholder = $('max-price').placeholder = desktop ? '$' : '₽';
+  $('screen-options').parentElement.hidden = !base.some(offer => screen(offer));
   renderOptions('screen-options', 'screen', base.map(screen), value => `${value}″`);
   renderOptions('ram-options', 'ram', base.map(offer => offer.ramGb), value => `${value} GB`);
   renderOptions('ssd-options', 'ssd', base.map(offer => offer.storageGb), storage);
@@ -157,8 +230,10 @@ function filtered() {
   const minimum = $('min-price').value;
   const maximum = $('max-price').value;
   const selected = state.filters;
+  const terms = searchTerms($('search').value);
   return state.offers.filter(offer =>
     matchesFamily(offer)
+    && matchesSearch(searchIndex.get(offer) || '', terms)
     && (selected.chip === '*' || offer.chip === selected.chip)
     && (!selected.screen || String(screen(offer)) === selected.screen)
     && (!selected.ram || String(offer.ramGb) === selected.ram)
@@ -170,144 +245,168 @@ function filtered() {
   );
 }
 
-function retailerGroups() {
+const retailerLabel = offer => state.telegramSources.find(source => source.retailer === offer?.retailer)?.sourceTitle || offer?.sourceTitle || offer?.retailer;
+function retailerGroups(offers) {
+  const present = new Set(offers.map(offer => offer.retailer));
+  for (const source of state.telegramSources) present.add(source.retailer);
   const configured = new Set(CONFIGURED_RETAILERS);
-  const other = state.retailers.filter(retailer => !configured.has(retailer)).map(name => ({ name, label: name }));
-  return other.length ? [...RETAILER_GROUPS, { key: 'other', label: 'Другие', retailers: other }] : RETAILER_GROUPS;
+  const channels = state.telegramSources.filter(source => !configured.has(source.retailer));
+  const channelIds = new Set(channels.map(source => source.retailer));
+  const other = state.retailers.filter(retailer => retailer !== AVITO && !configured.has(retailer) && !channelIds.has(retailer)).map(name => ({ name, label: name }));
+  const groups = [RETAILER_GROUPS[0], RETAILER_GROUPS[2], RETAILER_GROUPS[1]].map(group => ({ ...group, retailers: group.retailers.map(item => ({ ...item, label: retailerLabel({ retailer: item.name }) || item.label })) }));
+  groups[0].retailers.push(...channels.map(source => ({ name: source.retailer, label: source.sourceTitle })));
+  if (other.length) groups.push({ key: 'other', label: 'Другие', retailers: other });
+  const sellers = avitoSellerColumns(offers);
+  if (sellers.length) groups.push({ key: 'avito', label: 'НН (Авито)', retailers: sellers });
+  return groups.map(group => ({ ...group, retailers: group.retailers.filter(retailer => group.key === 'nizhny' || present.has(retailer.name)).map(retailer => ({ ...retailer, key: retailer.key || priceColumnKey({ retailer: retailer.name }) })) })).filter(group => group.retailers.length);
 }
 
-let renderVersion = 0;
-async function render() {
-  const version = ++renderVersion;
+const colorNames = { Silver: 'Серебристый', 'Space Gray': 'Серый космос', 'Space Black': 'Чёрный космос', Midnight: 'Тёмная ночь', Starlight: 'Сияющая звезда', 'Sky Blue': 'Небесно-голубой', Gold: 'Золотой', Blush: 'Розовый', Citrus: 'Цитрусовый', Indigo: 'Индиго', Blue: 'Синий', Green: 'Зелёный', Orange: 'Оранжевый', Yellow: 'Жёлтый', Pink: 'Розовый', Purple: 'Фиолетовый' };
+function variantLabel(offer) {
+  const condition = { new: 'новый', used: 'б/у', refurbished: 'восстановленный', display: 'витринный', open_box: 'вскрытая коробка' }[offer.condition] || 'состояние не уточнено';
+  return [colorNames[offer.color] || (offer.color === 'unknown' ? 'цвет не указан' : offer.color),
+    offer.cpuCores && offer.gpuCores ? `CPU ${offer.cpuCores} / GPU ${offer.gpuCores}` : 'ядра не уточнены',
+    condition, characteristics(offer), ...['displayType', 'bundle'].map(field => offer[field] && !['unknown', 'standard'].includes(offer[field]) ? offer[field] : null)].filter(Boolean).join(' · ');
+}
+
+function offerDetails(cell, offer, { showVariant = false, analytics, colorTrust } = {}) {
+  if (showVariant) cell.append(text('span', variantLabel(offer), 'variant'));
+  else if (characteristics(offer)) cell.append(text('span', characteristics(offer), 'variant'));
+  const trust = trustForRetailer(offer.retailer, analytics, colorTrust);
+  if (trust) {
+    const badge = text('span', trust.reason, 'trust-badge');
+    badge.title = colorTrust
+      ? `Другой цвет той же комплектации у этого продавца: ${rubles(colorTrust.comparisonPrice)}`
+      : `Средний ориентир сопоставимых магазинов НН: ${rubles(analytics?.nizhnyReferenceAverage)}. Эта цена не задаёт рекомендацию продажи.`;
+    cell.append(badge); cell.classList.add('low-trust-price');
+  }
+  if (stock(offer) === 'out') cell.append(text('span', 'Нет в наличии', 'tag'));
+  else if (offer.validationStatus === 'rejected' || offer.qualityWarnings?.length) {
+    const badge = text('span', 'Цена не прошла проверку', 'tag warn');
+    badge.title = (offer.qualityWarnings || []).join('; '); cell.append(badge);
+  } else if (!currentPrice(offer)) cell.append(text('span', 'Нужно обновить', 'tag warn'));
+  else if (stock(offer) === 'unknown') cell.append(text('span', 'Наличие уточнить', 'tag'));
+  if (isProcurementOffer(offer)) cell.append(text('span', procurementAge(offer), 'variant'));
+  cell.title = `Проверено: ${date(offer.fetchedAt)}`;
+}
+
+function priceRow(group, priceGroups) {
+  const row = text('tr', null, 'configuration-row');
+  const configCell = configurationCell(group.sample);
+  configCell.append(text('span', variantLabel(group.sample), 'variant'));
+  row.append(configCell);
+  const procurementCell = text('td', null, 'price-cell retailer-analytics retailer-group-start');
+  procurementCell.append(text('span', rubles(group.analytics.minimumProcurement), 'price'));
+  if (group.analytics.procurementBenchmark) procurementCell.append(text('span', retailerLabel(group.analytics.procurementBenchmark), 'variant'));
+  row.append(procurementCell);
+  const averageCell = text('td', null, 'price-cell retailer-analytics');
+  averageCell.append(text('span', group.analytics.averageRetail == null ? '—' : rubles(group.analytics.averageRetail), 'price'));
+  if (group.analytics.retailCount) averageCell.append(text('span', `${group.analytics.retailCount} ${plural(group.analytics.retailCount, ['магазин', 'магазина', 'магазинов'])}`, 'variant'));
+  row.append(averageCell);
+  const difference = group.analytics.difference;
+  const differenceCell = text('td', null, `price-cell retailer-analytics analytics-difference${difference == null ? '' : difference >= 0 ? ' positive' : ' negative'}`);
+  differenceCell.append(text('span', difference == null ? '—' : `${difference >= 0 ? '+' : ''}${rubles(difference)}`, 'price'));
+  if (group.analytics.markupPercent != null) differenceCell.append(text('span', `${difference >= 0 ? '+' : ''}${number(group.analytics.markupPercent)}% к закупке`, 'variant'));
+  row.append(differenceCell);
+  const recommendationCell = text('td', null, 'price-cell retailer-analytics recommended-cell');
+  recommendationCell.append(text('span', group.analytics.recommendedPrice == null ? '—' : rubles(group.analytics.recommendedPrice), 'price'));
+  if (group.analytics.benchmark) recommendationCell.append(text('span', `на 500 ₽ ниже ${retailerLabel(group.analytics.benchmark)}`, 'variant'));
+  if (group.analytics.recommendedPrice != null && group.analytics.minimumProcurement != null && group.analytics.recommendedPrice <= group.analytics.minimumProcurement) recommendationCell.append(text('span', 'Не выше минимальной закупки', 'tag warn'));
+  row.append(recommendationCell);
+  const byColumn = priceGroups.length ? groupOffersByPriceColumn(group.offers) : new Map();
+  for (const retailerGroup of priceGroups) for (const [index, retailer] of retailerGroup.retailers.entries()) {
+    const cell = text('td', null, `price-cell retailer-${retailerGroup.key}${index === 0 ? ' retailer-group-start' : ''}`);
+    const items = byColumn.get(retailer.key) || [];
+    if (retailer.name === AVITO) {
+      cell.dataset.sellerId = retailer.sellerId; renderAvitoCell(cell, items);
+    } else if (!items.length) cell.append(text('span', '—', 'empty-cell'));
+    else {
+      const first = items.find(offer => currentPrice(offer)) || items[0];
+      cell.append(safeLink(first));
+      offerDetails(cell, first, { analytics: group.analytics, colorTrust: group.lowTrust.get(first.retailer) });
+      if (retailerGroup.key === 'nizhny' && currentPrice(first) && first.price === group.analytics.minimumRetail && group.analytics.retailCount > 1) {
+        cell.classList.add('lowest-retail-price');
+        cell.append(text('span', 'Минимум в НН', 'variant'));
+      }
+      if (['cpuCores', 'gpuCores', 'condition'].some(field => !first[field] || first[field] === 'unknown')) {
+        const note = text('span', 'Характеристики неполные', 'variant');
+        note.title = 'Магазин не указал ядра процессора или состояние. Проверьте исходную карточку.';
+        cell.append(note);
+      }
+    }
+    row.append(cell);
+  }
+  return row;
+}
+
+function render({ keepPage = false } = {}) {
+  if (!keepPage) state.page = 1;
+  saveView(); renderActiveFilters();
   const ready = state.filters.family !== null && state.filters.chip !== null;
   $('sort').disabled = !ready; $('export').disabled = !ready;
   $('selection-prompt').hidden = ready;
-  $('table-wrap').hidden = !ready;
-  if (!ready) {
-    $('rows').replaceChildren(); $('head').replaceChildren(); $('empty').hidden = true;
-    $('selection-prompt').textContent = state.filters.family === null ? 'Выберите модель, затем процессор — после этого покажем подходящие цены.' : 'Теперь выберите процессор. Актуальная линейка показана первой.';
-    $('count').textContent = state.filters.family === null ? 'Начните с модели' : 'Модель выбрана';
-    return;
+  for (const id of ['table-wrap', 'table-meta']) $(id).hidden = !ready;
+  $('pagination').hidden = true;
+  if (!ready) { $('rows').replaceChildren(); $('head').replaceChildren(); $('empty').hidden = true; return; }
+  const queryKey = JSON.stringify([state.filters, $('search').value, $('min-price').value, $('max-price').value, Math.floor(Date.now() / 60000)]);
+  if (state.tableModel?.key !== queryKey) {
+    const offers = filtered();
+    state.tableModel = { key: queryKey, offers, groups: buildPriceTable(offers, { contextOffers: state.offers }) };
   }
-
-  const offers = filtered();
-  const desktop = ['desktops', 'mini', 'studio'].includes(state.filters.family);
-  $('desktop-note').hidden = !desktop;
-  $('table-note').textContent = desktop ? 'Показаны исходные суммы из Excel. Для цены в рублях откройте сайт заказов.' : 'Цена в ячейке ведёт на карточку магазина.';
-  $('analytics-method').hidden = desktop;
-  if (desktop) { renderDesktop(offers); return; }
-  const colorPriceTrust = findColorPriceLowTrust(familyOffers(), colorConfigurationKey);
-  const groups = new Map();
-  for (const offer of offers) { const id = key(offer); if (!groups.has(id)) groups.set(id, { sample: offer, offers: [] }); groups.get(id).offers.push(offer); }
-  const mode = $('sort').value;
-  for (const group of groups.values()) {
-    group.sortKey = key(group.sample);
-    group.minimumPrice = Math.min(...group.offers.map(offer => offer.price));
-    group.latestAt = Math.max(...group.offers.map(offer => Date.parse(offer.fetchedAt) || 0));
-    group.byRetailer = new Map();
-    for (const offer of group.offers) {
-      const items = group.byRetailer.get(offer.retailer) || [];
-      items.push(offer); group.byRetailer.set(offer.retailer, items);
-    }
-  }
-  const groupsSorted = [...groups.values()].sort((a, b) => mode === 'price-up' ? a.minimumPrice - b.minimumPrice : mode === 'price-down' ? b.minimumPrice - a.minimumPrice : mode === 'fresh' ? b.latestAt - a.latestAt : sortCollator.compare(a.sortKey, b.sortKey));
-  const priceGroups = retailerGroups();
+  const { groups, offers } = state.tableModel;
+  const page = selectTablePage(groups, { sort: $('sort').value, page: state.page });
+  state.page = page.page; state.pageCount = page.pages;
+  const priceGroups = retailerGroups(page.allRows.flatMap(group => group.offers));
+  const avitoColumns = priceGroups.find(group => group.key === 'avito')?.retailers || [];
+  $('avito-jump').hidden = !avitoColumns.length;
   const groupHeading = text('tr', null, 'column-groups');
-  const modelHeading = text('th', 'Модель и конфигурация', 'model-heading');
+  const modelHeading = text('th', 'Конфигурация и цвет', 'model-heading');
   modelHeading.rowSpan = 2; modelHeading.scope = 'col'; groupHeading.append(modelHeading);
-  const bestHeading = text('th', 'Лучшая цена', 'best-price-heading');
-  bestHeading.rowSpan = 2; bestHeading.scope = 'col'; groupHeading.append(bestHeading);
+  const retailerHeading = text('tr', null, 'retailer-headings');
   const analyticsHeading = text('th', 'Ритейл-аналитика', 'retailer-group-heading retailer-group-analytics');
   analyticsHeading.colSpan = 4; analyticsHeading.scope = 'colgroup'; groupHeading.append(analyticsHeading);
+  for (const [label, title] of [
+    ['Мин. закупка', 'Минимальная свежая закупочная цена для этой конфигурации и цвета'],
+    ['Средняя по НН', 'Среднее свежих цен магазинов НН в этой строке, по одной цене на магазин'],
+    ['Разница', 'Средняя по НН минус минимальная закупка; процент рассчитан относительно закупки'],
+    ['Рекомендация продажи', 'На 500 ₽ ниже минимальной сопоставимой цены доверенного магазина НН'],
+  ]) {
+    const heading = text('th', label, 'retailer-heading retailer-analytics');
+    heading.scope = 'col'; heading.title = title; retailerHeading.append(heading);
+  }
   for (const group of priceGroups) {
     const cell = text('th', group.label, `retailer-group-heading retailer-group-${group.key}`);
     cell.colSpan = group.retailers.length; cell.scope = 'colgroup'; groupHeading.append(cell);
   }
-  const retailerHeading = text('tr', null, 'retailer-headings');
-  for (const [label, extraClass] of [['Мин. закупка', ''], ['Средняя цена НН', ''], ['Разница', ''], ['Рекоменд. цена', ' recommended-heading']]) {
-    const cell = text('th', label, `retailer-heading retailer-analytics${extraClass}`); cell.scope = 'col'; retailerHeading.append(cell);
-  }
-  for (const group of priceGroups) {
-    for (const [index, retailer] of group.retailers.entries()) {
-      const cell = text('th', null, `retailer-heading retailer-${group.key}${index === 0 ? ' retailer-group-start' : ''}`);
-      cell.append(text('span', retailer.label));
-      const trust = RETAILER_TRUST[retailer.name];
-      if (trust) { const badge = text('span', `Trust: ${trust.label}`, 'trust-badge'); badge.title = trust.reason; cell.append(badge); }
-      cell.scope = 'col'; retailerHeading.append(cell);
+  for (const group of priceGroups) for (const [index, retailer] of group.retailers.entries()) {
+    const cell = text('th', null, `retailer-heading retailer-${group.key}${index === 0 ? ' retailer-group-start' : ''}`);
+    cell.append(text('span', retailer.label)); cell.scope = 'col';
+    const channel = state.telegramSources.find(source => source.retailer === retailer.name);
+    if (channel) {
+      cell.title = `Telegram · ${channel.sourceUsername ? '@' + channel.sourceUsername : channel.sourceChatId}`;
+      const count = state.offers.filter(offer => offer.retailer === retailer.name).length;
+      cell.append(text('span', count ? `${count} цен` : 'Прайс получен · пока нет распознанных цен', 'variant'));
+      if (state.telegramSources.filter(source => source.sourceTitle === channel.sourceTitle).length > 1) cell.append(text('span', channel.sourceUsername ? '@' + channel.sourceUsername : channel.sourceChatId, 'variant'));
     }
+    if (retailer.name === AVITO) {
+      cell.dataset.sellerId = retailer.sellerId; cell.title = `Профиль Авито: ${retailer.sellerId}`;
+      if (retailer.profileLabel) cell.append(text('span', retailer.profileLabel, 'variant'));
+      if (retailer.matchedRetailer) cell.append(text('span', `Сайт: ${retailer.matchedRetailer}`, 'variant'));
+    }
+    retailerHeading.append(cell);
   }
   $('head').replaceChildren(groupHeading, retailerHeading);
-  $('count').textContent = `${groupsSorted.length} ${plural(groupsSorted.length, ['строка', 'строки', 'строк'])} · ${offers.length} ${plural(offers.length, ['предложение', 'предложения', 'предложений'])} · ${state.retailers.length} ${plural(state.retailers.length, ['магазин', 'магазина', 'магазинов'])}`;
-  $('rows').replaceChildren();
-  $('empty').hidden = groupsSorted.length > 0;
+  $('count').textContent = `${page.total} ${plural(page.total, ['конфигурация', 'конфигурации', 'конфигураций'])} · ${page.offerCount} ${plural(page.offerCount, ['предложение', 'предложения', 'предложений'])}`;
   const fragment = document.createDocumentFragment();
-  let rendered = 0;
-  for (const group of groupsSorted) {
-    const row = text('tr'), sample = group.sample;
-    row.append(configurationCell(sample));
-    const displayed = new Map();
-    for (const retailerGroup of priceGroups) for (const retailer of retailerGroup.retailers) {
-      const items = (group.byRetailer.get(retailer.name) || []).sort(compareOffers);
-      displayed.set(retailer.name, { items, first: items[0] });
-    }
-    const bestCell = text('td', null, 'price-cell best-price-cell');
-    const best = [...displayed.values()].map(item => item.first).filter(Boolean).sort(compareOffers)[0];
-    if (!best) bestCell.append(text('span', '—', 'empty-cell'));
-    else {
-      bestCell.append(safeLink(best), text('span', best.retailer, 'variant'));
-      if (stock(best) === 'out') bestCell.append(text('span', 'Нет в наличии', 'tag'));
-      else if (['Дима', 'BSA'].includes(best.retailer)) bestCell.append(text('span', procurementAge(best), 'tag'));
-      else if (Date.now() - Date.parse(best.fetchedAt) > 4 * 3600000) bestCell.append(text('span', 'Старая проверка', 'tag warn'));
-    }
-    row.append(bestCell);
-    const colorLowTrustByRetailer = new Map();
-    for (const [retailer, { first }] of displayed) {
-      if (!first) continue;
-      const colorTrust = colorPriceTrust.get(colorPriceTrustKey(first, colorConfigurationKey));
-      if (colorTrust) colorLowTrustByRetailer.set(retailer, colorTrust);
-    }
-    const analytics = calculateRetailAnalytics(group.offers, { additionalLowTrust: colorLowTrustByRetailer });
-    const procurementCell = text('td', null, 'analytics-cell retailer-analytics');
-    procurementCell.append(text('span', rubles(analytics.minimumProcurement), analytics.minimumProcurement == null ? 'empty-cell' : 'price'));
-    if (analytics.procurementBenchmark) procurementCell.append(text('span', `минимум · ${analytics.procurementBenchmark.retailer}`, 'variant'));
-    row.append(procurementCell);
-    const retailCell = text('td', null, 'analytics-cell retailer-analytics');
-    retailCell.append(text('span', rubles(analytics.averageRetail), analytics.averageRetail == null ? 'empty-cell' : 'price'));
-    if (analytics.retailCount) retailCell.append(text('span', `${analytics.retailCount} ${plural(analytics.retailCount, ['магазин', 'магазина', 'магазинов'])}`, 'variant'));
-    row.append(retailCell);
-    const differenceClass = analytics.difference == null ? '' : analytics.difference >= 0 ? ' positive' : ' negative';
-    const differenceCell = text('td', null, `analytics-cell retailer-analytics analytics-difference${differenceClass}`);
-    const differenceText = analytics.difference == null ? '—' : `${analytics.difference >= 0 ? '+' : ''}${rubles(analytics.difference)}`;
-    differenceCell.append(text('span', differenceText, analytics.difference == null ? 'empty-cell' : 'price'));
-    if (analytics.markupPercent != null) differenceCell.append(text('span', `${analytics.markupPercent >= 0 ? '+' : ''}${number(analytics.markupPercent)}%`, 'variant'));
-    row.append(differenceCell);
-    const recommendedCell = text('td', null, 'analytics-cell retailer-analytics recommended-cell');
-    recommendedCell.append(text('span', rubles(analytics.recommendedPrice), analytics.recommendedPrice == null ? 'empty-cell' : 'price'));
-    if (analytics.benchmark) recommendedCell.append(text('span', `на 500 ₽ ниже ${analytics.benchmark.retailer}`, 'variant'));
-    if (analytics.recommendedPrice != null && analytics.minimumProcurement != null && analytics.recommendedPrice <= analytics.minimumProcurement) recommendedCell.append(text('span', 'Ниже минимальной закупки', 'tag warn'));
-    row.append(recommendedCell);
-    for (const retailerGroup of priceGroups) for (const [index, retailer] of retailerGroup.retailers.entries()) {
-      const cell = text('td', null, `price-cell retailer-${retailerGroup.key}${index === 0 ? ' retailer-group-start' : ''}`);
-      const { items, first } = displayed.get(retailer.name);
-      if (!items.length) cell.append(text('span', '—', 'empty-cell'));
-      else {
-        cell.append(safeLink(first));
-        const details = characteristics(first); if (details) cell.append(text('span', details, 'variant'));
-        const trust = trustForRetailer(retailer.name, analytics, colorLowTrustByRetailer.get(retailer.name));
-        if (trust) { cell.classList.add('low-trust-price'); const badge = text('span', `Trust: ${trust.label}`, 'trust-badge'); badge.title = trust.reason; cell.append(badge); }
-        if (stock(first) === 'out') cell.append(text('span', 'Нет в наличии', 'tag')); else if (retailerGroup.key === 'procurement') cell.append(text('span', procurementAge(first), 'tag')); else if (Date.now() - Date.parse(first.fetchedAt) > 4 * 3600000) cell.append(text('span', 'Старая проверка', 'tag warn'));
-      }
-      row.append(cell);
-    }
-    fragment.append(row);
-    if (++rendered % 40 === 0) {
-      $('rows').append(fragment);
-      await new Promise(resolve => setTimeout(resolve, 0));
-      if (version !== renderVersion) return;
-    }
+  for (const group of page.rows) {
+    fragment.append(priceRow(group, priceGroups));
   }
-  $('rows').append(fragment);
-  $('empty').hidden = groupsSorted.length > 0;
+  $('rows').replaceChildren(fragment);
+  $('empty').hidden = page.total > 0;
+  $('table-wrap').hidden = !page.total;
+  $('pagination').hidden = page.pages <= 1;
+  $('page-prev').disabled = page.page === 1; $('page-next').disabled = page.page === page.pages;
+  $('page-info').textContent = `${(page.page - 1) * TABLE_PAGE_SIZE + 1}–${Math.min(page.total, page.page * TABLE_PAGE_SIZE)} из ${page.total} · страница ${page.page} / ${page.pages}`;
 }
 
 function procurementAge(offer) {
@@ -320,60 +419,71 @@ function procurementAge(offer) {
   return `Прайс от ${new Date(sourceDay + 'T12:00:00Z').toLocaleDateString('ru-RU')}`;
 }
 
-function renderDesktop(offers) {
-  const mode = $('sort').value;
-  const sorted = [...offers].sort((a, b) => mode === 'price-up' ? a.price - b.price : mode === 'price-down' ? b.price - a.price : sortCollator.compare(a.listingId, b.listingId));
-  const heading = text('tr', null, 'column-groups');
-  for (const label of ['Модель', 'Чип · CPU / GPU', 'Память', 'SSD', 'Apple, $', 'Вес, кг', 'Доставка, $', 'Таможня, $', 'Организация и сопровождение, $', 'Итого покупателю, $']) heading.append(text('th', label));
-  $('head').replaceChildren(heading);
-  $('rows').replaceChildren(...sorted.map(offer => {
-    const row = text('tr');
-    const values = [offer.model, `${offer.chip} · ${offer.cpuCores} / ${offer.gpuCores}`, `${offer.ramGb} GB`, storage(offer.storageGb), number(offer.appleUsd), number(offer.weightKg), number(offer.deliveryUsd), number(offer.customsUsd), number(offer.serviceUsd), number(offer.totalUsd)];
-    values.forEach((value, i) => row.append(text('td', value, i === 9 ? 'price best-price-cell' : null)));
-    return row;
-  }));
-  $('count').textContent = `${offers.length} ${plural(offers.length, ['конфигурация', 'конфигурации', 'конфигураций'])} · Прайс под заказ · USD`;
-  $('empty').hidden = offers.length > 0;
-}
-
 function resetSpecs() { Object.assign(state.filters, { screen: '', ram: '', ssd: '', color: '', stock: '' }); $('min-price').value = ''; $('max-price').value = ''; }
 
+function renderActiveFilters() {
+  const labels = { family: { air: 'MacBook Air', pro: 'MacBook Pro', neo: 'MacBook Neo', mini: 'Mac mini', studio: 'Mac Studio', imac: 'iMac' }, stock: { in: 'В наличии', out: 'Нет в наличии' } };
+  const nodes = [];
+  const add = (label, clear) => {
+    const button = text('button', `${label} ×`, 'filter-tag'); button.type = 'button';
+    button.setAttribute('aria-label', `Убрать фильтр: ${label}`);
+    button.addEventListener('click', () => { clear(); renderControls(); render(); });
+    nodes.push(button);
+  };
+  for (const [key, value] of Object.entries(state.filters)) {
+    if (value == null || value === '' || value === '*') continue;
+    const label = labels[key]?.[value] || (key === 'ram' ? `${value} GB RAM` : key === 'ssd' ? `SSD ${storage(Number(value))}` : key === 'screen' ? `${value}″` : value);
+    add(label, () => {
+      if (key === 'family') { state.filters.family = '*'; state.filters.chip = '*'; resetSpecs(); }
+      else if (key === 'chip') { state.filters.chip = '*'; resetSpecs(); }
+      else state.filters[key] = '';
+    });
+  }
+  if ($('search').value) add(`Поиск: ${$('search').value}`, () => { $('search').value = ''; });
+  for (const [id, label] of [['min-price', 'От'], ['max-price', 'До']]) if ($(id).value) add(`${label} ${rubles(Number($(id).value))}`, () => { $(id).value = ''; });
+  $('active-filters').replaceChildren(...nodes); $('active-filters').hidden = !nodes.length;
+  $('clear-search').hidden = !$('search').value;
+}
+
 let reloadPending;
-function updateOffers(market, desktop) {
-  state.offers = [...market, ...desktop];
+function updateOffers(market) {
+  state.offers = prepareTableOffers(market);
+  state.tableModel = null;
+  for (const offer of state.offers) searchIndex.set(offer, offerSearchText(offer));
+  state.rankedAtMinute = Math.floor(Date.now() / 60000);
   const discovered = [...new Set(market.map(offer => offer.retailer))];
   state.retailers = [...CONFIGURED_RETAILERS, ...discovered.filter(retailer => !CONFIGURED_RETAILERS.includes(retailer)).sort(sortCollator.compare)];
-  renderControls(); render();
+  renderControls(); render({ keepPage: true }); renderStatus();
 }
 function reload() {
   if (reloadPending) return reloadPending;
-  // The opening desktop table is usable while market prices load independently.
-  const desktopTask = api('/api/desktop-prices').then(desktop => {
-    state.desktopOffers = desktop.rows.map((row, i) => ({ ...row, desktop: true, currency: 'USD', price: row.totalUsd, retailer: 'Прайс под заказ', stock: 'unknown', listingId: `desktop-${i}`, fetchedAt: desktop.sourceDate, title: `${row.model} ${row.chip}`, url: 'https://order.macbookbro.ru' }));
-    if (['desktops', 'mini', 'studio'].includes(state.filters.family)) {
-      updateOffers(state.marketOffers || [], state.desktopOffers);
-      document.body.classList.remove('is-loading');
-      $('filters').removeAttribute('aria-busy');
-    }
-  });
-  const marketTask = api('/api/table').then(data => { state.marketOffers = data.offers; });
-  reloadPending = Promise.allSettled([desktopTask, marketTask]).then(results => {
-    updateOffers(state.marketOffers || [], state.desktopOffers || []);
-    const failed = results.find(result => result.status === 'rejected');
-    if (failed) throw failed.reason;
+  reloadPending = fetch(new URL('../api/table', import.meta.url), {
+    signal: AbortSignal.timeout(30000), headers: state.tableEtag ? { 'if-none-match': state.tableEtag } : {},
+  }).then(async response => {
+    state.rankedAtMinute = Math.floor(Date.now() / 60000);
+    if (response.status === 304) return;
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const etag = response.headers.get('etag');
+    if (etag && etag === state.tableEtag) return;
+    const data = await response.json();
+    state.telegramSources = data.telegramSources || [];
+    updateOffers(data.offers); state.tableEtag = etag;
   }).finally(() => { reloadPending = null; });
   return reloadPending;
 }
 
 async function poll(reloadOnChange = true) {
   const status = await api('/api/status'); const running = status.state === 'running';
-  $('status').textContent = running ? `Обновление: ${status.source || 'источники'}${status.total ? ` · ${status.completed}/${status.total}` : ''}` : status.error ? 'Часть источников не обновилась' : status.updatedAt ? `Последний сбор: ${date(status.updatedAt)}` : 'Цены из сохранённой базы';
-  if (status.autoRefreshIntervalMs) $('status').textContent += ` · Автоматически каждый час${status.nextRefreshAt ? ` · Следующий сбор: ${date(status.nextRefreshAt)}` : ''}`;
+  state.latestStatus = status;
+  renderStatus();
   $('refresh').disabled = !state.csrf || running || state.refreshPending;
   $('refresh').textContent = running || state.refreshPending ? 'Обновляем цены…' : 'Обновить цены';
-  message(status.error || '');
-  if (reloadOnChange && !running && (state.wasRunning || (status.updatedAt && state.updatedAt !== status.updatedAt))) await reload();
+  message('');
+  const rankingExpired = state.offers.some(o => o.retailer === AVITO) && state.rankedAtMinute !== Math.floor(Date.now() / 60000);
+  if (reloadOnChange && !running && (rankingExpired || state.wasRunning || (status.updatedAt && state.updatedAt !== status.updatedAt))) await reload();
   state.wasRunning = running; state.updatedAt = status.updatedAt;
+  const minute = Math.floor(Date.now() / 60000);
+  if (state.ready && state.analyticsMinute !== minute) { render({ keepPage: true }); state.analyticsMinute = minute; }
 }
 
 let pollTimer;
@@ -423,15 +533,35 @@ $('filters').addEventListener('click', event => {
   track('filter_change', { filter, value });
 });
 $('min-price').addEventListener('input', render); $('max-price').addEventListener('input', render); $('sort').addEventListener('change', render);
-$('reset').addEventListener('click', () => { Object.assign(state.filters, { family: 'desktops', chip: '*', screen: '', ram: '', ssd: '', color: '', stock: '' }); $('sort').value = 'model'; resetSpecs(); renderControls(); render(); track('filter_reset'); });
+for (const [id, direction] of [['page-prev', -1], ['page-next', 1]]) $(id).addEventListener('click', () => {
+  state.page += direction; render({ keepPage: true }); $('table-wrap').scrollTop = 0;
+});
+let searchTimer;
+$('search').addEventListener('input', () => {
+  if (state.filters.family === null && $('search').value.trim()) { state.filters.family = '*'; state.filters.chip = '*'; renderControls(); }
+  clearTimeout(searchTimer); searchTimer = setTimeout(render, 150);
+});
+$('clear-search').addEventListener('click', () => { $('search').value = ''; render(); $('search').focus(); });
+$('clear-specs').addEventListener('click', () => { resetSpecs(); state.filters.chip = '*'; $('search').value = ''; renderControls(); render(); });
+window.addEventListener('hashchange', () => { restoreView(); renderControls(); render(); });
+$('avito-jump').addEventListener('click', () => {
+  const target = $('head').querySelector('.retailer-heading.retailer-avito');
+  if (!target) return;
+  const wrap = $('table-wrap');
+  const modelWidth = $('head').querySelector('.model-heading').getBoundingClientRect().width;
+  const left = wrap.scrollLeft + target.getBoundingClientRect().left - wrap.getBoundingClientRect().left - modelWidth - 1;
+  wrap.scrollTo({ left, behavior: 'smooth' });
+  wrap.focus({ preventScroll: true });
+});
+$('reset').addEventListener('click', () => { state.filters = emptyFilters(); $('search').value = ''; $('sort').value = 'model'; resetSpecs(); renderControls(); render(); track('filter_reset'); });
 $('export').addEventListener('click', async () => {
   const button = $('export');
   button.disabled = true;
-  const selected = filtered();
-  const filters = { ...state.filters, minPrice: $('min-price').value, maxPrice: $('max-price').value };
+  const selected = state.tableModel ? selectTablePage(state.tableModel.groups).allRows.flatMap(group => group.offers) : filtered();
+  const filters = { ...state.filters, query: $('search').value, minPrice: $('min-price').value, maxPrice: $('max-price').value };
   try {
     let offers = selected;
-    if (selected.some(offer => !offer.desktop)) {
+    if (selected.length) {
       const ids = new Set(selected.map(offer => offer.listingId));
       const full = await api('/api/master');
       offers = full.rows.flatMap(row => row.offers).filter(offer => ids.has(offer.listingId) && offer.visibility !== 'private');
@@ -443,26 +573,16 @@ $('export').addEventListener('click', async () => {
   } catch (error) { message(error.message); }
   finally { button.disabled = false; }
 });
-document.addEventListener('click', event => { const link = event.target.closest('[data-analytics]'); if (link) track(link.dataset.analytics); });
-
-try {
-  if (localStorage.getItem('mac-price-radar-cookie-notice') !== 'accepted') $('cookie-banner').hidden = false;
-} catch { $('cookie-banner').hidden = false; }
-$('cookie-accept').addEventListener('click', () => {
-  try { localStorage.setItem('mac-price-radar-cookie-notice', 'accepted'); } catch {}
-  $('cookie-banner').hidden = true;
-});
-
 async function init() {
   document.body.classList.add('is-loading');
   $('filters').setAttribute('aria-busy', 'true');
   try {
     const config = await api('./public-config.json');
     if (config.mode === 'public') {
-      const data = await api('../data/public-prices.json'); $('filters').hidden = true; $('sort').parentElement.hidden = true; $('export').hidden = true; $('selection-prompt').hidden = true; $('table-wrap').hidden = false;
+      const data = await api('../data/public-prices.json'); $('filters').hidden = true; $('table-meta').hidden = false; $('sort').parentElement.hidden = true; $('export').hidden = true; $('selection-prompt').hidden = true; $('table-wrap').hidden = false;
       $('head').append(text('tr')); for (const name of ['Товар', 'Цена', 'Город']) $('head').firstChild.append(text('th', name));
       for (const price of data.prices) { if (Date.parse(price.validUntil) <= Date.now()) continue; const row = text('tr'); for (const value of [price.title, `${number(price.priceMinor / 100)} ₽`, price.city]) row.append(text('td', value)); $('rows').append(row); }
-      $('status').textContent = `Выгрузка: ${date(data.generatedAt)}`; $('count').textContent = 'Публичный каталог'; $('empty').hidden = !!$('rows').children.length; return;
+      $('status').textContent = `Выгрузка: ${date(data.generatedAt)}`; $('status-detail').textContent = 'Опубликованные цены каталога.'; $('price-status').dataset.tone = 'success'; $('count').textContent = 'Публичный каталог'; $('empty').hidden = !!$('rows').children.length; return;
     }
     const sessionTask = api('/api/session').then(session => { state.csrf = session.csrfToken; $('refresh').hidden = false; $('refresh').disabled = state.wasRunning; track('page_view'); });
     const results = await Promise.allSettled([reload(), poll(false), sessionTask]);
@@ -473,4 +593,6 @@ async function init() {
   } catch (error) { $('status').textContent = 'Не удалось загрузить цены'; message(error.message); }
   finally { document.body.classList.remove('is-loading'); $('filters').removeAttribute('aria-busy'); }
 }
+restoreView();
+if (!location.hash) { state.filters.family = '*'; state.filters.chip = '*'; $('sort').value = 'coverage'; }
 init();

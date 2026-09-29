@@ -21,6 +21,12 @@ test('discovers RifaStore categories and pagination', () => {
   ]);
 });
 
+test('Rifa first-page aliases and HTML entities do not create duplicate requests', () => {
+  const url = 'https://rifastore.ru/categories/macbook-air';
+  assert.deepEqual(findRifaCategoryUrls(`<a href="${url}"></a><a href="${url}?page=1#top"></a>`), [url]);
+  assert.deepEqual(findRifaPageUrls('<a href="?page=1">1</a><a href="?page=2&amp;sort=price">2</a>', url), [url, `${url}?page=2&sort=price`]);
+});
+
 test('parses an Angular RifaStore card into the catalog format', () => {
   const [raw] = parseRifaCategory(categoryHtml, 'https://rifastore.ru/categories/macbook-air-13-m4');
   assert.equal(raw.url, productUrl);

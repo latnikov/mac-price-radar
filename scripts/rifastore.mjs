@@ -1,7 +1,14 @@
 const productAnchor = /<a\b(?=[^>]*\bclass=["'][^"']*\bproducts-view-name-link\b[^"']*["'])(?=[^>]*\btitle=["']([^"']+)["'])[^>]*>/gi;
 
 const absoluteUrl = (value, baseUrl) => {
-  try { const url = new URL(value, baseUrl); return url.origin === new URL(baseUrl).origin && !url.username && !url.password ? url.href : null; } catch { return null; }
+  try {
+    const url = new URL(value.replace(/&amp;/gi, '&'), baseUrl);
+    if (url.origin !== new URL(baseUrl).origin || url.username || url.password) return null;
+    url.hash = '';
+    if (url.searchParams.get('page') === '1') url.searchParams.delete('page');
+    url.searchParams.sort();
+    return url.href;
+  } catch { return null; }
 };
 
 export function findRifaCategoryUrls(html, baseUrl = 'https://rifastore.ru/') {

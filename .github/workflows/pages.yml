@@ -38,7 +38,7 @@ jobs:
         run: |
           npm run export:public
           mkdir -p dist/web dist/data
-          cp web/index.html web/app.js web/retail-analytics.js web/styles.css web/favicon.svg web/favicon-32.png web/apple-touch-icon.png web/og-image.jpg dist/web/
+          cp web/index.html web/app.js web/retail-analytics.js web/price-status.js web/avito-columns.js web/avito-status.js web/view-state.js web/price-table.js web/styles.css web/favicon.svg web/favicon-32.png web/apple-touch-icon.png web/og-image.jpg dist/web/
           cp web/404.html web/thank-you.html web/robots.txt web/sitemap.xml dist/
           cp data/public-prices.json dist/data/public-prices.json
           printf '{"mode":"public"}' > dist/web/public-config.json

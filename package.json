@@ -7,6 +7,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --import tsx test/*.test.ts test/*.test.mjs",
     "build:data": "node scripts/build-data.mjs",
+    "collect:avito": "node scripts/avito-collector.mjs",
     "sync:sheet": "node scripts/sync-sheet.mjs",
     "dev": "node scripts/server.mjs",
     "export:public": "node scripts/export-public.mjs",
@@ -14,7 +15,9 @@
     "telegram:poll": "node scripts/telegram-business-poll.mjs",
     "telegram:webhook": "node scripts/telegram-business-webhook.mjs",
     "dev:orders": "node order-site/server.mjs",
-    "test:orders": "node --test order-site/test/*.test.mjs"
+    "test:orders": "node --test order-site/test/*.test.mjs",
+    "dev:shop": "node storefront/server.mjs",
+    "test:shop": "node --test storefront/test/*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.5.1",
@@ -23,5 +26,10 @@
   },
   "engines": {
     "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "cheerio": "1.1.2",
+    "tough-cookie": "6.0.2",
+    "undici": "7.30.0"
   }
 }

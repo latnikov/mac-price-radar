@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { collectSources } from '../scripts/collection-runner.mjs';
+import { collectSources, collectionFailures, scheduleSources } from '../scripts/collection-runner.mjs';
+
+test('unavailable sources cannot be reported as an entirely successful run', () => {
+  assert.deepEqual(collectionFailures([{ status: 'success' }, { status: 'not_ready' }, { status: 'partial' }]), [{ status: 'not_ready' }, { status: 'partial' }]);
+  const sources = ['fast', 'unknown', 'slow'];
+  assert.deepEqual(scheduleSources(sources, [{ retailer: 'slow', durationMs: 100 }, { retailer: 'fast', durationMs: 10 }]), ['slow', 'fast', 'unknown']);
+  assert.deepEqual(sources, ['fast', 'unknown', 'slow']);
+});
 
 test('sources overlap within the limit, isolate failures, and serialize progress', async () => {
   let active = 0, peak = 0, reporting = 0;

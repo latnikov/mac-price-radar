@@ -19,7 +19,9 @@ function bigGeekCheckoutPrice(html, pageUrl) {
 
   const amounts = [];
   let found = false;
-  for (const match of html.matchAll(/<[^>]+>/g)) {
+  // Most tags belong to navigation/recommendations. Only inspect tags that
+  // can contain the checkout block, while still checking the exact class.
+  for (const match of html.matchAll(/<[^>]*\bprod-info-price\b[^>]*>/g)) {
     const tag = match[0];
     const classes = attribute(tag, 'class')?.split(/\s+/) || [];
     if (!classes.includes('prod-info-price')) continue;

@@ -1,17 +1,57 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request as httpRequest } from 'node:http';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, mkdir, copyFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createMasterServer } from '../scripts/server.mjs';
 import { openMasterStore } from '../scripts/master-store.mjs';
+import { normalizeAvitoListing } from '../scripts/avito-policy.mjs';
+import { record as avitoRecord } from './fixtures/avito/sample.mjs';
+import { avitoSellerColumns, groupOffersByPriceColumn } from '../web/avito-columns.js';
+
+test('Avito API exposes ranked seller prices, honest readiness and no excluded sellers', async t => {
+  const app = await setup(t, { env: {} });
+  const offer = normalizeAvitoListing(avitoRecord({ observedAt: new Date().toISOString() })).offer;
+  app.store.ingestRun({ observations: [offer, { ...offer, listingId: 'excluded', sellerName: 'Макбучная' },
+    { ...offer, listingId: 'gone', stock: 'Discontinued' }, { ...offer, listingId: 'private', visibility: 'private' }] });
+  const table = await (await app.request('/api/table')).json();
+  assert.equal(table.offers.length, 1);
+  assert.equal(table.offers[0].sellerName, 'Магазин техники');
+  assert.equal(table.offers[0].avitoRank.version, 'seller-robust-logprice-v1');
+  assert.equal(table.offers[0].avitoRank.independentSellers, 0);
+  assert.equal((await (await app.request('/api/status')).json()).avito.state, 'not_configured');
+  assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Авито НН'));
+});
+
+test('table API preserves marketplace profile IDs for per-seller Air M5 15 comparison', async t => {
+  const app = await setup(t, { env: {} });
+  const observations = ['seller-a', 'seller-b', 'seller-a'].map((id, index) => {
+    const externalId = String(1234567800 + index);
+    return normalizeAvitoListing(avitoRecord({ id: externalId,
+      url: `https://www.avito.ru/nizhniy_novgorod/noutbuki/macbook_${externalId}`,
+      title: 'MacBook Air 15 M5 16/512 Silver новый', price: 130000 + index * 1000,
+      priceText: `${130000 + index * 1000} ₽`, seller: { id, name: 'Apple' },
+      observedAt: new Date().toISOString() })).offer;
+  });
+  assert.ok(observations.every(Boolean));
+  app.store.ingestRun({ observations });
+  const { offers } = await (await app.request('/api/table')).json();
+  assert.equal(offers.length, 3);
+  assert.equal(avitoSellerColumns(offers).length, 2);
+  assert.deepEqual([...groupOffersByPriceColumn(offers).values()].map(items => items.length).sort(), [1, 2]);
+  assert.ok(offers.every(item => item.avitoRank && item.url && item.screenIn === 15 && item.chip === 'M5'));
+});
 
 async function setup(t, options = {}) {
   const store=openMasterStore(':memory:');let refreshes=0;
-  const server=await createMasterServer({store,refreshRunner:async()=>{refreshes++;},...options});
+  const directory=await mkdtemp(`${tmpdir()}/server-state-`);
+  const server=await createMasterServer({store,refreshRunner:async()=>{refreshes++;},...options,env:{TELEGRAM_BSA_STATE_PATH:`${directory}/telegram.json`,...options.env,AVITO_DATA_DIR:`${directory}/avito`}});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const origin=`http://127.0.0.1:${server.address().port}`;
-  t.after(async()=>{await new Promise(resolve=>server.close(resolve));store.close();});
+  t.after(async()=>{await new Promise(resolve=>server.close(resolve));store.close();await rm(directory,{recursive:true,force:true});});
   const request=(path,options={})=>fetch(origin+path,options);
   const session=await (await request('/api/session')).json();
   const post=(path,body)=>request(path,{method:'POST',headers:{origin,'content-type':'application/json','x-csrf-token':session.csrfToken},body:JSON.stringify(body)});
@@ -69,7 +109,7 @@ test('table cache revalidates unchanged data and invalidates after a write; priv
 });
 test('assets and desktop prices revalidate while sessions remain uncached', async t => {
   const app = await setup(t);
-  for (const path of ['/web/', '/web/app.js', '/web/styles.css', '/api/desktop-prices']) {
+  for (const path of ['/web/', '/web/app.js', '/web/price-status.js', '/web/avito-columns.js', '/web/avito-status.js', '/web/view-state.js', '/web/price-table.js', '/web/styles.css', '/api/desktop-prices']) {
     const response = await app.request(path);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'private, no-cache');
@@ -150,4 +190,58 @@ test('manual refresh includes Smart Device and accepts a source-only refresh', a
   assert.ok(runs[0].includes('Smart Device'));
   assert.equal((await app.post('/api/refresh',{retailer:'Smart Device'})).status,202);
   assert.deepEqual(runs[1],['Smart Device']);
+});
+
+test('AFM is available in the session, full refresh and source-only refresh', async t => {
+  const runs = [];
+  const app = await setup(t, { refreshRunner: async ({ retailers }) => { runs.push(retailers); } });
+  assert.ok((await (await app.request('/api/session')).json()).retailers.includes('AFM'));
+  assert.equal((await app.post('/api/refresh', {})).status, 202);
+  assert.ok(runs[0].includes('AFM'));
+  assert.equal((await app.post('/api/refresh', { retailer: 'AFM' })).status, 202);
+  assert.deepEqual(runs[1], ['AFM']);
+});
+
+test('new forwarded channel runs the real collector and appears in table API without configuration', async t => {
+  const root = await mkdtemp(`${tmpdir()}/telegram-end-to-end-`);
+  await mkdir(`${root}/data/private`, { recursive: true });
+  await mkdir(`${root}/apps-script`, { recursive: true });
+  await copyFile('data/catalog.json', `${root}/data/catalog.json`);
+  await copyFile('apps-script/reference.gs', `${root}/apps-script/reference.gs`);
+  const store = openMasterStore(`${root}/data/private/master.sqlite`);
+  store.ingestRun({ runId: 'test-initialized', observations: [] });
+  const env = { ...process.env, TELEGRAM_BUSINESS_WEBHOOK_SECRET: 'fixture_secret', TELEGRAM_BSA_STATE_PATH: `${root}/data/private/telegram.json` };
+  let run;
+  const server = await createMasterServer({ root, store, env, telegramRefreshDelayMs: 1,
+    refreshRunner: ({ retailers }) => run = promisify(execFile)(process.execPath, [resolve('scripts/build-data.mjs')], { cwd: root, env: { ...env, RETAILER: retailers.join(','), LIVE: '1' } }) });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(async () => { await new Promise(resolve => server.close(resolve)); await run?.catch(() => {}); store.close(); await rm(root, { recursive: true, force: true }); });
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const before = await fetch(`${origin}/api/table`);
+  const etag = before.headers.get('etag'); await before.arrayBuffer();
+  const now = Math.floor(Date.now() / 1000);
+  const forward = (updateId, title, text) => fetch(`${origin}/api/telegram/bsa-webhook`, {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-telegram-bot-api-secret-token': env.TELEGRAM_BUSINESS_WEBHOOK_SECRET },
+    body: JSON.stringify({ update_id: updateId, message: { message_id: updateId, date: now,
+      forward_origin: { type: 'channel', date: now, chat: { id: -100998877, title }, message_id: 10 }, text } }),
+  });
+  const response = await forward(1, 'Новый канал', 'MacBook Air 13 M5 16/512 Silver — 100000');
+  assert.deepEqual((await response.json()).refreshScheduled, ['Telegram:-100998877']);
+  for (let attempt = 0; !run && attempt < 100; attempt++) await new Promise(resolve => setTimeout(resolve, 10));
+  assert.ok(run); await run;
+  const changed = await fetch(`${origin}/api/table`, { headers: { 'if-none-match': etag } });
+  assert.equal(changed.status, 200);
+  const data = await changed.json();
+  assert.equal(data.telegramSources[0].sourceTitle, 'Новый канал');
+  assert.equal(data.offers.length, 1);
+  assert.equal(data.offers[0].price, 100000);
+  assert.equal(data.offers[0].sourceType, 'telegram_channel');
+  assert.match(data.offers[0].url, /t.me\/c\/998877\/10/);
+  const retry = await forward(2, 'Новый канал', 'MacBook Air 13 M5 16/512 Silver — 100000');
+  assert.deepEqual((await retry.json()).refreshScheduled, []);
+  const rename = await forward(3, 'Новое название', 'MacBook Air 13 M5 16/512 Silver — 100000');
+  assert.equal(rename.status, 200);
+  const renamed = await (await fetch(`${origin}/api/table`)).json();
+  assert.equal(renamed.telegramSources.length, 1);
+  assert.equal(renamed.telegramSources[0].sourceTitle, 'Новое название');
 });
