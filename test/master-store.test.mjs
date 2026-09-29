@@ -89,6 +89,18 @@ test('missing currency never rejects a ruble price', t => {
   assert.equal(store.getOffers()[0].rejected,false);
 });
 
+test('explicit foreign currency is quarantined rather than relabelled as rubles', t => {
+  const store = memory(t);
+  const usd = offer({ currency: 'USD', price: 1000 });
+  const preview = store.previewImport({ supplier: 'Shop', rows: [usd] });
+  assert.equal(preview.rejected, 1);
+  assert.ok(preview.rows[0].issues.includes('unsupported_currency'));
+  assert.equal(preview.rows[0].offer.currency, 'USD');
+  store.ingestRun({ observations: [usd] });
+  assert.equal(store.getOffers().length, 0);
+  assert.equal(store.getOffers({ includeRejected: true })[0].currency, 'USD');
+});
+
 test('master output uses one Apple model and storage vocabulary', t => {
   const store=memory(t);
   store.ingestRun({runId:'canonical-product',observations:[offer({model:'MacBook Neo',storageGb:1024})]});

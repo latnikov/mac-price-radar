@@ -15,6 +15,7 @@ import { fetchIphoriyaOffers } from './iphoriya.mjs';
 import { fetchMadstoreOffers } from './madstore.mjs';
 import { fetchSmartDeviceOffers } from './smart-device.mjs';
 import { fetchAfmOffers } from './afmcenter.mjs';
+import { afmWithdrawalObservations } from './afm-withdrawals.mjs';
 import { fetchAvitoOffers } from './avito.mjs';
 import { AVITO, visibleAvitoOffer } from './avito-policy.mjs';
 import { buildCatalogRows } from './catalog-rows.mjs';
@@ -127,7 +128,7 @@ try {
     }
     if (retailer === 'AFM') {
       const result = await fetchAfmOffers({ fetchPage });
-      return { offers: result.offers, failures: result.failures, counts: result.stats };
+      return { offers: result.offers, failures: result.failures, counts: result.stats, unpriced: result.unpriced };
     }
     if (retailer === 'Smart Device') {
       const result = await fetchSmartDeviceOffers({ fetchPage });
@@ -211,10 +212,19 @@ try {
         observations.push(...result.offers.map(offer => ({ ...offer, visibility: 'public', dataKind: 'live' })));
         continue;
       }
-      const assessment = assessCollection(previousOffers.filter(o => o.retailer === retailer && o.visibility !== 'private'), result.offers, result.failures);
+      const unpricedAfmIds = retailer === 'AFM' ? new Set((result.unpriced || []).map(item => `afm:${item.productId}:${item.editionId}`)) : new Set();
+      const previousForAssessment = previousOffers.filter(o => o.retailer === retailer && o.visibility !== 'private' && !unpricedAfmIds.has(o.externalId));
+      const assessment = assessCollection(previousForAssessment, result.offers, result.failures);
+      if (retailer === 'AFM' && result.counts?.products > 0 && result.offers.length === 0 && result.unpriced?.length > 0 && !result.failures.length) {
+        assessment.status = 'success';
+        assessment.error = null;
+      }
       const channel = telegram.get(retailer);
       sources.push({ retailer, ...channel, ...(retailer.startsWith('Telegram:') ? { sourceId: `telegram:${channel.sourceChatId}`, sellerId: `telegram:${channel.sourceChatId}` } : {}), durationMs, status: assessment.status, counts: { ...result.counts, ...assessment.counts }, error: assessment.error });
       observations.push(...assessment.observations.map(offer => ({ ...offer, visibility: 'public', dataKind: 'live' })));
+      if (retailer === 'AFM' && result.counts?.products > 0 && !result.failures.length) {
+        observations.push(...afmWithdrawalObservations(previousOffers, result.unpriced || []));
+      }
     }
     for (const source of sources) source.network = networkBySource.get(source.retailer);
     store.ingestRun({ runId, startedAt, observations, sources, actor: 'parser', reason: 'Обновление публичных наблюдений' });

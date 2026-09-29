@@ -59,12 +59,17 @@ test('unsupported messages report an empty source, and conditional prices cannot
   assert.ok(conditional.offers[0].qualityWarnings.length);
 });
 
-test('new Telegram source participates in procurement analytics and old messages expire', () => {
+test('new Telegram source needs approval before procurement analytics and old messages expire', () => {
   const [offer] = parseTelegramChannel([message(2, 'MacBook Air 13 M5 16/512 Silver — 100000')], source).offers;
+  assert.equal(source.procurementApproved, false);
   const market = ['iMobile', 'Apple Store'].map((retailer, i) => ({ ...offer, sourceType: 'website', retailer, price: 120000 + i * 1000, url: `https://shop.test/${i}` }));
   const [row] = buildPriceTable([offer, ...market], { now: Date.parse('2026-09-28T10:01:00Z') });
   assert.equal(row.offers.length, 3);
+  assert.equal(row.analytics.minimumProcurement, null);
   assert.equal(row.analytics.averageRetail, 120500);
   assert.equal(row.offers[0].retailer, source.retailer);
+  const approved = telegramSource(source, { TELEGRAM_APPROVED_SOURCE_IDS: source.sourceChatId });
+  const [approvedOffer] = parseTelegramChannel([message(2, 'MacBook Air 13 M5 16/512 Silver — 100000')], approved).offers;
+  assert.equal(buildPriceTable([approvedOffer, ...market], { now: Date.parse('2026-09-28T10:01:00Z') })[0].analytics.minimumProcurement, 100000);
   assert.equal(buildPriceTable([offer, ...market], { now: Date.parse('2026-09-29T10:01:00Z') })[0].analytics.averageRetail, null);
 });

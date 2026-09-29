@@ -105,9 +105,17 @@ test('incomplete, repeated, changing and invalid catalogues fail without publish
     await assert.rejects(fetchAfmOffers({ pageSize: 1, fetchPage: pages([{ total: 2, products: [captured[0]] }, second]) }), pattern);
   }
   for (const total of [null, '', 'bad', -1]) await assert.rejects(fetchAfmOffers({ fetchPage: pages([{ total, products: [] }]) }), /invalid total/);
-  await assert.rejects(fetchAfmOffers({ fetchPage: pages([{ total: 0, products: [] }]) }), /no priced Mac/);
+  await assert.rejects(fetchAfmOffers({ fetchPage: pages([{ total: 0, products: [] }]) }), /no Mac variants/);
   await assert.rejects(fetchAfmOffers({ pageSize: 101 }), /pagination limits/);
   await assert.rejects(fetchAfmOffers({ fetchPage: async () => ({ ok: false, status: 503 }) }), /HTTP 503/);
+});
+
+test('complete AFM catalog with all prices withdrawn is still a valid source snapshot', async () => {
+  const product = structuredClone(captured[0]);
+  for (const edition of product.editions) edition.price = '';
+  const result = await fetchAfmOffers({ fetchPage: pages([{ total: 1, products: [product] }]) });
+  assert.equal(result.offers.length, 0);
+  assert.equal(result.unpriced.length, product.editions.length);
 });
 
 test('fetches missing detail fields and fails when a required detail page fails', async () => {

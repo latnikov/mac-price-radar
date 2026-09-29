@@ -154,6 +154,6 @@ export async function fetchAfmOffers({ fetchPage = url => fetch(url, { signal: A
   });
   const unpriced = [];
   const offers = parseAfmProducts(products, { details, storepartuid: reference.storepartuid, unpriced });
-  if (!offers.length) throw fail('incomplete crawl: no priced Mac variants');
+  if (!offers.length && !unpriced.length) throw fail('incomplete crawl: no Mac variants');
   return { offers, failures: [], unpriced, stats: { catalogPagesFetched: 1, apiPagesFetched, productPagesFetched: details.size, products: products.length, variants: offers.length, unpricedVariants: unpriced.length } };
 }

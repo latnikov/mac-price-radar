@@ -11,10 +11,15 @@ test('unavailable sources cannot be reported as an entirely successful run', () 
 
 test('sources overlap within the limit, isolate failures, and serialize progress', async () => {
   let active = 0, peak = 0, reporting = 0;
+  let firstWaveStarted = 0, releaseFirstWave;
+  const firstWave = new Promise(resolve => { releaseFirstWave = resolve; });
   const progress = [];
   const results = await collectSources(['a', 'b', 'c', 'd', 'e'], async retailer => {
     peak = Math.max(peak, ++active);
-    await new Promise(resolve => setTimeout(resolve, retailer === 'a' ? 15 : 2));
+    if (['a', 'b', 'c'].includes(retailer)) {
+      if (++firstWaveStarted === 3) releaseFirstWave();
+      await firstWave;
+    }
     active--;
     if (retailer === 'b') throw new Error('offline');
     return retailer;

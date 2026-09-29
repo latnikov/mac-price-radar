@@ -7,7 +7,9 @@ export function telegramSource(source, env = process.env) {
   const retailer = sourceChatId === String(env.TELEGRAM_DIMA_CHAT_ID || '-1003421701174') ? 'Дима'
     : sourceChatId === String(env.TELEGRAM_BSA_CHAT_ID || '-1001291236326') || sourceUsername.toLowerCase() === String(env.TELEGRAM_BSA_CHANNEL || 'BigSaleApple').replace(/^@/, '').toLowerCase() ? 'BSA'
       : `Telegram:${sourceChatId}`;
+  const approvedIds = new Set(String(env.TELEGRAM_APPROVED_SOURCE_IDS || '').split(',').map(value => value.trim()).filter(Boolean));
   return { retailer, sourceType: 'telegram_channel', sourceChatId, sourceUsername,
+    procurementApproved: retailer === 'Дима' || retailer === 'BSA' || approvedIds.has(sourceChatId),
     sourceTitle: String(source.sourceTitle || sourceUsername || `Канал ${sourceChatId}`).slice(0, 160) };
 }
 

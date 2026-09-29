@@ -59,7 +59,7 @@ export function currentPrice(offer, now = Date.now()) {
   return Number.isFinite(offer.price) && offer.price > 0 && Number.isFinite(age) && age >= -60000 && age <= 4 * 3600000
     && (!offer.validUntil || Date.parse(offer.validUntil) > now)
     && !['OutOfStock', 'Discontinued', 'SoldOut'].includes(offer.stock)
-    && offer.validationStatus !== 'rejected' && !offer.rejected && !offer.qualityWarnings?.length
+    && offer.validationStatus !== 'rejected' && !offer.rejected && !offer.withdrawn && offer.latestAttempt?.status !== 'withdrawn' && !offer.qualityWarnings?.length
     && !['installment', 'from'].includes(offer.priceType) && !(offer.minimumQuantity > 1);
 }
 

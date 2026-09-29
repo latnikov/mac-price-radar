@@ -41,9 +41,11 @@ export function parseDimaMessages(messages, { now = new Date(), timeZone = 'Euro
   const today = dateInTimeZone(now, timeZone);
   const offers = [], failures = [], seen = new Set();
   let eligibleMessages = 0, candidates = 0;
-  for (const message of messages) {
-    const messageDate = Number.isFinite(Date.parse(message.date)) ? dateInTimeZone(message.date, timeZone) : null;
-    if (!messageDate || messageDate < today) continue;
+  const ordered = [...messages].sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || Number(b.id) - Number(a.id));
+  for (const message of ordered) {
+    const observed = Date.parse(message.date);
+    const messageDate = Number.isFinite(observed) ? dateInTimeZone(observed, timeZone) : null;
+    if (!messageDate || messageDate !== today || observed > new Date(now).getTime() + 60_000) continue;
     eligibleMessages++;
     const postId = String(message.id ?? message.postId ?? 'unknown');
     const source = sourceMeta(message);
@@ -51,13 +53,13 @@ export function parseDimaMessages(messages, { now = new Date(), timeZone = 'Euro
       const item = parsedLine(rawLine);
       if (!item) continue;
       candidates++;
-      const duplicateKey = `${item.sku}|${item.title}|${item.amount}`.toLowerCase();
+      const duplicateKey = item.sku.toLowerCase();
       if (seen.has(duplicateKey)) continue;
       seen.add(duplicateKey);
       const baseUrl = message.sourceUsername
         ? `https://t.me/${String(message.sourceUsername).replace(/^@/, '')}/${postId}`
         : privateChannelUrl(message.sourceChatId, postId);
-      const parsed = parseProduct(item.title, baseUrl, 'Дима', item.amount, new Date(now).toISOString(), {
+      const parsed = parseProduct(item.title, baseUrl, 'Дима', item.amount, new Date(observed).toISOString(), {
         rawPrice: item.rawPrice,
         sourceType: 'telegram_channel',
         stock: 'source_reported',

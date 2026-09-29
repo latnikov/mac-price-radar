@@ -86,8 +86,10 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
   if (dbPath !== ':memory:') mkdirSync(dirname(resolve(dbPath)), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
+  db.exec('CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+  const existingVersion = db.prepare("SELECT value FROM metadata WHERE key='schema_version'").get()?.value;
+  if (existingVersion && Number(existingVersion) !== SCHEMA_VERSION) { db.close(); throw new Error(`Unsupported master schema version ${existingVersion}`); }
   db.exec(`
-    CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sellers (id TEXT PRIMARY KEY, name TEXT NOT NULL, json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sources (id TEXT PRIMARY KEY, seller_id TEXT NOT NULL REFERENCES sellers(id), json TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS listings (id TEXT PRIMARY KEY, source_id TEXT NOT NULL REFERENCES sources(id), external_id TEXT, url TEXT NOT NULL, json TEXT NOT NULL);
@@ -103,7 +105,6 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
     CREATE TRIGGER IF NOT EXISTS prices_no_update BEFORE UPDATE ON price_decisions BEGIN SELECT RAISE(ABORT,'Price history is append-only'); END;
     CREATE TRIGGER IF NOT EXISTS prices_no_delete BEFORE DELETE ON price_decisions BEGIN SELECT RAISE(ABORT,'Price history is append-only'); END;
     CREATE TABLE IF NOT EXISTS calculations (id TEXT PRIMARY KEY, payload_hash TEXT NOT NULL, json TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS price_decisions (id TEXT NOT NULL, version INTEGER NOT NULL, operation_key TEXT UNIQUE NOT NULL, payload_hash TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY(id,version));
     CREATE TRIGGER IF NOT EXISTS observations_no_update BEFORE UPDATE ON observations BEGIN SELECT RAISE(ABORT,'Observations are append-only'); END;
     CREATE TRIGGER IF NOT EXISTS observations_no_delete BEFORE DELETE ON observations BEGIN SELECT RAISE(ABORT,'Observations are append-only'); END;
     CREATE TRIGGER IF NOT EXISTS audit_no_update BEFORE UPDATE ON audit BEGIN SELECT RAISE(ABORT,'Audit is append-only'); END;
@@ -113,8 +114,6 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
     CREATE TRIGGER IF NOT EXISTS decisions_no_update BEFORE UPDATE ON price_decisions BEGIN SELECT RAISE(ABORT,'Price decision history is append-only'); END;
     CREATE TRIGGER IF NOT EXISTS decisions_no_delete BEFORE DELETE ON price_decisions BEGIN SELECT RAISE(ABORT,'Price decision history is append-only'); END;
   `);
-  const existingVersion = db.prepare("SELECT value FROM metadata WHERE key='schema_version'").get()?.value;
-  if (existingVersion && Number(existingVersion) !== SCHEMA_VERSION) { db.close(); throw new Error(`Unsupported master schema version ${existingVersion}`); }
   db.prepare("INSERT OR IGNORE INTO metadata(key,value) VALUES ('schema_version',?)").run(String(SCHEMA_VERSION));
   if (dbPath !== ':memory:') chmodSync(dbPath, 0o600);
   const transaction = callback => {
@@ -169,7 +168,7 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
       for (const [index, sourceOffer] of (input.observations ?? []).entries()) {
         if (!sourceOffer || typeof sourceOffer !== 'object') throw new TypeError(`Observation ${index} must be an object`);
         const offer = sanitize(sourceOffer);
-        offer.currency = 'RUB';
+        offer.currency ||= 'RUB';
         offer.model = canonicalModelName(offer.model);
         offer.storageGb = canonicalStorageGb(offer.storageGb);
         if (offer.dataKind === 'demo' || offer.seed || offer.demo || offer.isDemo || offer.environment === 'demo' || offer.dataKind === 'demo') throw new Error('Demonstration data cannot enter the master store');
@@ -187,6 +186,7 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
         const amountMinor = offer.priceMinor ?? minorUnits(offer.price);
         const validationIssues = [...(offer.validationIssues ?? [])];
         if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) { rejected = true; validationIssues.push('invalid_price'); }
+        if (offer.currency !== 'RUB') { rejected = true; validationIssues.push('unsupported_currency'); }
         const observationId = offer.observationId ?? id('observation', [runId, ids.listingId, observedAt, digest(offer)]);
         const observation = { ...offer, ...ids, observationId, offerId: ids.listingId, runId, observedAt, fetchedAt: observedAt, receivedAt, visibility: offer.visibility ?? (ids.sourceType === 'private_price_list' ? 'private' : 'public'), priceMinor: Number.isSafeInteger(amountMinor) ? amountMinor : null, validationStatus: rejected ? 'rejected' : offer.validationStatus ?? 'needs_review', rejected, validationIssues, raw: offer.raw ?? offer, provenance: { ...offer.provenance, runId, sourceId: ids.sourceId, receivedAt, adapterVersion: offer.adapterVersion ?? offer.normalizationVersion ?? 'unknown' } };
         const priorObservation = ingestStatements.observation.get(observationId);
@@ -216,6 +216,7 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
           'observationId', latest.id, 'observedAt', latest.observed_at,
           'receivedAt', latest.received_at, 'rejected', json_extract(latest.json, '$.rejected'),
           'validationStatus', json_extract(latest.json, '$.validationStatus'),
+          'status', json_extract(latest.json, '$.status'),
           'validationIssues', json_extract(latest.json, '$.validationIssues'),
           'qualityWarnings', json_extract(latest.json, '$.qualityWarnings'),
           'runId', latest.run_id) END AS latest_json
@@ -229,7 +230,7 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
       ORDER BY l.id`));
     return collapseEquivalentOffers(offerQueries.get(key).all().map(row => {
       const offer = rowJSON(row);
-      offer.currency = 'RUB';
+      offer.currency ||= 'RUB';
       offer.model = canonicalModelName(offer.model);
       offer.storageGb = canonicalStorageGb(offer.storageGb);
       if (row.latest_json) {
@@ -237,9 +238,10 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
         latest.rejected = Boolean(latest.rejected);
         latest.qualityWarnings ??= [];
         offer.latestAttempt = latest;
+        if (latest.status === 'withdrawn') offer.withdrawn = true;
       }
       return offer;
-    }));
+    }).filter(offer => includeRejected || !offer.withdrawn));
   }
   const dataVersion = db.prepare('PRAGMA data_version');
   const localChanges = db.prepare('SELECT total_changes() AS changes');
@@ -268,7 +270,8 @@ export function openMasterStore(dbPath = 'data/private/master.sqlite') {
       try { Object.assign(offer, identity(offer)); } catch (error) { issues.push(error.message); }
       const amount = offer.priceMinor ?? minorUnits(offer.price);
       if (!Number.isSafeInteger(amount) || amount <= 0) issues.push('invalid_price');
-      offer.currency = 'RUB';
+      offer.currency ||= 'RUB';
+      if (offer.currency !== 'RUB') issues.push('unsupported_currency');
       if (offer.seed || offer.demo || offer.isDemo || offer.dataKind === 'demo') issues.push('demonstration_data');
       // An import is evidence, not automatic validation of the manufacturer's exact variant.
       offer.matchStatus = 'needs_review';

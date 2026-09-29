@@ -70,6 +70,9 @@ test('AC17 project files and cross-site mutation are blocked; reading never refr
   assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Madstore'));
   assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Smart Device'));
   assert.equal((await app.request('/api/quotes',{method:'POST',headers:{origin:'https://evil.test','content-type':'application/json'},body:'{}'})).status,403);
+  const session = await (await app.request('/api/session')).json();
+  assert.equal((await app.request('/api/refresh',{method:'POST',headers:{origin:'https://evil.test','content-type':'application/json','x-csrf-token':session.csrfToken},body:'{}'})).status,403);
+  assert.equal((await app.request('/api/refresh',{method:'POST',headers:{origin:'https://macbookbro.ru','content-type':'application/json','x-csrf-token':session.csrfToken},body:JSON.stringify({retailer:'Unknown'})})).status,400);
   const hostileHostStatus = await new Promise((resolve,reject)=>{const request=httpRequest(app.origin+'/api/session',{headers:{host:'evil.test'}},response=>{response.resume();resolve(response.statusCode);});request.on('error',reject);request.end();});
   assert.equal(hostileHostStatus,403);
   assert.equal((await app.post('/api/refresh',{retailer:'ReSale'})).status,202);

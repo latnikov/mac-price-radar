@@ -64,6 +64,7 @@ export function assessOffer(offer, { now = Date.now(), staleAfterMs = 2 * 3600_0
   if (/MacBook Pro/i.test(offer.model || '') && ((offer.chip === 'M5 Pro' && offer.storageGb < 1000) || (offer.chip === 'M5 Max' && offer.storageGb < 2000))) reasons.push('Конфликт спецификации Apple: SSD M5 Pro от 1 TB, M5 Max от 2 TB');
   if (offer.rejected || offer.validationStatus === 'rejected') reasons.push('Наблюдение отклонено при проверке');
   if (offer.latestAttempt?.rejected) reasons.push(`Последняя проверка отклонена: ${[...(offer.latestAttempt.qualityWarnings || []), ...(offer.latestAttempt.validationIssues || [])].join('; ')}`);
+  if (offer.withdrawn || offer.latestAttempt?.status === 'withdrawn') reasons.push('Цена отозвана источником');
   const missing = identityFields.filter(field => !known(offer[field]));
   if (missing.length) reasons.push(`Не проверены характеристики: ${missing.join(', ')}`);
   if (offer.condition !== 'new') reasons.push(`Состояние: ${offer.condition || 'unknown'}`);

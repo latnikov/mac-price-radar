@@ -280,7 +280,8 @@ function offerDetails(cell, offer, { showVariant = false, analytics, colorTrust 
       : `Средний ориентир сопоставимых магазинов НН: ${rubles(analytics?.nizhnyReferenceAverage)}. Эта цена не задаёт рекомендацию продажи.`;
     cell.append(badge); cell.classList.add('low-trust-price');
   }
-  if (stock(offer) === 'out') cell.append(text('span', 'Нет в наличии', 'tag'));
+  if (offer.withdrawn) cell.append(text('span', 'Цена отозвана магазином', 'tag warn'));
+  else if (stock(offer) === 'out') cell.append(text('span', 'Нет в наличии', 'tag'));
   else if (offer.validationStatus === 'rejected' || offer.qualityWarnings?.length) {
     const badge = text('span', 'Цена не прошла проверку', 'tag warn');
     badge.title = (offer.qualityWarnings || []).join('; '); cell.append(badge);

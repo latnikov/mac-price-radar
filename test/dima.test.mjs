@@ -34,3 +34,14 @@ test('Dima collector filters out messages forwarded before the current Moscow da
   assert.equal(result.stats.eligibleMessages, 1);
   assert.equal(result.offers.length, 4);
 });
+
+test('latest Dima post wins for the same SKU and keeps the source timestamp', () => {
+  const line = amount => `MacBook MDHH4 Air 13 Sky Blue (M5, 16GB, 512GB) 2026 ${amount}`;
+  const result = parseDimaMessages([
+    { id: 'new', date: '2026-09-29T11:00:00Z', sourceChatId: '-1003421701174', text: line(130000) },
+    { id: 'old', date: '2026-09-29T08:00:00Z', sourceChatId: '-1003421701174', text: line(120000) },
+  ], { now: '2026-09-29T12:00:00Z' });
+  assert.equal(result.offers.length, 1);
+  assert.equal(result.offers[0].price, 130000);
+  assert.equal(result.offers[0].fetchedAt, '2026-09-29T11:00:00.000Z');
+});

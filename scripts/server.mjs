@@ -166,7 +166,8 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       if (req.method === 'POST') {
         const token = Buffer.from(String(req.headers['x-csrf-token'] || ''));
         const expected = Buffer.from(csrfToken);
-        const allowedOrigins = new Set([`http://${req.headers.host}`, String(env.PUBLIC_ORIGIN || 'https://dev.macbookbro.ru').replace(/\/$/, '')]);
+        const allowedOrigins = new Set([`http://${req.headers.host}`, 'https://dev.macbookbro.ru', 'https://macbookbro.ru',
+          ...String(env.PUBLIC_ORIGINS || env.PUBLIC_ORIGIN || '').split(',').map(origin => origin.trim().replace(/\/$/, '')).filter(Boolean)]);
         if (!allowedOrigins.has(req.headers.origin) || token.length !== expected.length || !timingSafeEqual(token, expected)) return send(res, 403, { error: 'Откройте мастер-таблицу и повторите действие' });
         const body = await jsonBody(req);
         if (path === '/api/refresh' || path === '/refresh') {
