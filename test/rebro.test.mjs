@@ -54,3 +54,10 @@ test('rejects unsafe pagination, duplicate ids and malformed current prices', as
   assert.throws(() => parseRebroPage(page({ total: 1, cards: card({ id: 1, title: 'Apple MacBook Air 13&quot; (M5, 10C / 8C, 2026) 16 ГБ, 512 ГБ SSD, Серебристый', href: '/catalog/mac/macbook-air/air/', amount: 'по запросу' }) })), /invalid current price/);
   assert.throws(() => parseRebroPage(page({ total: 1, cards: card({ id: 1, title: 'Apple MacBook Air 13&quot; (M5, 10C / 8C, 2026) 16 ГБ, 512 ГБ SSD, Серебристый', href: '/catalog/mac/macbook-air/air/', amount: '140 990' }), next: 'https://evil.test/catalog/mac/?PAGEN_1=2' })), /outside/);
 });
+
+
+test('reports the real Rebro maintenance page without publishing stale prices', async () => {
+  const maintenance = '<link href="/local/php_interface/include/closed/css/main.css"><h1>Мы обновляемся, а это значит, что мы готовим для вас что-то новое.</h1>';
+  await assert.rejects(fetchRebroOffers({ fetchPage: async () => maintenance }), /магазин временно закрыл каталог/);
+  assert.throws(() => parseRebroPage('<html>Unexpected response</html>'), /catalogue total not found/);
+});

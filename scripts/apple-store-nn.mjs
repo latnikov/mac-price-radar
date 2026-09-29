@@ -2,6 +2,10 @@ import { decode, parseProduct, price } from './offer-normalization.mjs';
 
 const origin = 'https://nn.stores-apple.com';
 const catalogUrl = `${origin}/catalog/mac/`;
+// PRICE ordering is unstable for equal prices at page boundaries. Keep the
+// store's supported name ordering on every request, including rel=next links
+// which omit the sorting parameters.
+const crawlUrl = `${catalogUrl}?sort=NAME&order=asc`;
 
 function attributes(tag) {
   const result = {};
@@ -38,6 +42,8 @@ function paginationUrl(value) {
   }
   url.hash = '';
   for (const key of [...url.searchParams.keys()]) if (key !== 'PAGEN_4') url.searchParams.delete(key);
+  url.searchParams.set('sort', 'NAME');
+  url.searchParams.set('order', 'asc');
   return url.href;
 }
 
@@ -149,7 +155,7 @@ export async function fetchAppleStoreOffers({ fetchPage = url => fetch(url), max
   const seenPages = new Set();
   const seenProducts = new Set();
   const offers = [];
-  let url = catalogUrl;
+  let url = crawlUrl;
   let total = null;
   let cards = 0;
   while (url) {

@@ -111,6 +111,10 @@ function parseCard(card, openingTag, pageUrl) {
 /** Parses one server-rendered Rebro catalogue page and ignores crossed-out prices. */
 export function parseRebroPage(html, pageUrl = catalogUrl) {
   const source = String(html);
+  if (/\/local\/php_interface\/include\/closed\//i.test(source)
+    && /Мы\s+обновляемся/i.test(decode(source))) {
+    throw new Error('Rebro: магазин временно закрыл каталог на обновление; свежие цены недоступны');
+  }
   const totalMatch = source.match(/<span\b[^>]*id\s*=\s*["']catalog-top__count["'][^>]*>\s*([\d\s\u00a0\u202f]+)\s*<\/span>/i);
   if (!totalMatch) throw new Error('Rebro catalogue total not found');
   const total = Number(totalMatch[1].replace(/\s/g, ''));

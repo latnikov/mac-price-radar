@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { fetchAppleStoreOffers, parseAppleStorePage } from '../scripts/apple-store-nn.mjs';
 
 const root = 'https://nn.stores-apple.com/catalog/mac/';
+const firstPage = `${root}?sort=NAME&order=asc`;
+const nextPage = `${root}?PAGEN_4=2&sort=NAME&order=asc`;
 const card = ({ id, title, href, amount, sale = null }) => `
   <div data-elem class="item item-parent catalog-block-view__item item_block" data-id="${id}" data-product_type="1">
     <div class="item-title"><a class="dark_link" href="${href}"><span>${title}</span></a></div>
@@ -26,7 +28,7 @@ test('parses the unconditional retail price, stock section, and implicit Neo chi
   const parsed = parseAppleStorePage(page({ available: `${accessory}${air}`, preorder: pro, next: '?PAGEN_4=2' }));
   assert.equal(parsed.total, 4);
   assert.equal(parsed.cardCount, 3);
-  assert.equal(parsed.next, `${root}?PAGEN_4=2`);
+  assert.equal(parsed.next, nextPage);
   assert.equal(parsed.offers.length, 2);
   assert.deepEqual({ price: parsed.offers[0].price, stock: parsed.offers[0].stock, model: parsed.offers[0].model, chip: parsed.offers[0].chip, ram: parsed.offers[0].ramGb, storage: parsed.offers[0].storageGb, color: parsed.offers[0].color },
     { price: 139390, stock: 'InStock', model: 'MacBook Air 13"', chip: 'M5', ram: 16, storage: 512, color: 'Silver' });
@@ -36,8 +38,8 @@ test('parses the unconditional retail price, stock section, and implicit Neo chi
 
 test('walks every page and verifies the catalogue count before publishing', async () => {
   const pages = new Map([
-    [root, page({ available: `${accessory}${air}`, preorder: pro, next: '?PAGEN_4=2' })],
-    [`${root}?PAGEN_4=2`, page({ preorder: neo })],
+    [firstPage, page({ available: `${accessory}${air}`, preorder: pro, next: '?PAGEN_4=2' })],
+    [nextPage, page({ preorder: neo })],
   ]);
   const result = await fetchAppleStoreOffers({ fetchPage: async url => { assert.ok(pages.has(url), url); return pages.get(url); } });
   assert.equal(result.offers.length, 3);
@@ -50,7 +52,7 @@ test('walks every page and verifies the catalogue count before publishing', asyn
 
 test('rejects partial, duplicated, malformed, and external pagination results', async () => {
   await assert.rejects(fetchAppleStoreOffers({ fetchPage: async () => page({ total: 2, preorder: air }) }), /received 1 of 2/);
-  await assert.rejects(fetchAppleStoreOffers({ fetchPage: async url => url === root ? page({ total: 2, preorder: air, next: '?PAGEN_4=2' }) : page({ total: 2, preorder: air }) }), /duplicate product id/);
+  await assert.rejects(fetchAppleStoreOffers({ fetchPage: async url => url === firstPage ? page({ total: 2, preorder: air, next: '?PAGEN_4=2' }) : page({ total: 2, preorder: air }) }), /duplicate product id/);
   assert.throws(() => parseAppleStorePage(page({ total: 1, preorder: card({ id: 8, title: 'Ноутбук Apple MacBook Air 13 M5 16 ГБ 512 ГБ Silver', href: '/catalog/bad/', amount: '' }) })), /invalid retail price/);
   assert.throws(() => parseAppleStorePage(page({ total: 1, preorder: air, next: 'https://evil.test/catalog/mac/?PAGEN_4=2' })), /outside the catalogue/);
 });
