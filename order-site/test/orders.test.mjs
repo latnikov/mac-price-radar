@@ -9,7 +9,7 @@ import { pricingInfo, quoteConfigurator, quoteCustomerPrice } from '../pricing.m
 const order = () => ({ configuration: { model: 'mini', chip: 'm6-12-12', memory: 16, storage: 256, ethernet: 2.5 }, phone: '8 (999) 000-00-00', name: 'Тест', consent: true });
 async function setup(t, overrides = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'mac-orders-'));
-  const env = { ORDER_ORIGIN: 'https://order.example.test', ORDER_ACCEPTING: '1', ORDER_TELEGRAM_BOT_TOKEN: 'test-only', ORDER_TELEGRAM_CHAT_ID: 'test-chat', ...overrides.env };
+  const env = { ORDER_ORIGIN: 'https://order.example.test', ORDER_ACCEPTING: '1', ORDER_TELEGRAM_BOT_TOKEN: 'test-only', ORDER_TELEGRAM_CHAT_ID: 'test-chat', ORDER_PRICE_MAX_AGE_MS: '0', ...overrides.env };
   const args = { env, dbPath: join(directory, 'orders.sqlite'), runWorker: false, ...overrides, env };
   let service = createOrderService(args);
   await new Promise(r => service.server.listen(0, '127.0.0.1', r));
@@ -28,6 +28,45 @@ test('persists a validated order, normalizes phone, and deduplicates retried req
   assert.equal(JSON.parse(rows[0].payload).phone, '+79990000000');
   assert.equal(JSON.parse(rows[0].payload).priceRub, 105319);
   assert.equal((await post({ ...order(), name: 'Другое имя' })).status, 409);
+});
+
+test('retry returns the saved order and price after a pricebook change, including legacy fingerprints', async t => {
+  const { service, post } = await setup(t);
+  const first = await (await post()).json();
+  const row = service.db.prepare('SELECT * FROM orders WHERE id=?').get(first.orderId);
+  const saved = JSON.parse(row.payload);
+  saved.priceRub = 99999;
+  saved.pricingAsOf = '2026-09-30T00:00:00Z';
+  service.db.prepare('UPDATE orders SET payload=?, fingerprint=? WHERE id=?').run(JSON.stringify(saved), 'legacy-price-payload-hash', first.orderId);
+  const retry = await post();
+  assert.equal(retry.status, 200);
+  assert.deepEqual(await retry.json(), { orderId: first.orderId, accepted: true, priceRub: 99999 });
+  assert.equal(service.db.prepare('SELECT COUNT(*) AS n FROM orders').get().n, 1);
+});
+
+test('expired pricebook becomes an on-request quote and cannot set an estimated order price', async t => {
+  const { post, base, service } = await setup(t, { now: () => Date.parse('2026-09-29T12:00:00Z'), env: { ORDER_PRICE_MAX_AGE_MS: String(72 * 3600000) } });
+  const quote = await (await fetch(`${base}/api/quote?model=mini&chip=m6-12-12&memory=16&storage=256&ethernet=2.5`)).json();
+  assert.equal(quote.priceRub, null);
+  assert.equal(quote.priceStatus, 'on_request');
+  assert.deepEqual(quote.stepPricesRub, {});
+  const response = await post();
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).priceRub, null);
+  assert.equal(JSON.parse(service.db.prepare('SELECT payload FROM orders').get().payload).priceStatus, 'on_request');
+});
+
+test('accepted quote survives pricebook expiry when the customer retries the same key', async t => {
+  let clock = Date.parse('2026-09-25T12:00:00Z');
+  const { post, base } = await setup(t, { now: () => clock, env: { ORDER_PRICE_MAX_AGE_MS: String(72 * 3600000) } });
+  const path = '/api/quote?model=mini&chip=m6-12-12&memory=16&storage=256&ethernet=2.5';
+  assert.equal((await (await fetch(base + path)).json()).priceRub, 105319);
+  const first = await (await post()).json();
+  clock = Date.parse('2026-09-29T12:00:00Z');
+  assert.equal((await (await fetch(base + path)).json()).priceRub, null);
+  const retry = await post();
+  assert.equal(retry.status, 200);
+  assert.deepEqual(await retry.json(), first);
 });
 test('rejects forged configurations, missing consent, cross-origin calls and private paths', async t => {
   const { service, post, base } = await setup(t);
@@ -73,6 +112,8 @@ test('relay queue is authenticated, leased, recovered after timeout and acknowle
   const { service, post, base } = await setup(t, { env: { ORDER_DELIVERY_MODE: 'relay', ORDER_RELAY_KEY: key }, now: () => clock });
   const relay = (path, body = {}, auth = key) => fetch(`${base}/api/relay/${path}`, { method: 'POST', headers: { Authorization: `Bearer ${auth}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await post()).status, 201);
+  assert.equal((await relay('status', {}, 'wrong')).status, 403);
+  assert.deepEqual(await (await relay('status')).json(), { acceptingOrders: true, pendingNotifications: 1, oldestPendingSeconds: 0 });
   assert.equal((await relay('claim', {}, 'wrong')).status, 403);
   const first = (await (await relay('claim')).json()).notifications[0];
   assert.match(first.text, /Mac mini/);
@@ -86,6 +127,7 @@ test('relay queue is authenticated, leased, recovered after timeout and acknowle
   assert.equal((await relay('ack', { orderId: next.orderId, lease: next.lease })).status, 200);
   assert.equal((await (await relay('claim')).json()).notifications.length, 0);
   assert.equal(service.db.prepare('SELECT notified_at FROM orders').get().notified_at, clock);
+  assert.deepEqual(await (await relay('status')).json(), { acceptingOrders: true, pendingNotifications: 0, oldestPendingSeconds: null });
 });
 
 test('keeps the 50 base totals private and publishes only final ruble quotes', async t => {

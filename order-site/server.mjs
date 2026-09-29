@@ -20,15 +20,11 @@ async function readJson(req) {
 }
 function notificationText(row) {
   const p = JSON.parse(row.payload);
-  let priceLine = '';
-  try {
-    const priceRub = Object.hasOwn(p, 'priceRub') ? p.priceRub : quoteCustomerPrice(p.configuration);
-    priceLine = Number.isInteger(priceRub) ? `\nПредварительная цена: ${formatPublicPrice(priceRub)}` : '\nЦена: по запросу, требуется расчёт';
-  } catch { /* Preserve delivery for an older order whose configuration left the current price list. */ }
+  const priceLine = Number.isInteger(p.priceRub) ? `\nПредварительная цена: ${formatPublicPrice(p.priceRub)}` : '\nЦена: по запросу, требуется расчёт';
   const payment = p.paymentMethod === 'invoice' ? 'Перевод на расчётный счёт от ИП/юрлица' : p.paymentMethod === 'cash' ? 'Наличные' : 'Уточнить у клиента';
   return `Новая заявка · Макбучная\n№ ${row.id}\n${new Date(row.created_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} (МСК)\n\n${p.configurationDescription || describeConfiguration(p.configuration)}${priceLine}\nОплата: ${payment}\n\nИмя: ${p.name || 'не указано'}\nТелефон: ${p.phone}\nГород: Нижний Новгород\n\nСвяжитесь с клиентом для подтверждения стоимости и срока.`;
 }
-export function validateOrder(body) {
+export function validateOrder(body, { includeQuote = true, priceAllowed = () => true } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw fault(400, 'Некорректная заявка.');
   let configuration;
   try { configuration = validateConfiguration(body.configuration); } catch (e) { throw fault(400, e.message); }
@@ -41,9 +37,15 @@ export function validateOrder(body) {
   if (body.consent !== true) throw fault(400, 'Подтвердите согласие на обработку данных.');
   if (body.website) throw fault(400, 'Не удалось отправить заявку.');
   if (body.paymentMethod !== undefined && !['cash', 'invoice'].includes(body.paymentMethod)) throw fault(400, 'Выберите наличные или перевод на расчётный счёт от ИП/юрлица.');
-  const priceRub = quoteCustomerPrice(configuration);
-  return { configuration, configurationDescription: describeConfiguration(configuration), priceRub, priceStatus: Number.isInteger(priceRub) ? 'estimated' : 'on_request', pricingAsOf: configuration.model === 'pixel' ? pixelPricingCheckedAt : configuration.model === 'other' ? null : pricingInfo.checkedAt, paymentMethod: body.paymentMethod || 'cash', phone: `+${phone}`, name: (body.name || '').trim(), consentVersion: '2026-09-27' };
+  const intent = { configuration, paymentMethod: body.paymentMethod || 'cash', phone: `+${phone}`, name: (body.name || '').trim(), consentVersion: '2026-09-27' };
+  if (!includeQuote) return intent;
+  const priceRub = priceAllowed(configuration) ? quoteCustomerPrice(configuration) : null;
+  return { ...intent, configurationDescription: describeConfiguration(configuration), priceRub, priceStatus: Number.isInteger(priceRub) ? 'estimated' : 'on_request', pricingAsOf: configuration.model === 'pixel' ? pixelPricingCheckedAt : configuration.model === 'other' ? null : pricingInfo.checkedAt };
 }
+
+const intentFingerprint = value => createHash('sha256').update(JSON.stringify(Object.fromEntries(
+  ['configuration', 'paymentMethod', 'phone', 'name', 'consentVersion'].map(field => [field, value[field]]),
+))).digest('hex');
 
 export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB || resolve(root, 'data/orders.sqlite'), fetchImpl = fetch, now = Date.now, runWorker = true } = {}) {
   mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
@@ -63,6 +65,14 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
   const deliveryReady = relayMode ? Boolean(env.ORDER_RELAY_KEY?.length >= 32 && env.ORDER_TELEGRAM_CHAT_ID) : telegramReady;
   const acceptingOrders = deliveryReady && env.ORDER_ACCEPTING === '1';
   const allowedOrigin = env.ORDER_ORIGIN || 'http://127.0.0.1:4180';
+  const priceMaxAgeMs = env.ORDER_PRICE_MAX_AGE_MS === undefined ? 72 * 3600000 : Number(env.ORDER_PRICE_MAX_AGE_MS);
+  if (!Number.isSafeInteger(priceMaxAgeMs) || priceMaxAgeMs < 0) throw new Error('ORDER_PRICE_MAX_AGE_MS must be a non-negative integer');
+  const priceAllowed = configuration => {
+    if (priceMaxAgeMs === 0) return true;
+    const checkedAt = configuration.model === 'pixel' ? pixelPricingCheckedAt : pricingInfo.checkedAt;
+    const age = now() - Date.parse(checkedAt);
+    return Number.isFinite(age) && age >= 0 && age <= priceMaxAgeMs;
+  };
   const rate = new Map();
   let working = false;
   async function dispatch() {
@@ -128,20 +138,27 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
         // Custom requests are validated only when posted; free text never enters URLs/cache.
         if (normalized.model === 'other') throw fault(400, 'Стоимость другого товара уточним по заявке.');
         // Only valid catalogue keys enter this bounded cache, never raw URLs.
-        const key = JSON.stringify(normalized);
+        const fresh = priceAllowed(normalized);
+        const key = JSON.stringify([normalized, fresh]);
         if (!quotes.has(key)) {
-          try { quotes.set(key, representation({ ...quoteConfigurator(normalized), currency: 'RUB' })); }
+          try { quotes.set(key, representation({ ...(fresh ? quoteConfigurator(normalized) : { priceRub: null, priceStatus: 'on_request', stepPricesRub: {} }), currency: 'RUB' })); }
           catch (e) { throw fault(400, e.message); }
         }
         sendRepresentation(req, res, quotes.get(key), 'application/json'); return;
       }
       if (req.method === 'GET' && path === '/healthz') { db.prepare('SELECT 1').get(); json(200, { ok: true }); return; }
-      if (path === '/api/relay/claim' || path === '/api/relay/ack') {
+      if (path === '/api/relay/claim' || path === '/api/relay/ack' || path === '/api/relay/status') {
         if (req.method !== 'POST') throw fault(405, 'Метод не поддерживается.');
         const supplied = Buffer.from(String(req.headers.authorization || ''));
         const expected = Buffer.from(`Bearer ${env.ORDER_RELAY_KEY || ''}`);
         if (!relayMode || !env.ORDER_RELAY_KEY || supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) throw fault(403, 'Доступ запрещён.');
         const body = await readJson(req);
+        if (path.endsWith('/status')) {
+          const pending = db.prepare('SELECT COUNT(*) AS count, MIN(created_at) AS oldest FROM orders WHERE notified_at IS NULL').get();
+          json(200, { acceptingOrders, pendingNotifications: pending.count,
+            oldestPendingSeconds: pending.oldest == null ? null : Math.max(0, Math.floor((now() - pending.oldest) / 1000)) });
+          return;
+        }
         if (path.endsWith('/claim')) {
           db.exec('BEGIN IMMEDIATE');
           try {
@@ -168,18 +185,19 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
       const key = req.headers['idempotency-key'];
       if (typeof key !== 'string' || !/^[\w-]{16,80}$/.test(key)) throw fault(400, 'Обновите страницу и повторите отправку.');
       const body = await readJson(req);
-      const payload = validateOrder(body);
-      const serialized = JSON.stringify(payload);
-      const fingerprint = createHash('sha256').update(serialized).digest('hex');
+      const intent = validateOrder(body, { includeQuote: false });
+      const fingerprint = intentFingerprint(intent);
       const existing = db.prepare('SELECT id, fingerprint, payload FROM orders WHERE request_key = ?').get(key);
       if (existing) {
-        if (existing.fingerprint !== fingerprint) throw fault(409, 'Заявка изменилась. Обновите страницу и отправьте её заново.');
         const saved = JSON.parse(existing.payload);
-        let priceRub = saved.priceRub;
-        try { if (!Number.isInteger(priceRub)) priceRub = quoteCustomerPrice(saved.configuration); } catch { priceRub = undefined; }
-        json(200, { orderId: existing.id, accepted: true, priceRub: Number.isInteger(priceRub) ? priceRub : null }); return;
+        // Older rows hashed the complete price-bearing payload. Compare the
+        // normalized customer intent so retries survive pricebook changes.
+        if (intentFingerprint(saved) !== fingerprint) throw fault(409, 'Заявка изменилась. Обновите страницу и отправьте её заново.');
+        json(200, { orderId: existing.id, accepted: true, priceRub: Number.isInteger(saved.priceRub) ? saved.priceRub : null }); return;
       }
       if (!acceptingOrders) throw fault(503, 'Приём заявок пока не подключён. Попробуйте позже.');
+      const payload = validateOrder(body, { priceAllowed });
+      const serialized = JSON.stringify(payload);
       // Caddy overwrites X-Forwarded-For; only trust it behind the loopback proxy.
       const peer = req.socket.remoteAddress;
       const ip = env.ORDER_TRUST_PROXY === '1' && ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(peer) ? String(req.headers['x-forwarded-for'] || peer).split(',').at(-1).trim() : peer;

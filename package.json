@@ -12,6 +12,7 @@
     "dev": "node scripts/server.mjs",
     "export:public": "node scripts/export-public.mjs",
     "backup": "node scripts/backup.mjs",
+    "backup:orders": "node order-site/backup.mjs",
     "telegram:poll": "node scripts/telegram-business-poll.mjs",
     "telegram:webhook": "node scripts/telegram-business-webhook.mjs",
     "dev:orders": "node order-site/server.mjs",
