@@ -7,6 +7,7 @@ import { randomUUID, createHash, timingSafeEqual } from 'node:crypto';
 import { validateConfiguration, describeConfiguration } from './catalog.mjs';
 import { formatPublicPrice, pricingInfo, quoteConfigurator, quoteCustomerPrice } from './pricing.mjs';
 import { representation, sendRepresentation } from './http-cache.mjs';
+import { pixelPricingCheckedAt } from './pixel-pricing.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const fault = (status, message) => Object.assign(new Error(message), { status });
@@ -21,10 +22,11 @@ function notificationText(row) {
   const p = JSON.parse(row.payload);
   let priceLine = '';
   try {
-    const priceRub = Number.isInteger(p.priceRub) ? p.priceRub : quoteCustomerPrice(p.configuration);
-    priceLine = `\nПредварительная цена: ${formatPublicPrice(priceRub)}`;
+    const priceRub = Object.hasOwn(p, 'priceRub') ? p.priceRub : quoteCustomerPrice(p.configuration);
+    priceLine = Number.isInteger(priceRub) ? `\nПредварительная цена: ${formatPublicPrice(priceRub)}` : '\nЦена: по запросу, требуется расчёт';
   } catch { /* Preserve delivery for an older order whose configuration left the current price list. */ }
-  return `Новая заявка · Макбучная\n№ ${row.id}\n${new Date(row.created_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} (МСК)\n\n${describeConfiguration(p.configuration)}${priceLine}\n\nИмя: ${p.name || 'не указано'}\nТелефон: ${p.phone}\nГород: Нижний Новгород\n\nСвяжитесь с клиентом для подтверждения стоимости и срока.`;
+  const payment = p.paymentMethod === 'invoice' ? 'Перевод на расчётный счёт от ИП/юрлица' : p.paymentMethod === 'cash' ? 'Наличные' : 'Уточнить у клиента';
+  return `Новая заявка · Макбучная\n№ ${row.id}\n${new Date(row.created_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} (МСК)\n\n${p.configurationDescription || describeConfiguration(p.configuration)}${priceLine}\nОплата: ${payment}\n\nИмя: ${p.name || 'не указано'}\nТелефон: ${p.phone}\nГород: Нижний Новгород\n\nСвяжитесь с клиентом для подтверждения стоимости и срока.`;
 }
 export function validateOrder(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw fault(400, 'Некорректная заявка.');
@@ -38,7 +40,9 @@ export function validateOrder(body) {
   if (body.name !== undefined && (typeof body.name !== 'string' || body.name.length > 100 || /[\x00-\x1f\x7f]/.test(body.name))) throw fault(400, 'Проверьте имя.');
   if (body.consent !== true) throw fault(400, 'Подтвердите согласие на обработку данных.');
   if (body.website) throw fault(400, 'Не удалось отправить заявку.');
-  return { configuration, priceRub: quoteCustomerPrice(configuration), pricingAsOf: pricingInfo.checkedAt, phone: `+${phone}`, name: (body.name || '').trim(), consentVersion: '2026-09-24' };
+  if (body.paymentMethod !== undefined && !['cash', 'invoice'].includes(body.paymentMethod)) throw fault(400, 'Выберите наличные или перевод на расчётный счёт от ИП/юрлица.');
+  const priceRub = quoteCustomerPrice(configuration);
+  return { configuration, configurationDescription: describeConfiguration(configuration), priceRub, priceStatus: Number.isInteger(priceRub) ? 'estimated' : 'on_request', pricingAsOf: configuration.model === 'pixel' ? pixelPricingCheckedAt : configuration.model === 'other' ? null : pricingInfo.checkedAt, paymentMethod: body.paymentMethod || 'cash', phone: `+${phone}`, name: (body.name || '').trim(), consentVersion: '2026-09-27' };
 }
 
 export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB || resolve(root, 'data/orders.sqlite'), fetchImpl = fetch, now = Date.now, runWorker = true } = {}) {
@@ -91,6 +95,7 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
     ['/', ['public/index.html', 'text/html']], ['/style.css', ['public/style.css', 'text/css']],
     ['/app.js', ['public/app.js', 'text/javascript']], ['/catalog.mjs', ['catalog.mjs', 'text/javascript']],
     ['/quote-client.mjs', ['public/quote-client.mjs', 'text/javascript']],
+    ['/selection-link.mjs', ['public/selection-link.mjs', 'text/javascript']],
     ['/privacy.html', ['public/privacy.html', 'text/html']],
   ]);
   // Deployments restart the service: load immutable assets once per process.
@@ -116,9 +121,12 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
           model: url.searchParams.get('model'), chip: url.searchParams.get('chip'),
           memory: Number(url.searchParams.get('memory')), storage: Number(url.searchParams.get('storage')),
           ethernet: Number(url.searchParams.get('ethernet')),
+          phone: url.searchParams.get('phone'),
         };
         let normalized;
         try { normalized = validateConfiguration(configuration); } catch (e) { throw fault(400, e.message); }
+        // Custom requests are validated only when posted; free text never enters URLs/cache.
+        if (normalized.model === 'other') throw fault(400, 'Стоимость другого товара уточним по заявке.');
         // Only valid catalogue keys enter this bounded cache, never raw URLs.
         const key = JSON.stringify(normalized);
         if (!quotes.has(key)) {
@@ -169,7 +177,7 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
         const saved = JSON.parse(existing.payload);
         let priceRub = saved.priceRub;
         try { if (!Number.isInteger(priceRub)) priceRub = quoteCustomerPrice(saved.configuration); } catch { priceRub = undefined; }
-        json(200, { orderId: existing.id, accepted: true, ...(Number.isInteger(priceRub) ? { priceRub } : {}) }); return;
+        json(200, { orderId: existing.id, accepted: true, priceRub: Number.isInteger(priceRub) ? priceRub : null }); return;
       }
       if (!acceptingOrders) throw fault(503, 'Приём заявок пока не подключён. Попробуйте позже.');
       // Caddy overwrites X-Forwarded-For; only trust it behind the loopback proxy.

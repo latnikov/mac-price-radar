@@ -1,5 +1,6 @@
 import { catalog, capacity, describeConfiguration } from '/catalog.mjs';
 import { createQuoteLoader } from '/quote-client.mjs';
+import { readSelection, selectionHash } from '/selection-link.mjs';
 const loadQuote = createQuoteLoader();
 const $ = id => document.getElementById(id);
 let model = catalog.models[0];
@@ -7,8 +8,25 @@ let requestId = crypto.randomUUID();
 let pendingPayload = null;
 let sending = false;
 let currentQuoteRub = null;
+let quoteReady = false;
 let quoteVersion = 0;
+let currentStep = 'configuration';
+let restoredSelection = readSelection(location.hash);
+function saveSelection() {
+  const hash = selectionHash(selection());
+  if (location.hash !== hash) history.replaceState(null, '', `${location.pathname}${location.search}${hash}`);
+}
+function syncMobileOrder() {
+  $('mobile-order').hidden = currentStep !== 'configuration';
+  $('mobile-model').textContent = model.id === 'other' ? 'Другой товар' : model.name;
+  $('mobile-price').textContent = quoteReady ? (Number.isInteger(currentQuoteRub) ? formatPublicPrice(currentQuoteRub) : 'Цена по запросу') : 'Выберите параметры';
+  $('mobile-continue').disabled = !quoteReady;
+  $('mobile-continue').textContent = Number.isInteger(currentQuoteRub) ? 'Оформить →' : 'Продолжить →';
+}
 const formatPublicPrice = price => `${Number(price).toLocaleString('ru-RU')} ₽`;
+const priceText = price => Number.isInteger(price) ? `Предварительная цена: ${formatPublicPrice(price)}` : 'Цена по запросу';
+const paymentMethod = () => document.querySelector('input[name="payment"]:checked').value;
+const paymentText = () => paymentMethod() === 'invoice' ? 'Перевод на расчётный счёт от ИП/юрлица' : 'Наличные';
 const selectedValue = id => $(id).querySelector('[aria-pressed="true"]')?.dataset.value;
 const setStepPricesLoading = () => document.querySelectorAll('.option-step').forEach(step => {
   step.textContent = 'Считаем цену…';
@@ -19,7 +37,8 @@ const showStepPrices = (stepPrices, currentPrice) => {
     $(`${group}-options`)?.querySelectorAll('button').forEach(button => {
       const price = prices[button.dataset.value];
       const step = button.querySelector('.option-step');
-      if (!step || !Number.isInteger(price)) return;
+      if (!step) return;
+      if (!Number.isInteger(price)) { step.textContent = 'Цена по запросу'; return; }
       step.textContent = price === 0
         ? formatPublicPrice(currentPrice)
         : `${price > 0 ? '+' : '−'} ${formatPublicPrice(Math.abs(price))}`;
@@ -28,7 +47,7 @@ const showStepPrices = (stepPrices, currentPrice) => {
     });
   }
 };
-const optionButtons = (id, values, label, onChange, { preferred, preserve = true } = {}) => {
+const optionButtons = (id, values, label, onChange, { preferred, preserve = true, detail } = {}) => {
   const container = $(id);
   const previous = selectedValue(id);
   const normalized = values.map(value => ({ value, id: String(typeof value === 'object' ? value.id : value) }));
@@ -42,27 +61,45 @@ const optionButtons = (id, values, label, onChange, { preferred, preserve = true
     button.setAttribute('role', 'radio');
     button.setAttribute('aria-pressed', String(item.id === selected));
     button.setAttribute('aria-checked', String(item.id === selected));
+    button.tabIndex = item.id === selected ? 0 : -1;
     const name = document.createElement('span');
     name.className = 'option-name';
     name.textContent = label(item.value);
     const step = document.createElement('span');
     step.className = 'option-step';
     step.textContent = 'Считаем цену…';
-    button.append(name, step);
+    button.append(name);
+    if (detail) {
+      const description = document.createElement('span');
+      description.className = 'option-detail'; description.textContent = detail(item.value);
+      button.append(description);
+    }
+    button.append(step);
     button.addEventListener('click', () => {
       if (button.getAttribute('aria-pressed') === 'true') return;
       container.querySelectorAll('button').forEach(other => {
         const active = other === button;
         other.setAttribute('aria-pressed', String(active));
         other.setAttribute('aria-checked', String(active));
+        other.tabIndex = active ? 0 : -1;
       });
       onChange();
+    });
+    button.addEventListener('keydown', event => {
+      if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+      event.preventDefault();
+      const items = [...container.querySelectorAll('button')];
+      const index = items.indexOf(button);
+      const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : (index + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1) + items.length) % items.length;
+      items[next].click(); items[next].focus();
     });
     return button;
   });
   container.replaceChildren(...buttons);
 };
 function selection() {
+  if (model.id === 'other') return { model: 'other', description: $('other-description').value.trim() };
+  if (model.id === 'pixel') return { model: 'pixel', phone: selectedValue('phone-options'), storage: Number(selectedValue('pixel-storage-options')) };
   return {
     model: model.id,
     chip: selectedValue('chip-options'),
@@ -74,73 +111,148 @@ function selection() {
 async function refreshQuote(configuration) {
   const version = ++quoteVersion;
   currentQuoteRub = null;
+  quoteReady = false;
   $('continue-order').disabled = true;
+  $('retry-quote').hidden = true;
+  $('quote-note').textContent = 'Проверяем стоимость выбранной конфигурации…';
+  syncMobileOrder();
   $('price').textContent = 'Считаем предварительную цену…';
   setStepPricesLoading();
   try {
     const data = await loadQuote(configuration);
     if (version !== quoteVersion) return;
     currentQuoteRub = data.priceRub;
+    quoteReady = true;
     showStepPrices(data.stepPricesRub, currentQuoteRub);
-    $('price').textContent = `Предварительная цена: ${formatPublicPrice(currentQuoteRub)}`;
+    $('price').textContent = priceText(currentQuoteRub);
+    $('continue-order').textContent = Number.isInteger(currentQuoteRub) ? 'Оформить заказ' : 'Запросить стоимость';
+    $('quote-note').textContent = Number.isInteger(currentQuoteRub)
+      ? 'Это предварительная цена. Точную стоимость и срок привоза в Нижний Новгород подтвердим по телефону.'
+      : 'Оставьте заявку на выбранную конфигурацию. Стоимость, наличие и срок привоза подтвердим по телефону.';
+    $('price-help').textContent = Number.isInteger(currentQuoteRub)
+      ? 'Под выбранными вариантами показана текущая цена, под остальными — насколько цена увеличится или уменьшится.'
+      : 'Выберите нужную конфигурацию и отправьте запрос стоимости. Цену подтвердим перед покупкой.';
     $('continue-order').disabled = false;
+    syncMobileOrder();
   } catch (error) {
     if (version !== quoteVersion) return;
     document.querySelectorAll('.option-step').forEach(step => { step.textContent = 'Доплата недоступна'; });
-    $('price').textContent = error.name === 'TimeoutError' ? 'Расчёт цены занял слишком много времени. Попробуйте ещё раз.' : error.message;
+    $('price').textContent = 'Не удалось рассчитать цену';
+    $('quote-note').textContent = 'Проверьте соединение и повторите расчёт. Выбранные параметры сохранены.';
+    $('retry-quote').hidden = false;
+    syncMobileOrder();
   }
 }
 function summary() {
   const configuration = selection();
+  saveSelection();
+  $('share-message').textContent = '';
+  $('share-selection').hidden = model.id === 'other';
+  $('retry-quote').hidden = true;
   $('selection').textContent = describeConfiguration(configuration);
+  if (model.id === 'other') {
+    ++quoteVersion; currentQuoteRub = null; quoteReady = configuration.description.length >= 3;
+    $('selection').textContent = configuration.description || 'Укажите товар и нужные параметры.';
+    $('price').textContent = 'Цена по запросу';
+    $('quote-note').textContent = 'Стоимость и возможность заказа уточним по вашей заявке.';
+    $('continue-order').disabled = !quoteReady; $('continue-order').textContent = 'Запросить стоимость';
+    syncMobileOrder();
+    return;
+  }
+  if (model.id === 'pixel') {
+    const phone = catalog.pixelModels.find(item => item.id === configuration.phone);
+    $('pixel-specs').textContent = `${phone.chip} · ${phone.screen} · ${phone.memoryByStorage[configuration.storage]} ГБ оперативной памяти. Оперативная память определяется выбранной версией.`;
+  }
   void refreshQuote(configuration);
 }
 function chipChanged({ resetMemory = false } = {}) {
   const chip = model.chips.find(x => x.id === selectedValue('chip-options'));
   optionButtons('memory-options', chip.memory, x => `${x} ГБ`, summary, {
-    preferred: resetMemory && chip.memory.includes(16) ? 16 : undefined,
-    preserve: !resetMemory,
+    preferred: restoredSelection?.memory ?? (resetMemory && chip.memory.includes(16) ? 16 : undefined),
+    preserve: !resetMemory && !restoredSelection,
   });
-  optionButtons('storage-options', chip.storage, capacity, summary, { preferred: 256, preserve: false });
+  optionButtons('storage-options', chip.storage, capacity, summary, { preferred: restoredSelection?.storage ?? 256, preserve: false });
+  summary();
+}
+function phoneChanged() {
+  const phone = catalog.pixelModels.find(item => item.id === selectedValue('phone-options'));
+  optionButtons('pixel-storage-options', phone.storage, capacity, summary, { preferred: restoredSelection?.storage, preserve: false });
   summary();
 }
 function modelChanged(id) {
-  model = catalog.models.find(x => x.id === id);
+  model = catalog.models.find(x => x.id === id) || { id, name: id === 'pixel' ? 'Google Pixel' : 'товар' };
   $('model-name').textContent = model.name;
+  $('mac-fields').hidden = !['mini', 'studio'].includes(id);
+  $('pixel-fields').hidden = id !== 'pixel';
+  $('other-fields').hidden = id !== 'other';
+  $('other-description').required = id === 'other';
+  $('other-description').disabled = id !== 'other';
+  $('price-help').hidden = id === 'other';
   $('studio-note').hidden = model.id !== 'studio';
   $('ethernet-block').hidden = model.id === 'mini';
   document.querySelectorAll('[data-model]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.model === id)));
-  optionButtons('chip-options', model.chips, x => `${x.name} · ${x.cpu} CPU / ${x.gpu} GPU`, chipChanged, { preserve: false });
-  optionButtons('ethernet-options', model.ethernet, x => `${x} Гбит/с`, summary, { preserve: false });
+  if (id === 'other') { summary(); return; }
+  if (id === 'pixel') {
+    optionButtons('phone-options', catalog.pixelModels, item => item.name, phoneChanged, {
+      preserve: !restoredSelection, preferred: restoredSelection?.phone, detail: item => `${item.generation} · ${item.chip} · ${item.screen}`,
+    });
+    phoneChanged(); return;
+  }
+  optionButtons('chip-options', model.chips, x => `${x.name} · ${x.cpu} CPU / ${x.gpu} GPU`, chipChanged, { preferred: restoredSelection?.chip, preserve: false });
+  optionButtons('ethernet-options', model.ethernet, x => `${x} Гбит/с`, summary, { preferred: restoredSelection?.ethernet, preserve: false });
   chipChanged({ resetMemory: true });
 }
 function showStep(step) {
+  currentStep = step;
   $('configuration').hidden = step !== 'configuration';
   document.querySelector('.models').hidden = step !== 'configuration';
   $('contact-step').hidden = step !== 'contact';
   $('success').hidden = step !== 'success';
+  document.querySelectorAll('[data-step]').forEach(item => {
+    if (item.dataset.step === step) item.setAttribute('aria-current', 'step');
+    else item.removeAttribute('aria-current');
+  });
+  syncMobileOrder();
 }
-document.querySelectorAll('[data-model]').forEach(x => x.addEventListener('click', () => modelChanged(x.dataset.model)));
+document.querySelectorAll('[data-model]').forEach(x => x.addEventListener('click', () => { if (model.id !== x.dataset.model) modelChanged(x.dataset.model); }));
+$('retry-quote').addEventListener('click', () => { void refreshQuote(selection()); });
+$('share-selection').addEventListener('click', async () => {
+  saveSelection();
+  try { await navigator.clipboard.writeText(location.href); $('share-message').textContent = 'Ссылка скопирована. Она откроет выбранную конфигурацию.'; }
+  catch { $('share-message').textContent = 'Выбор сохранён в адресе страницы. Скопируйте его из строки браузера.'; }
+});
+window.addEventListener('hashchange', () => {
+  if (sending) { saveSelection(); return; }
+  restoredSelection = readSelection(location.hash);
+  modelChanged(restoredSelection?.model || 'mini'); restoredSelection = null;
+  showStep('configuration');
+});
+$('other-description').addEventListener('input', summary);
 $('configuration').addEventListener('submit', async e => {
   e.preventDefault();
-  if (!Number.isInteger(currentQuoteRub)) return;
+  if (!quoteReady) return;
   const configuration = selection();
   $('contact-selection').textContent = describeConfiguration(configuration);
-  $('contact-price').textContent = `Предварительная цена: ${formatPublicPrice(currentQuoteRub)}`;
+  $('contact-price').textContent = priceText(currentQuoteRub);
+  $('contact-payment').textContent = `Оплата: ${paymentText()}`;
   showStep('contact');
+  $('form-error').hidden = true;
   $('contact-title').focus();
   $('availability').textContent = '';
+  $('submit-order').disabled = true;
   try {
     const response = await fetch('/api/status', { signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new Error('Status unavailable');
     const status = await response.json();
     if (!status.acceptingOrders) $('availability').textContent = 'Форма пока в режиме просмотра: приём заявок ещё не подключён.';
     $('submit-order').disabled = !status.acceptingOrders;
   } catch { $('availability').textContent = 'Не удалось проверить связь с сервером. Попробуйте отправить заявку.'; $('submit-order').disabled = false; }
 });
-$('back').addEventListener('click', () => { if (!sending) { showStep('configuration'); $('chip-options').querySelector('button')?.focus(); } });
+const focusSelection = () => model.id === 'other' ? $('other-description').focus() : $(model.id === 'pixel' ? 'phone-options' : 'chip-options').querySelector('button[aria-pressed="true"]')?.focus();
+$('back').addEventListener('click', () => { if (!sending) { showStep('configuration'); focusSelection(); } });
 $('new-order').addEventListener('click', () => {
   $('order').reset(); requestId = crypto.randomUUID(); pendingPayload = null;
-  showStep('configuration'); $('chip-options').querySelector('button')?.focus();
+  showStep('configuration'); summary(); focusSelection();
 });
 $('order').addEventListener('submit', async e => {
   e.preventDefault();
@@ -149,7 +261,7 @@ $('order').addEventListener('submit', async e => {
   if (!/^(?:7|8)\d{10}$/.test(phone) && !/^\d{10}$/.test(phone)) {
     $('form-error').textContent = 'Укажите российский номер: +7 и ещё 10 цифр.'; $('form-error').hidden = false; $('phone').focus(); return;
   }
-  const body = { configuration: selection(), phone: $('phone').value, name: $('customer-name').value, consent: $('consent').checked, website: $('website').value };
+  const body = { configuration: selection(), paymentMethod: paymentMethod(), phone: $('phone').value, name: $('customer-name').value, consent: $('consent').checked, website: $('website').value };
   const fingerprint = JSON.stringify(body);
   if (pendingPayload && pendingPayload !== fingerprint) requestId = crypto.randomUUID();
   pendingPayload = fingerprint;
@@ -161,11 +273,12 @@ $('order').addEventListener('submit', async e => {
     if (!response.ok) throw new Error(data.error || 'Не удалось отправить заявку. Попробуйте ещё раз.');
     $('order-number').textContent = data.orderId;
     $('success-selection').textContent = describeConfiguration(body.configuration);
-    $('success-price').textContent = `Предварительная цена: ${formatPublicPrice(data.priceRub ?? currentQuoteRub)}`;
+    $('success-price').textContent = priceText(data.priceRub);
     showStep('success'); $('success-title').focus();
   } catch (error) {
     $('form-error').textContent = error.name === 'TypeError' || error.name === 'TimeoutError' ? 'Ответ сервера не получен. Нажмите «Отправить заявку» ещё раз — повторная отправка не создаст дубль.' : error.message;
     $('form-error').hidden = false;
   } finally { sending = false; $('submit-order').disabled = false; $('back').disabled = false; $('submit-order').textContent = 'Отправить заявку'; }
 });
-modelChanged('mini');
+modelChanged(restoredSelection?.model || 'mini');
+restoredSelection = null;

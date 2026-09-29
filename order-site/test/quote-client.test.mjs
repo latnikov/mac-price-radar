@@ -26,3 +26,14 @@ test('switching configurations aborts the previous network request', async () =>
   assert.equal((await load({ memory: 32 })).priceRub, 200);
   await aborted;
 });
+
+test('on-request quotes are explicit and malformed prices never unlock ordering', async () => {
+  const onRequest = { priceRub: null, priceStatus: 'on_request', stepPricesRub: {} };
+  const configuration = { model: 'pixel', phone: 'pixel-11', storage: 256 };
+  const load = createQuoteLoader({ fetchImpl: async () => ({ ok: true, json: async () => onRequest }) });
+  assert.equal((await load(configuration)).priceStatus, 'on_request');
+  for (const data of [{ priceRub: null, stepPricesRub: {} }, { priceRub: 0, stepPricesRub: {} }, { priceRub: -1, stepPricesRub: {} }]) {
+    const invalid = createQuoteLoader({ fetchImpl: async () => ({ ok: true, json: async () => data }) });
+    await assert.rejects(invalid(configuration), /Не удалось рассчитать цену/);
+  }
+});

@@ -64,3 +64,34 @@ footer p { margin: 14px 0; }
 .trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
 [hidden] { display: none !important; }
 @media (max-width: 400px) { body { padding: 18px 12px; } fieldset, #contact-step, #success { padding: 16px 12px; } .models { gap: 14px; } .models button { min-width: 0; flex: 1; padding: 9px; } .option-buttons button { flex-basis: calc(50% - 9px); } legend { font-size: 21px; } .announcement span { display: block; margin-top: 8px; } }
+
+/* Keep the original storefront style while allowing a full phone category. */
+.models { flex-wrap: wrap; gap: 12px; }
+.models button { flex: 1 1 140px; min-width: 0; font-size: 18px; }
+.phone-models button { flex: 1 1 170px; min-height: 90px; }
+.option-detail { font-size: 12px; font-weight: normal; line-height: 1.4; }
+.payment { margin: 0 0 20px; background: white; }
+.payment label { display: flex; align-items: flex-start; gap: 10px; font-size: 16px; line-height: 1.5; }
+.payment input[type="radio"] { width: 20px; height: 20px; min-height: 0; padding: 0; margin: 2px 0 0; flex: 0 0 20px; }
+@media (max-width: 400px) { .models button { flex: 1 1 calc(50% - 12px); } .phone-models button { flex-basis: calc(50% - 9px); } }
+
+.checkout-steps { display: flex; justify-content: space-between; gap: 8px; list-style: none; padding: 0; margin: 0 0 24px; font: 13px/1.4 Arial, sans-serif; color: #68606d; }
+.checkout-steps li { display: flex; align-items: center; gap: 7px; }
+.checkout-steps span { display: grid; place-items: center; width: 25px; height: 25px; flex-shrink: 0; border: 1px solid #cfc6d5; border-radius: 50%; }
+.checkout-steps [aria-current="step"] { color: #651096; font-weight: bold; }
+.checkout-steps [aria-current="step"] span { background: #7200cb; border-color: #7200cb; color: #fff600; }
+.summary-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
+.summary-actions button { font-size: 14px; min-height: 40px; padding: 8px 12px; }
+#share-message:empty { display: none; }
+#phone-hint { color: #59515f; margin-top: -8px; }
+.mobile-order { display: none; }
+@media (max-width: 700px) {
+  body { padding-bottom: calc(108px + env(safe-area-inset-bottom)); }
+  .mobile-order { display: flex; position: fixed; z-index: 10; bottom: 0; left: 0; right: 0; align-items: center; justify-content: space-between; gap: 12px; background: #ffffef; border-top: 2px solid #7200cb; box-shadow: 0 -5px 25px #24102e15; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); font-family: Arial, sans-serif; }
+  .mobile-order > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .mobile-order span { font-size: 12px; color: #59515f; }
+  .mobile-order strong { color: #651096; font-size: 18px; }
+  .mobile-order small { font-size: 10px; color: #59515f; }
+  .mobile-order button { flex-shrink: 0; color: white; background: #7200cb; border: 2px outset #a420ed; font-size: 14px; font-weight: bold; min-height: 46px; padding: 10px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; } }

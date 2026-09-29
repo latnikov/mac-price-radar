@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Макбучная — Mac mini и Mac Studio на заказ</title>
-  <meta name="description" content="Выберите конфигурацию Mac mini или Mac Studio и оставьте заявку в Макбучной. Нижний Новгород.">
+  <title>Макбучная — Mac, Google Pixel и другие товары на заказ</title>
+  <meta name="description" content="Mac mini, Mac Studio, актуальная линейка Google Pixel и другие товары Макбучной. Выберите товар, узнайте цену и оставьте заявку. Нижний Новгород.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%237200cb'/%3E%3Ctext x='4' y='25' font-family='serif' font-weight='bold' font-size='28' fill='%23ffff00'%3EМ%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="/style.css">
   <link rel="modulepreload" href="/catalog.mjs">
@@ -15,20 +15,23 @@
   <header>
     <p class="welcome">Добро пожаловать в</p>
     <h1>Макбучную!</h1>
-    <p class="city">Компьютеры Mac на заказ · Нижний Новгород</p>
+    <p class="city">Техника на заказ · Нижний Новгород</p>
     <div class="divider" aria-hidden="true"></div>
-    <p class="announcement"><b>НОВИНКИ APPLE</b> <span>Большие возможности. Маленькие компьютеры.</span></p>
+    <p class="announcement"><b>ВСЯ МАКБУЧНАЯ</b> <span>Mac, Google Pixel и другие товары — в одной форме.</span></p>
   </header>
   <main>
-    <nav aria-label="Выбор компьютера" class="models">
+    <ol class="checkout-steps" aria-label="Этапы заказа"><li data-step="configuration" aria-current="step"><span>1</span> Выбор товара</li><li data-step="contact"><span>2</span> Контакты</li><li data-step="success"><span>3</span> Готово</li></ol>
+    <nav aria-label="Выбор категории товара" class="models">
       <button type="button" data-model="mini" aria-pressed="true">Mac mini</button>
       <button type="button" data-model="studio" aria-pressed="false">Mac Studio</button>
+      <button type="button" data-model="pixel" aria-pressed="false">Google Pixel</button>
+      <button type="button" data-model="other" aria-pressed="false">Другой товар</button>
     </nav>
     <form id="configuration">
       <fieldset>
         <legend>1. Соберите свой <span id="model-name">Mac mini</span></legend>
-        <p class="step-note">Под выбранными вариантами показана текущая цена, под остальными — насколько цена увеличится или уменьшится.</p>
-        <div class="fields">
+        <p class="step-note" id="price-help">Под выбранными вариантами показана текущая цена, под остальными — насколько цена увеличится или уменьшится.</p>
+        <div class="fields" id="mac-fields">
           <div class="option-block">
             <p id="chip-label" class="option-label">Процессор <span>(чип и количество ядер)</span></p>
             <div id="chip-options" class="option-buttons" role="radiogroup" aria-labelledby="chip-label"></div>
@@ -46,14 +49,40 @@
             <div id="ethernet-options" class="option-buttons" role="radiogroup" aria-labelledby="ethernet-label"></div>
           </div>
         </div>
+        <div id="pixel-fields" hidden>
+          <p class="step-note">Актуальные смартфоны Google: серия 11, Pixel 10a и серия 10. Выберите модель и встроенную память.</p>
+          <div class="option-block">
+            <p id="phone-label" class="option-label">Модель Pixel</p>
+            <div id="phone-options" class="option-buttons phone-models" role="radiogroup" aria-labelledby="phone-label"></div>
+          </div>
+          <div class="option-block">
+            <p id="pixel-storage-label" class="option-label">Встроенная память</p>
+            <div id="pixel-storage-options" class="option-buttons" role="radiogroup" aria-labelledby="pixel-storage-label"></div>
+          </div>
+          <p id="pixel-specs" class="small"></p>
+          <p class="small">Цвет, регион поставки, наличие и срок привоза согласуем перед покупкой. Каталог не означает наличие на складе. <a href="https://store.google.com/us/category/phones?hl=en-US" target="_blank" rel="noopener noreferrer">Линейка Google</a></p>
+        </div>
+        <div id="other-fields" hidden>
+          <label for="other-description">Какой товар нужен?</label>
+          <input id="other-description" maxlength="500" minlength="3" placeholder="Например: MacBook Air, 16/512 ГБ, серебристый">
+          <p class="small">Укажите модель и нужные параметры. Возможность заказа, цену и срок привоза подтвердим по телефону.</p>
+        </div>
         <p id="studio-note" class="small" hidden>512 ГБ памяти: Apple заявляет доступность в конце октября. Пока этот вариант нельзя выбрать.</p>
       </fieldset>
       <section class="summary" aria-labelledby="summary-title">
-        <h2 id="summary-title">Ваш будущий Mac</h2>
+        <h2 id="summary-title">Ваш заказ</h2>
         <p id="selection" aria-live="polite"></p>
         <p id="price" class="price" aria-live="polite"></p>
-        <p>Это предварительная цена. Точную стоимость и срок привоза в Нижний Новгород подтвердим по телефону.</p>
+        <p id="quote-note">Это предварительная цена. Точную стоимость и срок привоза в Нижний Новгород подтвердим по телефону.</p>
+        <div class="summary-actions"><button id="retry-quote" type="button" hidden>Повторить расчёт</button><button id="share-selection" type="button">Ссылка на конфигурацию</button></div>
+        <p id="share-message" class="small" role="status"></p>
       </section>
+      <fieldset class="payment" aria-describedby="payment-note">
+        <legend>Способ оплаты</legend>
+        <label><input type="radio" name="payment" value="cash" checked> Наличные</label>
+        <label><input type="radio" name="payment" value="invoice"> Перевод на расчётный счёт от ИП/юрлица</label>
+        <p id="payment-note" class="small">Оплата в рублях после подтверждения заказа. Для ИП и юридических лиц выставим счёт.</p>
+      </fieldset>
       <button class="primary" id="continue-order" type="submit">Оформить заказ</button>
       <p class="small centered">Без оплаты на сайте. Сначала всё обсудим.</p>
     </form>
@@ -61,9 +90,11 @@
       <h2 id="contact-title" tabindex="-1">2. Как с вами связаться?</h2>
       <p id="contact-selection"></p>
       <p id="contact-price" class="price"></p>
+      <p id="contact-payment"></p>
       <form id="order">
         <label for="phone">Номер телефона <b aria-hidden="true">*</b></label>
-        <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="+7 (999) 123-45-67" maxlength="24" required>
+        <input id="phone" name="phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="+7 (999) 123-45-67" maxlength="24" aria-describedby="phone-hint form-error" required>
+        <p id="phone-hint" class="small">Позвоним, чтобы подтвердить заказ. Можно ввести номер с +7 или 8.</p>
         <label for="customer-name">Как вас зовут <span>(необязательно)</span></label>
         <input id="customer-name" name="name" autocomplete="name" maxlength="100" placeholder="Имя или ФИО">
         <div class="trap" aria-hidden="true"><label for="website">Ваш сайт</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
@@ -80,15 +111,16 @@
       <p>Мы свяжемся с вами по указанному телефону и подтвердим стоимость и срок привоза.</p>
       <p id="success-selection"></p>
       <p id="success-price" class="price"></p>
-      <button type="button" id="new-order">Выбрать ещё один Mac</button>
+      <button type="button" id="new-order">Выбрать ещё один товар</button>
     </section>
     <noscript>Для выбора конфигурации и отправки заявки включите JavaScript в браузере.</noscript>
+    <div id="mobile-order" class="mobile-order" hidden><div><span id="mobile-model">Mac mini</span><strong id="mobile-price"></strong><small>Предварительная стоимость</small></div><button id="mobile-continue" type="submit" form="configuration" disabled>Продолжить →</button></div>
   </main>
   <footer>
     <div class="divider" aria-hidden="true"></div>
     <p><b>Макбучная</b> · Нижний Новгород</p>
-    <p class="badges"><span>MADE WITH ♥ &amp; HTML</span> <span>MAC INSIDE</span></p>
-    <p class="small">Предварительные цены по прайсу. Конфигурации проверены 24.09.2026. <a href="/privacy.html">Обработка данных</a></p>
+    <p class="badges"><span>MADE WITH ♥ &amp; HTML</span> <span>MAC + PIXEL</span></p>
+    <p class="small">Предварительные цены по прайсу; для товаров без цены — расчёт по заявке. Mac: 24.09.2026. Pixel: 27.09.2026. <a href="/privacy.html">Обработка данных</a></p>
   </footer>
 </body>
 </html>

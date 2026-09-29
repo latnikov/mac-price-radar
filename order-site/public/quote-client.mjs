@@ -13,7 +13,9 @@ export function createQuoteLoader({ fetchImpl = fetch, now = Date.now, ttlMs = 3
     const response = await fetchImpl(`/api/quote?${query}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Не удалось рассчитать цену.');
-    if (!Number.isInteger(data.priceRub) || !data.stepPricesRub) throw new Error('Не удалось рассчитать цену.');
+    const priced = Number.isInteger(data.priceRub) && data.priceRub > 0;
+    const onRequest = data.priceRub === null && data.priceStatus === 'on_request';
+    if ((!priced && !onRequest) || !data.stepPricesRub) throw new Error('Не удалось рассчитать цену.');
     if (cache.size >= 100) cache.delete(cache.keys().next().value);
     cache.set(key, { data, expiresAt: now() + ttlMs });
     return data;

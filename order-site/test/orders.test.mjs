@@ -114,6 +114,7 @@ test('keeps the 50 base totals private and publishes only final ruble quotes', a
   assert.equal(quote.stepPricesRub.storage[512], 22145);
   assert.equal(quote.stepPricesRub.chip['m5pro-15-16'], 88844);
   assert.equal(privatePricing.status, 404);
+  assert.equal((await fetch(`${base}/pixel-pricing.mjs`)).status, 404);
 });
 
 test('quotes both surcharges and savings relative to the current selection', () => {
@@ -129,7 +130,7 @@ test('quotes both surcharges and savings relative to the current selection', () 
 
 test('assets and quotes revalidate without caching orders, status or relay responses', async t => {
   const { base, post } = await setup(t);
-  for (const path of ['/', '/app.js', '/quote-client.mjs', '/catalog.mjs', '/style.css', '/api/quote?model=mini&chip=m6-12-12&memory=16&storage=256&ethernet=2.5']) {
+  for (const path of ['/', '/app.js', '/quote-client.mjs', '/selection-link.mjs', '/catalog.mjs', '/style.css', '/api/quote?model=mini&chip=m6-12-12&memory=16&storage=256&ethernet=2.5']) {
     const first = await fetch(base + path);
     assert.equal(first.status, 200);
     assert.equal(first.headers.get('cache-control'), 'private, no-cache');
@@ -152,4 +153,78 @@ test('assets and quotes revalidate without caching orders, status or relay respo
     assert.equal(response.headers.get('etag'), null);
   }
   assert.equal((await post()).headers.get('cache-control'), 'no-store');
+});
+
+test('all 25 Pixel variants validate, quote and reject forged storage/model values', async t => {
+  const { base, post, service } = await setup(t);
+  let variants = 0;
+  assert.equal(catalog.pixelModels.length, 9);
+  for (const phone of catalog.pixelModels) {
+    for (const storage of phone.storage) {
+      variants++;
+      const configuration = { model: 'pixel', phone: phone.id, storage };
+      const response = await fetch(`${base}/api/quote?${new URLSearchParams(configuration)}`);
+      assert.equal(response.status, 200);
+      const quote = await response.json();
+      assert.equal(quote.priceRub, null); // No invented retail price without an approved supplier price.
+      assert.equal(quote.priceStatus, 'on_request');
+      assert.deepEqual(Object.keys(quote.stepPricesRub['pixel-storage']).map(Number), phone.storage);
+      assert.equal(quote.stepPricesRub.phone[phone.id], null);
+    }
+  }
+  assert.equal(variants, 25);
+  for (const phone of ['pixel-99', 'pixel-11']) {
+    assert.equal((await fetch(`${base}/api/quote?model=pixel&phone=${phone}&storage=99999`)).status, 400);
+  }
+  const payload = { ...order(), configuration: { model: 'pixel', phone: 'pixel-11-pro', storage: 512 }, paymentMethod: 'invoice', priceRub: 1 };
+  const response = await post(payload);
+  assert.equal(response.status, 201);
+  const saved = JSON.parse(service.db.prepare('SELECT payload FROM orders').get().payload);
+  assert.equal(saved.priceRub, null);
+  assert.equal(saved.priceStatus, 'on_request');
+  assert.equal(saved.paymentMethod, 'invoice');
+  assert.match(saved.configurationDescription, /Pixel 11 Pro \(512 ГБ, 16 ГБ/);
+  assert.equal((await post(payload)).status, 200);
+  assert.equal((await post({ ...payload, paymentMethod: 'cash' })).status, 409);
+});
+
+test('custom product requests and payment allowlist work without quoting zero rubles', async t => {
+  const { post, service, base } = await setup(t);
+  const payload = { ...order(), configuration: { model: 'other', description: '  MacBook Air 16/512  ' }, paymentMethod: 'cash' };
+  const response = await post(payload);
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).priceRub, null);
+  const saved = JSON.parse(service.db.prepare('SELECT payload FROM orders').get().payload);
+  assert.equal(saved.configuration.description, 'MacBook Air 16/512');
+  for (const description of ['', 'a', 'x'.repeat(501), 'Injected\nmessage']) {
+    assert.equal((await post({ ...payload, configuration: { model: 'other', description } })).status, 400);
+  }
+  for (const paymentMethod of ['bitcoin', 'crypto', 'card', {}, null]) {
+    assert.equal((await post({ ...payload, paymentMethod })).status, 400);
+  }
+  const page = await (await fetch(base)).text();
+  assert.doesNotMatch(page, /bitcoin|крипт|битко/i);
+  assert.match(page, /Перевод на расчётный счёт от ИП\/юрлица/);
+  assert.match(page, /Наличные/);
+});
+
+test('Pixel and custom requests survive restart and relay with payment and no false price', async t => {
+  const key = 'test-only-relay-secret-not-production-12345';
+  const { post, args } = await setup(t, { env: { ORDER_DELIVERY_MODE: 'relay', ORDER_RELAY_KEY: key } });
+  await post({ ...order(), configuration: { model: 'pixel', phone: 'pixel-10a', storage: 128 }, paymentMethod: 'invoice' }, 'pixel-restart-key-0001');
+  await post({ ...order(), configuration: { model: 'other', description: '<b>MacBook Air</b>' }, paymentMethod: 'cash' }, 'other-restart-key-0001');
+  const recovered = createOrderService(args);
+  await new Promise(r => recovered.server.listen(0, '127.0.0.1', r));
+  try {
+    const response = await fetch(`http://127.0.0.1:${recovered.server.address().port}/api/relay/claim`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body: '{}' });
+    const { notifications } = await response.json();
+    assert.equal(notifications.length, 2);
+    assert.match(notifications[0].text, /Google Pixel 10a/);
+    assert.match(notifications[0].text, /Перевод на расчётный счёт от ИП\/юрлица/);
+    assert.match(notifications[1].text, /Другой товар: <b>MacBook Air<\/b>/);
+    for (const { text } of notifications) {
+      assert.match(text, /Цена: по запросу/);
+      assert.doesNotMatch(text, /0 ₽|NaN|undefined/);
+    }
+  } finally { await recovered.close(); }
 });

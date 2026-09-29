@@ -1,4 +1,5 @@
 import { catalog, validateConfiguration } from './catalog.mjs';
+import { pixelCustomerTotalsUsd, convertPixelCustomerTotal } from './pixel-pricing.mjs';
 
 // Customer totals from the supplied workbook. This module is server-only.
 const totalsUsd = {
@@ -45,6 +46,8 @@ export const pricingInfo = Object.freeze({
 
 export function quoteCustomerPrice(value) {
   const configuration = validateConfiguration(value);
+  if (configuration.model === 'other') return null;
+  if (configuration.model === 'pixel') return convertPixelCustomerTotal(configuration, pixelCustomerTotalsUsd, pricingInfo.usdRub, pricingInfo.rateAdjustmentRub);
   const totalUsd = totalsUsd[configuration.chip]?.[`${configuration.memory}-${configuration.storage}`];
   if (!Number.isInteger(totalUsd)) throw new Error('Для этой конфигурации пока нет предварительной цены.');
   return Math.round(totalUsd * (pricingInfo.usdRub + pricingInfo.rateAdjustmentRub));
@@ -54,6 +57,22 @@ export function quoteCustomerPrice(value) {
 // UI in sync with the authoritative price table without publishing source amounts.
 export function quoteConfigurator(value) {
   const configuration = validateConfiguration(value);
+  if (configuration.model === 'other') return { priceRub: null, priceStatus: 'on_request', stepPricesRub: {} };
+  if (configuration.model === 'pixel') {
+    const phone = catalog.pixelModels.find(item => item.id === configuration.phone);
+    const priceRub = quoteCustomerPrice(configuration);
+    const difference = candidate => {
+      const candidatePrice = quoteCustomerPrice(candidate);
+      return Number.isInteger(candidatePrice) && Number.isInteger(priceRub) ? candidatePrice - priceRub : null;
+    };
+    return {
+      priceRub, priceStatus: Number.isInteger(priceRub) ? 'estimated' : 'on_request',
+      stepPricesRub: {
+        phone: Object.fromEntries(catalog.pixelModels.map(item => [item.id, difference({ model: 'pixel', phone: item.id, storage: item.id === phone.id ? configuration.storage : item.storage[0] })])),
+        'pixel-storage': Object.fromEntries(phone.storage.map(storage => [storage, difference({ ...configuration, storage })])),
+      },
+    };
+  }
   const model = catalog.models.find(item => item.id === configuration.model);
   const chip = model.chips.find(item => item.id === configuration.chip);
   const quote = overrides => quoteCustomerPrice({ ...configuration, ...overrides });
