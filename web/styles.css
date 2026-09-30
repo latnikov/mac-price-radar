@@ -249,3 +249,19 @@ td .trust-badge { margin: 7px 0 0; }
 }
 
 .search-overview { margin: 0 0 18px; padding: 20px 24px; border: 1px solid #dce2eb; border-radius: 12px; background: #f0f5ff; line-height: 1.7; overflow-wrap: anywhere; }
+
+/* Column visibility controls stay outside the horizontally scrolling table. */
+.column-controls, .column-group-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.column-controls { margin-bottom: 14px; }
+.column-controls button, .column-menu summary { min-height: 34px; padding: 8px 11px; font-size: 12px; }
+.column-group-toggle[aria-expanded="false"] { background: #edf1f6; color: #68768b; border-style: dashed; }
+.column-menu { position: relative; }
+.column-menu summary { cursor: pointer; border: 1px solid #dce2eb; border-radius: 10px; background: white; }
+.column-options { position: absolute; top: calc(100% + 6px); left: 0; z-index: 8; width: min(320px, 80vw); max-height: 55vh; overflow: auto; padding: 12px; background: white; border: 1px solid #dce2eb; border-radius: 12px; box-shadow: 0 12px 32px #263a5d20; }
+.column-options fieldset { margin: 0 0 10px; padding: 8px; border: 1px solid #e6eaf0; border-radius: 8px; }
+.column-options legend { color: #536278; font-size: 12px; }
+.column-options label { display: flex; align-items: center; gap: 8px; min-height: 34px; font-size: 12px; cursor: pointer; }
+.column-options input { width: 16px; height: 16px; accent-color: var(--accent); }
+.retailer-heading { position: sticky; padding-right: 38px; }
+.column-collapse { position: absolute; top: 8px; right: 5px; min-height: 26px; width: 26px; padding: 0; border-color: transparent; background: transparent; color: inherit; }
+@media (max-width: 600px) { .column-menu { position: static; } .column-controls { position: relative; } .column-options { top: 100%; width: min(320px, 100%); } }

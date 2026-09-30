@@ -10,6 +10,18 @@ const state = {
   filters: emptyFilters(), page: 1,
 };
 const searchIndex = new WeakMap();
+const COLUMN_STORAGE_KEY = 'mac-price-radar:columns:v1';
+const hiddenGroups = new Set(), hiddenColumns = new Set();
+try {
+  const saved = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || '{}');
+  for (const [values, target] of [[saved.groups, hiddenGroups], [saved.columns, hiddenColumns]]) {
+    if (Array.isArray(values)) for (const key of values) if (typeof key === 'string') target.add(key);
+  }
+} catch { /* A blocked or damaged browser store must not prevent loading prices. */ }
+function saveColumns() {
+  try { localStorage.setItem(COLUMN_STORAGE_KEY, JSON.stringify({ groups: [...hiddenGroups], columns: [...hiddenColumns] })); } catch { /* Keep this session's selection. */ }
+}
+
 function restoreView() {
   const view = readView(location.hash);
   state.filters = view.filters;
@@ -343,13 +355,78 @@ function priceRow(group, priceGroups) {
   return row;
 }
 
+// The model and price calculations always include all sources. Only presentation changes.
+function renderColumnControls(priceGroups) {
+  const headings = [...$('head').querySelector('.retailer-headings').children];
+  const groups = [{ key: 'analytics', label: 'Ритейл-аналитика', retailers: ['minimum', 'average', 'difference', 'recommendation'].map((key, i) => ({ key: `analytics:${key}`, label: headings[i].textContent })) }, ...priceGroups];
+  const columns = groups.flatMap(group => group.retailers.map(column => ({ ...column, group: group.key })));
+  const groupHeadings = [...$('head').querySelector('.column-groups').children].slice(1);
+  const rows = [...$('rows').children];
+  const controls = $('column-controls');
+  const menuOpen = controls.querySelector('details')?.open || false;
+  const buttons = text('div', null, 'column-group-buttons');
+  const menu = text('details', null, 'column-menu'); menu.open = menuOpen;
+  menu.append(text('summary', 'Столбцы'));
+  const options = text('div', null, 'column-options');
+  const groupButtons = [], checkboxes = [];
+  const apply = () => {
+    const visible = columns.map(column => !hiddenGroups.has(column.group) && !hiddenColumns.has(column.key));
+    headings.forEach((heading, i) => { heading.hidden = !visible[i]; });
+    rows.forEach(row => { columns.forEach((column, i) => { row.children[i + 1].hidden = !visible[i]; }); });
+    groups.forEach((group, i) => {
+      const count = columns.filter((column, j) => column.group === group.key && visible[j]).length;
+      groupHeadings[i].hidden = !count; groupHeadings[i].colSpan = Math.max(1, count);
+      groupButtons[i].textContent = `${count ? '−' : '+'} ${group.label} · ${count}/${group.retailers.length}`;
+      groupButtons[i].setAttribute('aria-expanded', String(count > 0));
+      groupButtons[i].title = `${count ? 'Свернуть' : 'Развернуть'} группу «${group.label}»`;
+    });
+    checkboxes.forEach((input, i) => { input.checked = visible[i]; });
+    $('avito-jump').hidden = !columns.some((column, i) => column.group === 'avito' && visible[i]);
+    reset.disabled = !hiddenGroups.size && !hiddenColumns.size;
+  };
+  for (const group of groups) {
+    const button = text('button', '', 'column-group-toggle'); button.type = 'button';
+    button.addEventListener('click', () => {
+      const shown = !hiddenGroups.has(group.key) && group.retailers.some(column => !hiddenColumns.has(column.key));
+      if (shown) hiddenGroups.add(group.key);
+      else {
+        hiddenGroups.delete(group.key);
+        if (group.retailers.every(column => hiddenColumns.has(column.key))) group.retailers.forEach(column => hiddenColumns.delete(column.key));
+      }
+      saveColumns(); apply();
+    });
+    buttons.append(button); groupButtons.push(button);
+    const fieldset = text('fieldset'); fieldset.append(text('legend', group.label));
+    for (const column of group.retailers) {
+      const label = text('label'); const input = document.createElement('input'); input.type = 'checkbox';
+      input.addEventListener('change', () => {
+        if (input.checked) { hiddenGroups.delete(group.key); hiddenColumns.delete(column.key); }
+        else hiddenColumns.add(column.key);
+        saveColumns(); apply();
+      });
+      label.append(input, document.createTextNode(column.label + (column.profileLabel ? ` · ${column.profileLabel}` : '')));
+      fieldset.append(label); checkboxes.push(input);
+    }
+    options.append(fieldset);
+  }
+  headings.forEach((heading, i) => {
+    const button = text('button', '−', 'column-collapse'); button.type = 'button';
+    button.title = `Свернуть столбец «${columns[i].label}»`; button.setAttribute('aria-label', button.title);
+    button.addEventListener('click', () => { hiddenColumns.add(columns[i].key); saveColumns(); apply(); groupButtons[groups.findIndex(group => group.key === columns[i].group)].focus({ preventScroll: true }); });
+    heading.append(button);
+  });
+  const reset = text('button', 'Показать все', 'secondary'); reset.type = 'button';
+  reset.addEventListener('click', () => { hiddenGroups.clear(); hiddenColumns.clear(); saveColumns(); apply(); });
+  menu.append(options); controls.replaceChildren(buttons, menu, reset); apply();
+}
+
 function render({ keepPage = false } = {}) {
   if (!keepPage) state.page = 1;
   saveView(); renderActiveFilters();
   const ready = state.filters.family !== null && state.filters.chip !== null;
   $('sort').disabled = !ready; $('export').disabled = !ready;
   $('selection-prompt').hidden = ready;
-  for (const id of ['table-wrap', 'table-meta']) $(id).hidden = !ready;
+  for (const id of ['table-wrap', 'table-meta', 'column-controls']) $(id).hidden = !ready;
   $('pagination').hidden = true;
   $('search-overview').hidden = true;
   if (!ready) { $('rows').replaceChildren(); $('head').replaceChildren(); $('empty').hidden = true; return; }
@@ -414,6 +491,7 @@ function render({ keepPage = false } = {}) {
     fragment.append(priceRow(group, priceGroups));
   }
   $('rows').replaceChildren(fragment);
+  renderColumnControls(priceGroups);
   $('empty').hidden = page.total > 0;
   $('table-wrap').hidden = !page.total;
   $('pagination').hidden = page.pages <= 1;
@@ -558,7 +636,7 @@ $('clear-search').addEventListener('click', () => { $('search').value = ''; rend
 $('clear-specs').addEventListener('click', () => { resetSpecs(); state.filters.chip = '*'; $('search').value = ''; renderControls(); render(); });
 window.addEventListener('hashchange', () => { restoreView(); renderControls(); render(); });
 $('avito-jump').addEventListener('click', () => {
-  const target = $('head').querySelector('.retailer-heading.retailer-avito');
+  const target = $('head').querySelector('.retailer-heading.retailer-avito:not([hidden])');
   if (!target) return;
   const wrap = $('table-wrap');
   const modelWidth = $('head').querySelector('.model-heading').getBoundingClientRect().width;
