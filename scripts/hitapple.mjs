@@ -88,13 +88,13 @@ function normalizedTitle(title) {
   return clean(title).replace(/(\d+)\s*-?core\s*,\s*(?:GPU\s*)?(\d+)\s*-?core\b/gi, '$1-core CPU / $2-core GPU');
 }
 
-function normalizedOffer({ title, url, amount, rawPrice, stock, externalId, productId = externalId, variantId = null, fetchedAt, evidence }) {
+function normalizedOffer({ title, url, amount, rawPrice, stock, externalId, productId = externalId, variantId = null, minimumQuantity = 1, fetchedAt, evidence }) {
   const offer = parseProduct(normalizedTitle(title), url, 'HitApple', amount, fetchedAt, {
     externalId, sourceProductId: productId, ...(variantId ? { sourceVariantId: variantId } : {}),
     sourceCity: 'Нижний Новгород', sourceSite: 'hitapple.ru', rawPrice,
     condition: 'new', region: 'unknown', keyboard: 'unknown', displayType: 'standard', bundle: 'standard',
-    priceType: 'full', paymentMethod: 'cash', buyerType: 'retail', minimumQuantity: 1, stock,
-    evidence: { ...evidence, sourceProductTitle: title,
+    priceType: 'full', paymentMethod: 'cash', buyerType: 'retail', minimumQuantity, stock,
+    evidence: { ...evidence, sourceProductTitle: evidence.sourceProductTitle ?? title,
       priceMeaning: 'Текущая розничная цена при наличном расчёте; старая цена и рассрочка исключены',
       availabilityMeaning: 'Наличие из публичного WooCommerce каталога или выбранного варианта' },
   });
@@ -216,20 +216,25 @@ export function parseHitappleVariations(html, pageUrl, { expectedProductId, fetc
     combinations.add(key);
     const amount = price(variant.display_price);
     if (!amount) throw fail(`invalid current variant price: ${id}`);
+    const renderedPrice = load(String(variant.price_html || ''));
+    if (currentPrice(renderedPrice, renderedPrice.root()).amount !== amount) throw fail(`variant price differs from rendered RUB price: ${id}`);
+    const minimumQuantity = Number(variant.min_qty ?? 1);
+    if (!Number.isInteger(minimumQuantity) || minimumQuantity < 1) throw fail(`invalid variant minimum quantity: ${id}`);
     if (typeof variant.is_in_stock !== 'boolean' || typeof variant.is_purchasable !== 'boolean' || typeof variant.variation_is_active !== 'boolean' || typeof variant.variation_is_visible !== 'boolean') throw fail(`missing variant availability: ${id}`);
     const colorLabel = selected.get('attribute_pa_czvet');
     const color = variantColor(colorLabel, variant, Boolean(neo));
     const memory = selected.get('attribute_pa_obem-pamyati');
     if (neo && !/^8\s*\/\s*(?:256|512)\s*GB$/i.test(memory)) throw fail(`unverified Neo memory: ${memory}`);
     const variantTitle = `${neo || normalizedTitle(title)} ${memory} ${color}`;
-    const stock = !variant.is_in_stock || !variant.is_purchasable || !variant.variation_is_active || !variant.variation_is_visible ? 'OutOfStock' : variant.backorders_allowed ? 'PreOrder' : 'InStock';
+    const onBackorder = /available-on-backorder|предзаказ|под заказ|on backorder/i.test(String(variant.availability_html || ''));
+    const stock = !variant.is_in_stock || !variant.is_purchasable || !variant.variation_is_active || !variant.variation_is_visible || onBackorder ? 'OutOfStock' : 'InStock';
     offers.push(normalizedOffer({ title: variantTitle, url: productUrl(variantUrl.href), amount, rawPrice: String(variant.display_price), stock,
-      externalId: id, productId, variantId: id, fetchedAt,
+      externalId: id, productId, variantId: id, minimumQuantity, fetchedAt,
       evidence: { method: 'woocommerce-product-variations-v1', productPage: url, sourceProductTitle: title,
         sourceVariantId: id, sourceVariantAttributes: variant.attributes, sourceColorLabel: colorLabel,
         sourceCurrentPrice: variant.display_price, sourceRegularPrice: variant.display_regular_price,
         cashPriceNotice: 'Цена указана при наличном расчёте', sourceInStock: variant.is_in_stock,
-        sourcePurchasable: variant.is_purchasable, sourceBackordersAllowed: variant.backorders_allowed,
+        sourcePurchasable: variant.is_purchasable, sourceBackordersAllowed: variant.backorders_allowed, sourceOnBackorder: onBackorder,
         ...(neo ? { detailSpecifications: 'A18 Pro; 6 ядер CPU; 5 ядер GPU; 8 ГБ памяти; 13-дюймовый экран', sourceColorImage: variant.image?.url || variant.image?.title, supplementedFields: ['chip', 'screenIn', 'cpuCores', 'gpuCores'] } : {}),
       } }));
   }
@@ -237,7 +242,7 @@ export function parseHitappleVariations(html, pageUrl, { expectedProductId, fetc
 }
 
 /** Completes every category and exact variant before returning a new snapshot. */
-export async function fetchHitappleOffers({ fetchPage = url => fetch(url), maxPages = 30 } = {}) {
+export async function fetchHitappleOffers({ fetchPage = url => fetch(url, { signal: AbortSignal.timeout(20000) }), maxPages = 30 } = {}) {
   if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 100) throw fail('maxPages must be between 1 and 100');
   const fetchedAt = new Date().toISOString();
   const seen = new Set(), entries = new Map(), variableProducts = new Map();
@@ -280,7 +285,7 @@ export async function fetchHitappleOffers({ fetchPage = url => fetch(url), maxPa
     for (const entry of entries.values()) {
       if (entry.type !== 'variation' || parentUrl(entry.url) !== url) continue;
       const offer = byId.get(entry.id);
-      if (!offer || offer.url !== entry.url || offer.price !== entry.amount || (offer.stock === 'OutOfStock') !== (entry.stock === 'OutOfStock')) throw fail(`incomplete crawl: variant ${entry.id} differs between catalogue and product page`);
+      if (!offer || offer.url !== entry.url || offer.price !== entry.amount || !offer.evidence.sourceInStock !== (entry.stock === 'OutOfStock')) throw fail(`incomplete crawl: variant ${entry.id} differs between catalogue and product page`);
     }
     for (const offer of parsed.offers) {
       if (entries.get(offer.externalId)?.type === 'simple' || offers.some(prior => prior.externalId === offer.externalId)) throw fail('duplicate offer identity');
