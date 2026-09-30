@@ -45,6 +45,22 @@ test('an unknown POST holds its full reservation and cannot be retried automatic
   assert.equal(gate.budget.remainingUsd, 4.441);
 });
 
+test('the last allowed run imports its result and pauses instead of promising another hourly update', async t => {
+  const ledger = initialLedger();
+  for (let i = 0; i < 8; i++) ledger.entries.push({ runId: `pastRun${i}`, status: 'SUCCEEDED', costUsd: 0.365, startedAt: start, importedAt: start });
+  const f = await fixture(t, ledger);
+  let posts = 0;
+  const result = await runApifyWorker({ ...f.options, fetchImpl: async (url, options) => {
+    if (options.method === 'POST') { posts++; return reply({ data: run() }, 201); }
+    return reply([]);
+  }, importRun: async () => ({ counts: { accepted: 0 } }) });
+  assert.equal(posts, 1);
+  assert.equal(result.state, 'paused');
+  assert.equal(result.schedule.enabled, false);
+  assert.equal(result.budget.runsUsed, 10);
+  assert.equal(result.nextRunAt, null);
+});
+
 test('successful execution persists a reservation before POST, imports safely and waits before another paid run', async t => {
   const f = await fixture(t), calls = [], imports = [];
   const fetchImpl = async (url, options) => {

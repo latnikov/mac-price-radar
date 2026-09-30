@@ -24,7 +24,10 @@ function validateLedger(ledger) {
   if (!ledger || ledger.schemaVersion !== 1 || !Array.isArray(ledger.entries)) throw safeError('LEDGER', 'Apify: журнал бюджета отсутствует или повреждён; нужен проверенный начальный расход');
   const ids = new Set();
   for (const entry of ledger.entries) {
-    if (!entry || typeof entry !== 'object' || typeof entry.status !== 'string') throw safeError('LEDGER', 'Apify: повреждена запись журнала бюджета');
+    if (!entry || typeof entry !== 'object' || ![...RUNNING, ...TERMINAL, 'POSTING', 'POST_UNKNOWN'].includes(entry.status))
+      throw safeError('LEDGER', 'Apify: повреждена запись журнала бюджета');
+    if ((RUNNING.has(entry.status) || TERMINAL.has(entry.status)) && !validId(entry.runId))
+      throw safeError('LEDGER', 'Apify: в журнале отсутствует ID уже запущенного сбора');
     if (entry.runId) {
       if (!validId(entry.runId) || ids.has(entry.runId)) throw safeError('LEDGER', 'Apify: некорректный или повторный ID запуска в журнале');
       ids.add(entry.runId);
@@ -343,7 +346,9 @@ export async function runApifyWorker({
     }
     if (!await finish(entry, run)) return state('running', 'Сбор Apify продолжается; новый платный запуск не создаётся');
     gate = evaluateApifyBudget(ledger, { ...config, now: time() });
-    return state(gate.reason === 'needs_reconciliation' ? 'needs_attention' : 'partial',
+    const finalState = gate.reason === 'needs_reconciliation' ? 'needs_attention'
+      : ['run_limit', 'budget_limit', 'period_ended'].includes(gate.reason) ? 'paused' : 'partial';
+    return state(finalState,
       gate.reason === 'needs_reconciliation' ? gateMessage(gate.reason) : `Выгрузка Apify импортирована. ${gateMessage(gate.reason)}`);
   } catch (error) {
     if (error.code === 'LOCK') return { state: 'locked', transport: 'apify', message: error.message };
