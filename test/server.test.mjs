@@ -22,10 +22,21 @@ test('Avito API exposes ranked seller prices, honest readiness and no excluded s
   assert.equal(table.offers[0].sellerName, 'Алексей');
   assert.equal(table.offers[0].marketplaceSellerType, 'private');
   assert.equal(table.offers[0].condition, 'used');
-  assert.equal(table.offers[0].avitoRank.version, 'seller-robust-logprice-v1');
-  assert.equal(table.offers[0].avitoRank.independentSellers, 0);
+  assert.equal(table.offers[0].avitoRank.version, 'russian-procurement-gap-v1');
+  assert.equal(table.offers[0].avitoRank.referencePrice, null);
+  assert.equal(table.offers[0].avitoRank.procurement, null);
   assert.equal((await (await app.request('/api/status')).json()).avito.state, 'not_configured');
   assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Авито НН'));
+  const monitor = await (await app.request('/api/avito-monitor')).json();
+  assert.equal(monitor.listings.length, 1);
+  assert.equal(monitor.listings[0].rank.referencePrice, null);
+  app.store.ingestRun({ observations: [{ ...offer, retailer:'BSA',listingId:'bsa:procurement',sourceId:'telegram:bsa',sellerId:'bsa',
+    sourceType:'telegram_channel',condition:'new',price:offer.price+20000,priceMinor:(offer.price+20000)*100 }] });
+  const compared = await (await app.request('/api/avito-monitor')).json();
+  assert.equal(compared.listings[0].rank.referencePrice, offer.price+20000);
+  assert.equal(compared.listings[0].rank.deltaRub, 17000);
+  assert.equal(compared.listings[0].rank.procurement.retailer, 'BSA');
+  assert.equal(compared.listingSummary.compared, 1);
 });
 
 test('table API preserves marketplace profile IDs for per-seller Air M5 15 comparison', async t => {

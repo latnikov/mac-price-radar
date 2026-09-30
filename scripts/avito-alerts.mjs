@@ -25,9 +25,16 @@ function validChat(value) {
 }
 
 function formatCandidate(candidate, opportunities, now) {
+  const procurement = candidate?.comparisonKind === 'russian-procurement-gap'
+    && candidate.matchKind === 'same_color' && candidate.procurement?.condition === 'new'
+    && ['Дима','BSA'].includes(candidate.procurement?.retailer)
+    && candidate.procurement.price === candidate.referencePrice
+    && Number.isFinite(Date.parse(candidate.procurement.observedAt))
+    && Date.parse(candidate.procurement.observedAt) <= now + 60_000
+    && now - Date.parse(candidate.procurement.observedAt) <= 72*3_600_000;
+  const peers = candidate?.comparisonKind === 'used-asking-price-spread' && Number.isInteger(candidate.peerCount) && candidate.peerCount >= 3;
   if (!candidate || candidate.alertEligible !== true || candidate.condition !== 'used'
-    || candidate.marketplaceSellerType !== 'private' || candidate.comparisonKind !== 'used-asking-price-spread'
-    || !Number.isInteger(candidate.peerCount) || candidate.peerCount < 3
+    || candidate.marketplaceSellerType !== 'private' || (!procurement && !peers)
     || typeof candidate.dedupKey !== 'string' || !/^avito:\d+:\d+$/.test(candidate.dedupKey)
     || candidate.dedupKey.length > 150 || !positive(candidate.price) || !positive(candidate.referencePrice)) return null;
   const delta = candidate.estimatedDeltaRub ?? candidate.deltaRub;
@@ -45,10 +52,12 @@ function formatCandidate(candidate, opportunities, now) {
   const text = [
     'Авито Сигналы · стоит проверить', title, `Б/у · частный продавец: ${seller}.`, '',
     `Цена Авито: ${rubles(candidate.price)}`,
-    `Минимальная цена сопоставимых б/у у других частников: ${rubles(candidate.referencePrice)}`,
+    procurement ? `Русский закуп нового MacBook · ${candidate.procurement.retailer}: ${rubles(candidate.referencePrice)}`
+      : `Минимальная цена сопоставимых б/у у других частников: ${rubles(candidate.referencePrice)}`,
     `Резерв на дополнительные расходы: ${rubles(reserve)}`,
     `Разница после резерва: ${rubles(delta)}${fraction}`,
-    '', 'Ориентир — цены объявлений, а не состоявшихся сделок. Проверьте состояние, аккумулятор, ремонт и комплектацию.',
+    '', procurement ? 'Б/у сравнивается с закупом нового устройства. Это разница цен, не прибыль. Проверьте состояние, аккумулятор и ремонт.'
+      : 'Ориентир — цены объявлений, а не состоявшихся сделок. Проверьте состояние, аккумулятор, ремонт и комплектацию.',
     `Объявление проверено: ${atMoscow(observedAt)}`, '', url, `Таблица: ${SITE_URL}`,
   ].join('\n');
   return { key: candidate.dedupKey, text };
@@ -180,7 +189,8 @@ export async function sendAvitoAlerts({ opportunities, env = process.env,
       entry.status = 'unknown'; entry.reason = 'response_outcome_unknown';
       return finish('Telegram вернул неопределённый результат. Проверьте доставку вручную; этот сигнал повторно не отправляется.');
     }
-    const uncertain = Object.values(ledger.entries).some(entry => entry.status === 'unknown');
+    const uncertain = Object.values(ledger.entries).some(entry => entry.status === 'unknown'
+      && !(entry.resolution?.kind === 'excluded_by_current_policy' && Number.isFinite(Date.parse(entry.resolution.at))));
     return finish(`${sentCount ? `Отправлено новых сигналов: ${sentCount}.` : 'Новых сигналов для отправки нет.'}${uncertain ? ' Есть сигналы с неподтверждённой доставкой: проверьте чат вручную, автоматического повтора не будет.' : ''}`);
   } finally {
     await rm(lockPath, { recursive: true, force: true });

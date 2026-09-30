@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { calculateAvitoOpportunities } from '../scripts/avito-opportunities.mjs';
+import { calculatePrivatePeerOpportunities as calculateAvitoOpportunities } from '../scripts/avito-opportunities.mjs';
 import { AVITO } from '../scripts/avito-policy.mjs';
 
 const at = '2026-09-30T12:00:00.000Z', now = Date.parse(at);

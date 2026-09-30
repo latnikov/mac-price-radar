@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Авито — б/у MacBook от частников в Нижнем Новгороде</title>
-  <meta name="description" content="Б/у MacBook от частных продавцов на Авито в Нижнем Новгороде. Сравнение с объявлениями других частников и ручная проверка интересных предложений.">
+  <meta name="description" content="Б/у MacBook от частников Нижнего Новгорода. Ранжирование по разнице с русским закупом Димы и BSA.">
   <meta name="theme-color" content="#f5f6f8">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
@@ -47,6 +47,13 @@
       <p id="avito-monitor-notifications"></p>
     </div>
     <p id="avito-monitor-coverage" class="avito-monitor-note"></p>
+    <section class="avito-ranked" aria-labelledby="avito-ranked-title">
+      <div class="avito-opportunities-heading"><h3 id="avito-ranked-title">Все собранные объявления · русский закуп</h3><span id="avito-ranked-count" class="avito-opportunities-count"></span></div>
+      <p id="avito-ranked-summary" class="avito-monitor-note"></p>
+      <p class="avito-monitor-note">Сначала — наибольшая разница с минимальным закупом Димы/BSA для той же модели, чипа, RAM и SSD. Цвет и дата прайса указаны в сравнении. Б/у сравнивается с новым устройством; это не прибыль.</p>
+      <div class="avito-ranked-controls"><label>Поиск по всем объявлениям <input id="avito-ranked-search" type="search" placeholder="Модель, продавец, цена" maxlength="120"></label><button id="avito-ranked-export" type="button" class="secondary">Скачать CSV</button></div>
+      <div class="avito-ranked-scroll" tabindex="0" aria-label="Рейтинг объявлений"><table class="avito-ranked-table"><thead><tr><th>№</th><th>Объявление и продавец</th><th>Авито</th><th>Русский закуп · новое</th><th>Разница после 3 000 ₽</th><th>Что проверить</th></tr></thead><tbody id="avito-ranked-rows"></tbody></table></div>
+    </section>
     <section class="avito-opportunities" aria-labelledby="avito-opportunities-title">
       <div class="avito-opportunities-heading"><h3 id="avito-opportunities-title">Стоит проверить</h3><span id="avito-opportunities-count" class="avito-opportunities-count"></span></div>
       <p id="avito-opportunities-threshold" class="avito-monitor-note"></p>

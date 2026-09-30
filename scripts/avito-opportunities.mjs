@@ -1,5 +1,6 @@
 import { canonicalModelName, canonicalStorageGb, canonicalUrl, known, moneyMinor, normalize } from './domain.mjs';
 import { AVITO, avitoUrl, excludedSeller, businessSellerName } from './avito-policy.mjs';
+import { russianProcurementOffers, compareAvitoProcurement, AVITO_PROCUREMENT_VERSION } from './avito-procurement.mjs';
 
 export const AVITO_OPPORTUNITIES_VERSION = 'private-used-asking-spread-v2';
 const BASIC_FIELDS = ['model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color'];
@@ -71,7 +72,7 @@ function inScope(offer, now, maxAgeHours) {
  * sales or a resale/profit prediction. deltaPercent is after the reserve,
  * divided by that conservative reference. No network or input mutation occurs.
  */
-export function calculateAvitoOpportunities(offers, {
+export function calculatePrivatePeerOpportunities(offers, {
   now = Date.now(), minDeltaRub = 10_000, minDeltaPercent = 10,
   maxAgeHours = 4, costReserveRub = 3_000,
 } = {}) {
@@ -153,4 +154,24 @@ export function calculateAvitoOpportunities(offers, {
     candidates,
     summary: { avitoCount: avito.length, eligibleCount: scoped.length, insufficientBaselineCount, candidateCount: candidates.length, alertEligibleCount: candidates.filter(candidate => candidate.alertEligible).length },
   };
+}
+
+export function calculateAvitoOpportunities(offers, {now=Date.now(),minDeltaRub=10000,minDeltaPercent=10,maxAgeHours=4,costReserveRub=3000}={}) {
+  if(!Array.isArray(offers)||!Number.isFinite(now)||!(maxAgeHours>0))throw new TypeError('Invalid opportunity inputs');
+  minor(minDeltaRub,'minDeltaRub');minor(costReserveRub,'costReserveRub');percentage(minDeltaPercent,'minDeltaPercent');
+  const all=uniqueListings(offers),procurement=russianProcurementOffers(all,{now});
+  const avito=all.filter(o=>o.retailer===AVITO),scoped=avito.filter(o=>inScope(o,now,maxAgeHours));
+  const compared=scoped.map(o=>({offer:o,rank:compareAvitoProcurement(o,procurement,{now,costReserveRub})}));
+  const candidates=compared.filter(({rank:r})=>r.referencePrice!==null&&r.deltaRub>=minDeltaRub&&r.deltaPercent>=minDeltaPercent)
+    .map(({offer:o,rank:r})=>({...o,...r,configurationKey:configKey(o),sellerType:'private',peerCount:0,shopCount:1,
+      evidence:[r.procurement],observedAt:new Date(timestamp(o)).toISOString(),estimatedDeltaRub:r.deltaRub,
+      dedupKey:`avito:${o.externalId||new URL(o.url).pathname.match(/_(\d+)$/)[1]}:${moneyMinor(o.price)}`,
+      requiresReview:true,reviewReasons:r.reasons,status:'needs_review',comparisonNote:'Разница с русским закупом нового MacBook после резерва расходов; не прибыль.'}));
+  candidates.sort((a,b)=>b.deltaRub-a.deltaRub||String(a.listingId).localeCompare(String(b.listingId)));
+  return {version:AVITO_PROCUREMENT_VERSION,generatedAt:new Date(now).toISOString(),
+    thresholds:{minDeltaRub,minDeltaPercent,maxAgeHours,costReserveRub},
+    note:'Б/у MacBook частников Нижнего Новгорода сравниваются с актуальным русским закупом нового устройства (Дима/BSA). Разница после резерва — ориентир для проверки, не прибыль.',candidates,
+    summary:{avitoCount:avito.length,eligibleCount:scoped.length,procurementCount:procurement.length,
+      insufficientBaselineCount:compared.filter(x=>x.rank.referencePrice===null).length,candidateCount:candidates.length,
+      alertEligibleCount:candidates.filter(x=>x.alertEligible).length}};
 }

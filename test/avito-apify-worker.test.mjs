@@ -324,7 +324,18 @@ test('manual price-range collection uses documented filters and cannot repay an 
   await runApifyWorker(options); await runApifyWorker(options);
   assert.equal(posts,1);
   const entry=JSON.parse(await readFile(f.ledgerPath,'utf8')).entries.at(-1);
-  assert.equal(entry.requestKey,'initial:under50k');assert.deepEqual(entry.scope,{priceMin:0,priceMax:49999});
+  assert.equal(entry.requestKey,'initial:under50k');assert.deepEqual(entry.scope,{priceMin:0,priceMax:49999,query:'MacBook'});
+});
+
+test('targeted MacBook collection uses the documented query without the default URL overriding it', async t => {
+  const f = await fixture(t); let posts = 0;
+  const result = await runApifyWorker({...f.options,env:{...f.options.env,AVITO_APIFY_QUERY:'MacBook M4'},
+    requestKey:'targeted:m4',manualRun:true,importRun:async()=>({counts:{accepted:0}}),fetchImpl:async(url,options)=>{
+      if(options.method==='POST'){posts++;const input=JSON.parse(options.body);assert.equal(input.searchUrl,undefined);assert.equal(input.query,'MacBook M4');return reply({data:run()});}
+      return reply([]);
+    }});
+  assert.equal(posts,1);assert.equal(result.budget.limitUsd,5);
+  assert.equal(JSON.parse(await readFile(f.ledgerPath,'utf8')).entries.at(-1).scope.query,'MacBook M4');
 });
 
 test('actor lifetime allowance is separate from the shared $5 expense of every tested provider', () => {

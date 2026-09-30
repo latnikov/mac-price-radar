@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { calculateAvitoOpportunities } from './avito-opportunities.mjs';
 import { publicAvitoState } from './avito-access.mjs';
-import { avitoUrl, avitoUsedCondition, businessSellerName, macBookIdentity } from './avito-policy.mjs';
+import { AVITO, visibleAvitoOffer, avitoUrl, avitoUsedCondition, businessSellerName, macBookIdentity } from './avito-policy.mjs';
+import { rankAvitoProcurementOffers } from './avito-procurement.mjs';
 
 const read = async (path, fallback) => {
   try {
@@ -44,9 +45,24 @@ export async function readAvitoMonitor({ root, env = process.env, offers = [], n
   state.budget = Object.fromEntries(['limitUsd', 'spentUsd', 'remainingUsd', 'reservedUsd'].filter(key => Number.isFinite(saved.budget?.[key])).map(key => [key, saved.budget[key]]));
   if (Number.isFinite(Date.parse(saved.budget?.periodEndsAt))) state.budget.periodEndsAt = saved.budget.periodEndsAt;
   if (Number.isFinite(Date.parse(saved.nextRunAt))) state.nextRunAt = saved.nextRunAt;
-  return { state, opportunities: calculateAvitoOpportunities(offers, { now }),
+  const ranked=rankAvitoProcurementOffers(offers,{now}).filter(o=>o.retailer===AVITO && visibleAvitoOffer(o));
+  const review=Object.values(reviews).map(publicReview).filter(item=>item?.observedAt);
+  const acceptedIds=new Set(ranked.map(o=>String(o.externalId)));
+  const listings=[...ranked.map(o=>({id:String(o.externalId),title:safeText(o.title,300),url:o.url,
+    sellerName:safeText(o.sellerName,200),price:o.price,condition:'used',observedAt:o.observedAt||o.fetchedAt,
+    configuration:[o.model,o.chip,`${o.ramGb}/${o.storageGb}`,o.color].join(' · '),review:false,rank:o.avitoRank})),
+    ...review.filter(o=>!acceptedIds.has(o.id)).map(o=>({...o,review:true,
+      rank:{referencePrice:null,deltaRub:null,reasons:[o.reason,'Характеристики требуют проверки; сравнение с закупом не рассчитано']}}))];
+  listings.sort((a,b)=>Number(b.rank.referencePrice!==null)-Number(a.rank.referencePrice!==null)
+    || Number(b.rank.fresh===true)-Number(a.rank.fresh===true)
+    || (b.rank.deltaRub??-Infinity)-(a.rank.deltaRub??-Infinity)
+    || (a.price??Infinity)-(b.price??Infinity) || a.id.localeCompare(b.id));
+  listings.forEach((o,i)=>{o.position=i+1;});
+  return { state, opportunities: calculateAvitoOpportunities(offers, { now }),listings,
+    listingSummary:{total:listings.length,compared:listings.filter(o=>o.rank.referencePrice!==null).length,review:review.length,
+      procurementSources:['Дима','BSA'],procurementMaxAgeHours:72},
     coverage: { complete: false, message: 'Только б/у MacBook частных продавцов в Нижнем Новгороде. Полный охват не подтверждён: бюджет и бесплатный тариф ограничивают число карточек и запусков. Пропавшее из частичной выдачи объявление не считается проданным.' },
     notifications: { enabled: notifications.enabled === true, channel: notifications.channel === 'telegram' ? 'telegram' : 'site',
       lastSentAt: validDate(notifications.lastSentAt), message: safeText(notifications.message) },
-    review: Object.values(reviews).map(publicReview).filter(item => item?.observedAt).sort((a,b) => Date.parse(b.observedAt) - Date.parse(a.observedAt)).slice(0, 1000) };
+    review: review.sort((a,b) => Date.parse(b.observedAt) - Date.parse(a.observedAt)).slice(0, 1000) };
 }

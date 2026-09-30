@@ -36,7 +36,7 @@ export function monitorSummary(data = {}) {
   const minRub = finite(threshold.minDeltaRub) ? threshold.minDeltaRub : 10000;
   const minPercent = finite(threshold.minDeltaPercent) ? threshold.minDeltaPercent : 10;
   const candidates = Array.isArray(opportunities.candidates) ? opportunities.candidates.filter(item => item && typeof item === 'object'
-    && item.condition === 'used' && (item.sellerType ?? item.marketplaceSellerType) === 'private' && item.comparisonKind === 'used-asking-price-spread') : [];
+    && item.condition === 'used' && (item.sellerType ?? item.marketplaceSellerType) === 'private' && ['used-asking-price-spread','russian-procurement-gap'].includes(item.comparisonKind)) : [];
   const budget = state.budget || {};
   const spent = finite(budget.spentUsd) ? dollars.format(budget.spentUsd) : 'неизвестно';
   const trialBudget = finite(budget.limitUsd);
@@ -95,14 +95,15 @@ function candidateCard(candidate) {
   };
   heading.append(url ? link(title) : node('span', title));
   const prices = node('dl', null, 'avito-opportunity-prices');
-  for (const [label, value] of [['Цена Авито', candidate.price], ['Цена сопоставимых б/у', candidate.referencePrice]]) {
+  const procurement=candidate.comparisonKind==='russian-procurement-gap';
+  for (const [label, value] of [['Цена Авито', candidate.price], [procurement?'Русский закуп · новое':'Цена сопоставимых б/у', candidate.referencePrice]]) {
     const item = node('div'); item.append(node('dt', label), node('dd', rubles(value))); prices.append(item);
   }
   const delta = node('p', null, 'avito-opportunity-delta');
   const percent = finite(candidate.deltaPercent) ? ` · ${decimal.format(candidate.deltaPercent)}%` : '';
-  delta.append(node('span', 'Разница с объявлениями частников после резерва'), node('strong', `${rubles(candidate.estimatedDeltaRub ?? candidate.deltaRub)}${percent}`));
+  delta.append(node('span', procurement?'Разница с русским закупом после резерва':'Разница с объявлениями частников после резерва'), node('strong', `${rubles(candidate.estimatedDeltaRub ?? candidate.deltaRub)}${percent}`));
   card.append(heading, node('p', candidate.sellerName || 'Продавец не указан', 'avito-opportunity-seller'), prices, delta);
-  if (candidate.condition === 'used') card.append(node('p', 'Цены в объявлениях частников — не цены состоявшихся сделок. Нужна проверка состояния.', 'avito-opportunity-review'));
+  if (candidate.condition === 'used') card.append(node('p', procurement?'Б/у сравнивается с закупом нового устройства. Проверить состояние; разница не является прибылью.':'Цены в объявлениях частников — не цены состоявшихся сделок. Нужна проверка состояния.', 'avito-opportunity-review'));
   else if (candidate.requiresReview) card.append(node('p', 'Нужна ручная проверка объявления', 'avito-opportunity-review'));
   const reasons = Array.isArray(candidate.reasons) ? candidate.reasons.filter(reason => typeof reason === 'string').slice(0, 3) : [];
   if (reasons.length) {
@@ -131,6 +132,7 @@ function reviewCard(item) {
 }
 
 function render(data, root) {
+  renderRanked(data);
   const summary = monitorSummary(data);
   const set = (id, value) => { document.getElementById(id).textContent = value; };
   root.dataset.tone = summary.tone;
@@ -160,6 +162,44 @@ function render(data, root) {
   reviewMore.textContent = `На странице показаны первые ${REVIEW_LIMIT} из ${number.format(summary.reviews.length)} объявлений на проверке.`;
   document.getElementById('avito-monitor-content').hidden = false;
   document.getElementById('avito-monitor-error').hidden = true;
+}
+
+let rankedListings=[];
+function filteredRanked() {
+  const query=(document.getElementById('avito-ranked-search')?.value||'').trim().toLocaleLowerCase('ru');
+  return rankedListings.filter(o=>`${o.title} ${o.sellerName} ${o.configuration||''} ${o.price} ${o.rank?.procurement?.retailer||''}`.toLocaleLowerCase('ru').includes(query));
+}
+function drawRanked() {
+  const rows=filteredRanked().map(o=>{
+    const tr=node('tr');tr.append(node('td',o.position));
+    const listing=node('td'),url=avitoListingUrl(o.url),title=node(url?'a':'span',o.title||'MacBook');
+    if(url){title.href=url;title.target='_blank';title.rel='noopener noreferrer';}
+    listing.append(title,node('small',`${o.sellerName||'Продавец не указан'} · Б/у`),node('small',o.configuration||'Характеристики требуют проверки'),node('small',`Наблюдение: ${date(o.observedAt)||'не указано'}`));
+    tr.append(listing,node('td',rubles(o.price)));
+    const r=o.rank||{},reference=node('td');
+    if(finite(r.referencePrice)){reference.append(node('strong',rubles(r.referencePrice)),node('small',`${r.procurement?.retailer||''} · ${r.procurement?.color||''}`),node('small',`Прайс: ${date(r.procurement?.observedAt)||'не указан'}`));}
+    else reference.append(node('span',o.review?'Не рассчитан':'Нет сопоставимой цены'));
+    const delta=node('td',finite(r.deltaRub)?`${r.deltaRub>0?'+':''}${rubles(r.deltaRub)}`:'—');
+    if(r.deltaRub>0)delta.className='avito-ranked-positive';
+    if(finite(r.deltaPercent))delta.append(node('small',`${decimal.format(r.deltaPercent)}%`));
+    const reasons=node('td');reasons.append(...(r.reasons||[]).map(s=>node('small',s)));
+    tr.append(reference,delta,reasons);return tr;
+  });
+  document.getElementById('avito-ranked-rows').replaceChildren(...rows);
+  document.getElementById('avito-ranked-count').textContent=number.format(rows.length);
+}
+function renderRanked(data) {
+  rankedListings=Array.isArray(data.listings)?data.listings:[];
+  const compared=rankedListings.filter(o=>finite(o.rank?.referencePrice)).length;
+  document.getElementById('avito-ranked-summary').textContent=`Сохранено ${number.format(rankedListings.length)} объявлений от частников. Сопоставимый закуп найден для ${number.format(compared)}; остальные доступны для ручной проверки.`;
+  drawRanked();
+}
+function exportRanked() {
+  const quote=v=>`"${String(v??'').replace(/^[=+@-]/,'\'$&').replaceAll('"','""')}"`;
+  const rows=[['Место','Объявление','Продавец','Авито, ₽','Закуп нового, ₽','Поставщик','Цвет закупа','Дата закупа','Разница после резерва, ₽','Проверить','Ссылка'],
+    ...filteredRanked().map(o=>[o.position,o.title,o.sellerName,o.price,o.rank?.referencePrice,o.rank?.procurement?.retailer,o.rank?.procurement?.color,o.rank?.procurement?.observedAt,o.rank?.deltaRub,(o.rank?.reasons||[]).join('; '),o.url])];
+  const url=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.map(quote).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
+  const a=node('a');a.href=url;a.download='avito-nn-russian-procurement.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 function startMonitor(root) {
@@ -203,4 +243,6 @@ function startMonitor(root) {
 if (typeof document !== 'undefined' && document.body?.dataset.sheet === 'avito') {
   const root = document.getElementById('avito-monitor');
   if (root) startMonitor(root);
+  document.getElementById('avito-ranked-search')?.addEventListener('input',drawRanked);
+  document.getElementById('avito-ranked-export')?.addEventListener('click',exportRanked);
 }

@@ -1,5 +1,6 @@
 import { AVITO, avitoGroupKey, visibleAvitoOffer } from './avito-policy.mjs';
 import { catalogConfigurationKey, NIZHNY_RETAILERS, findColorPriceLowTrust, colorPriceTrustKey, belowMarketReason } from '../web/retail-analytics.js';
+export { rankAvitoProcurementOffers as rankAvitoOffers } from './avito-procurement.mjs';
 
 export const AVITO_MODEL_VERSION = 'seller-robust-logprice-v1';
 const median = values => { const a = [...values].sort((x, y) => x - y), n = a.length; return n ? (a[Math.floor((n - 1) / 2)] + a[Math.floor(n / 2)]) / 2 : null; };
@@ -70,7 +71,7 @@ function marketFor(offer, candidates, now) {
     lower: Math.exp(mu - 1.96 * predictiveSigma), upper: Math.exp(mu + 1.96 * predictiveSigma) };
 }
 
-export function rankAvitoOffers(offers, { now = Date.now() } = {}) {
+export function rankAvitoPeerOffers(offers, { now = Date.now() } = {}) {
   const local = new Set(NIZHNY_RETAILERS), buckets = new Map();
   const websiteColorTrust = findColorPriceLowTrust(offers.filter(o => o.retailer !== AVITO && usable(o, now)), catalogConfigurationKey);
   const sellerColors = findColorPriceLowTrust(offers.filter(o => o.retailer === AVITO && visibleAvitoOffer(o) && usable(o, now))

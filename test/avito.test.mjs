@@ -8,7 +8,7 @@ import { AVITO, avitoUrl, avitoGroupKey, normalizeAvitoListing, visibleAvitoOffe
 import { parseAvitoSearch, parseAvitoDetail } from '../scripts/avito-parser.mjs';
 import { collectAvitoSnapshot, createAvitoHttpTransport, runAvitoWorker } from '../scripts/avito-collector.mjs';
 import { parseAvitoSnapshot, fetchAvitoOffers } from '../scripts/avito.mjs';
-import { rankAvitoOffers, robustLogMarket } from '../scripts/avito-ranking.mjs';
+import { rankAvitoPeerOffers as rankAvitoOffers, robustLogMarket } from '../scripts/avito-ranking.mjs';
 import { openMasterStore } from '../scripts/master-store.mjs';
 import { at, search, url, record as fixtureRecord, searchPage, detailPage, snapshot } from './fixtures/avito/sample.mjs';
 

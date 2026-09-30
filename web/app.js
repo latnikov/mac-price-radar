@@ -150,9 +150,12 @@ function avitoOfferNode(offer) {
   const specs = characteristics(offer);
   if (specs) item.append(text('span', specs, 'variant'));
   const labels = { high: 'высокий', medium: 'средний', low: 'низкий' };
-  const badge = text('span', rank ? `Доверие: ${labels[rank.level]} · ${rank.score}/100` : 'Доверие: не рассчитан', `trust-badge avito-trust-${rank?.level || 'medium'}`);
+  const procurement = rank?.comparisonKind === 'russian-procurement-gap';
+  const badge = text('span', procurement ? (rank.referencePrice == null ? 'Нет цены русского закупа' : `Русский закуп: ${rubles(rank.referencePrice)}`)
+    : rank ? `Доверие: ${labels[rank.level]} · ${rank.score}/100` : 'Доверие: не рассчитан', `trust-badge avito-trust-${rank?.level || 'medium'}`);
   badge.title = rank?.reasons?.join('; ') || 'Оценка сопоставимости цены, свежести и независимых предложений';
   item.append(badge);
+  if(procurement && rank.deltaRub != null)item.append(text('span',`Разница после резерва: ${rubles(rank.deltaRub)}`,'variant'));
   if (rank?.level === 'low' && rank.reasons?.length) item.append(text('span', rank.reasons[0], 'avito-reason'));
   item.append(text('span', `Проверено ${date(offer.fetchedAt)}`, 'variant'));
   if (stock(offer) === 'out') item.append(text('span', 'Нет в наличии', 'tag'));

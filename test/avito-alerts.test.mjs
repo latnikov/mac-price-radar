@@ -25,6 +25,21 @@ const temp = async t => {
 };
 const ledger = async dir => JSON.parse(await readFile(join(dir, 'alerts.json'), 'utf8'));
 
+test('Russian procurement signals identify the new-device baseline and reject mismatched or stale quotes',async t=>{
+  const dir=await temp(t);let text,calls=0;
+  const procurement={retailer:'BSA',price:100000,condition:'new',observedAt:new Date(NOW).toISOString()};
+  const candidate=offer(undefined,{comparisonKind:'russian-procurement-gap',peerCount:0,matchKind:'same_color',procurement});
+  const result=await sendAvitoAlerts({env,dir,now:()=>NOW,opportunities:opportunities([candidate]),fetchImpl:async(url,options)=>{
+    calls++;text=JSON.parse(options.body).text;return response();
+  }});
+  assert.equal(result.sentCount,1);assert.match(text,/Русский закуп нового MacBook · BSA/);assert.match(text,/не прибыль/);
+  for(const extra of [{matchKind:'other_color'},{procurement:{...procurement,retailer:'BigGeek'}},
+    {procurement:{...procurement,price:99999}},{procurement:{...procurement,observedAt:new Date(NOW-73*3600000).toISOString()}}]) {
+    await sendAvitoAlerts({env,dir,now:()=>NOW,opportunities:opportunities([offer(1234567891,{...candidate,...extra,dedupKey:'avito:1234567891:8000000'})]),fetchImpl:async()=>{calls++;return response();}});
+  }
+  assert.equal(calls,1);
+});
+
 test('only the dedicated bot and explicit recipient enable alerts; business credentials are never reused', async t => {
   const dir = await temp(t);
   let calls = 0;
@@ -202,4 +217,19 @@ test('stale, incomplete, unsafe-link and non-eligible candidates never generate 
   const state = await sendAvitoAlerts({ env, dir, now: NOW, opportunities: opportunities(candidates), fetchImpl: async () => { calls++; return response(); } });
   assert.equal(state.sentCount, 0);
   assert.equal(calls, 0);
+});
+
+test('source-verified retirement of an excluded legacy signal keeps deduplication and does not hide current uncertain delivery', async t => {
+  const dir=await temp(t),first=offer(),next=offer(1234567891);
+  await writeAvitoJson(join(dir,'alerts.json'),{schemaVersion:1,entries:{[first.dedupKey]:{status:'unknown',resolution:{kind:'excluded_by_current_policy',at:new Date(NOW).toISOString()}}}});
+  let calls=0;
+  const run=candidates=>sendAvitoAlerts({env,dir,now:NOW,opportunities:opportunities(candidates),fetchImpl:async()=>{calls++;return response();}});
+  const retired=await run([first]);
+  assert.equal(calls,0);assert.doesNotMatch(retired.message,/неподтверждённой доставкой/);
+  const history=await ledger(dir);history.entries[next.dedupKey]={status:'unknown'};
+  await writeAvitoJson(join(dir,'alerts.json'),history);
+  const unresolved=await run([first,next]);
+  assert.equal(calls,0);assert.match(unresolved.message,/неподтверждённой доставкой/);
+  assert.equal((await ledger(dir)).entries[first.dedupKey].status,'unknown');
+  assert.equal((await run([offer(1234567892)])).sentCount,1);assert.equal(calls,1);
 });
