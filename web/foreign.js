@@ -142,9 +142,10 @@ $('foreign-refresh').addEventListener('click', async () => {
   finally { pending = false; render(); if (failure) showFailure(failure); }
 });
 async function poll() {
-  try { if (!document.hidden) await reload(); }
+  try { if (!document.hidden || !snapshot.updatedAt) await reload(); }
   catch (error) { showFailure(`Не удалось обновить лист: ${error.message}`); }
   finally { setTimeout(poll, running ? 3000 : 30000); }
 }
 request('session').then(session => { csrf = session.csrfToken; render(); }).catch(error => { showFailure(error.message); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) void reload().catch(error => showFailure(error.message)); });
 void poll();
