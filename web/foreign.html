@@ -17,12 +17,15 @@
     <div class="search-bar"><label for="foreign-search">Быстрый поиск</label><div class="search-input"><span aria-hidden="true">⌕</span><input id="foreign-search" type="search" maxlength="120" placeholder="Например: Air M5 16GB Silver" autocomplete="off"><button id="foreign-clear-search" type="button" aria-label="Очистить поиск" hidden>×</button></div></div>
     <div class="filter-step"><div class="step-label"><strong>Линейка</strong><span>Выберите технику</span></div><div class="choice-group" id="foreign-category-options"></div></div>
     <div class="filter-step"><div class="step-label"><strong><span class="step-number">1</span> Модель</strong><span>С чего начнём?</span></div><div class="choice-group" id="foreign-family-options"></div></div>
-    <details class="advanced-filters" id="foreign-advanced" open><summary>Уточнить процессор, память и цвет</summary>
-      <div class="filter-step" id="foreign-chip-group"><div class="step-label"><strong><span class="step-number">2</span> Процессор</strong></div><div class="choice-group" id="foreign-chip-options"></div></div>
+    <details class="advanced-filters" id="foreign-advanced"><summary>Уточнить процессор, память и цвет</summary>
+      <div class="filter-step" id="foreign-chip-group"><div class="step-label"><strong><span class="step-number">2</span> Процессор</strong><span>Последние поколения в прайсе показаны первыми</span></div><div class="choice-stack"><div class="choice-group" id="foreign-chip-options"></div><details class="chip-history" id="foreign-chip-history" hidden><summary>Предыдущие поколения</summary><div class="choice-group" id="foreign-chip-older"></div></details></div></div>
       <div class="spec-step">
         <div class="spec-group" id="foreign-screen-group"><span>Размер</span><div class="choice-group compact" id="foreign-screen-options"></div></div>
         <div class="spec-group" id="foreign-ram-group"><span>Память RAM</span><div class="choice-group compact" id="foreign-ram-options"></div></div>
         <div class="spec-group" id="foreign-storage-group"><span>Накопитель</span><div class="choice-group compact" id="foreign-storage-options"></div></div>
+        <div class="spec-group" id="foreign-cpu-group"><span>Ядра CPU</span><div class="choice-group compact" id="foreign-cpu-options"></div></div>
+        <div class="spec-group" id="foreign-gpu-group"><span>Ядра GPU</span><div class="choice-group compact" id="foreign-gpu-options"></div></div>
+        <div class="spec-group" id="foreign-display-group"><span>Покрытие экрана</span><div class="choice-group compact" id="foreign-display-options"></div></div>
         <div class="spec-group wide" id="foreign-color-group"><span>Цвет</span><div class="choice-group compact" id="foreign-color-options"></div></div>
         <div class="spec-group" id="foreign-connection-group"><span>Связь</span><div class="choice-group compact" id="foreign-connection-options"></div></div>
         <div class="price-range"><label>Цена от<input id="foreign-min" type="number" min="0" placeholder="₽"></label><label>Цена до<input id="foreign-max" type="number" min="0" placeholder="₽"></label></div>
@@ -39,11 +42,12 @@
     </details>
   </section>
   <section class="price-status"><div class="status-copy"><p id="foreign-summary" role="status" aria-live="polite"></p></div><button id="foreign-refresh" disabled>Обновить цены</button></section>
-  <div id="foreign-active-filters" class="active-filters" hidden></div>
+  <div id="foreign-active-filters" class="active-filters" aria-label="Выбранные фильтры" hidden></div>
   <div class="table-meta"><span id="foreign-count"></span><label>Сортировать <select id="foreign-sort"><option value="model">По модели</option><option value="price">Сначала дешевле</option><option value="price-down">Сначала дороже</option></select></label></div>
   <div class="table-wrap" id="foreign-table" tabindex="0" aria-label="Таблица зарубежных цен" hidden>
-    <table><caption class="sr-only">Зарубежные цены Apple в долларах и рублях</caption><thead><tr><th>Модель</th><th>Конфигурация</th><th>Цена, $</th><th>Цена, ₽</th><th>Источник и условия</th></tr></thead><tbody id="foreign-rows"></tbody></table>
+    <table><caption class="sr-only">Зарубежные цены по конфигурациям и цветам Apple в долларах и рублях</caption><thead><tr><th class="model-heading" scope="col">Конфигурация и цвет</th><th scope="col">Цена, $</th><th scope="col">Цена, ₽</th><th scope="col">Источник и условия</th></tr></thead><tbody id="foreign-rows"></tbody></table>
   </div>
+  <nav id="foreign-pagination" class="pagination" aria-label="Страницы таблицы" hidden><button id="foreign-page-prev" type="button">← Назад</button><span id="foreign-page-info" role="status" aria-live="polite"></span><button id="foreign-page-next" type="button">Далее →</button></nav>
   <p id="foreign-empty" hidden></p>
 </main>
 </body>

@@ -13,9 +13,22 @@
 .foreign-controls { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 24px; }
 .foreign-controls label { display: grid; gap: 8px; }
 .foreign-controls label:first-child { flex: 1; min-width: 230px; }
-.foreign-sheet table { min-width: 800px; width: 100%; }
-.foreign-sheet th, .foreign-sheet td { padding: 16px; text-align: left; white-space: normal; position: static; }
-.foreign-sheet td:nth-child(3), .foreign-sheet td:nth-child(4) { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.foreign-sheet td:nth-child(4) { font-weight: 650; }
+.foreign-sheet table { min-width: 760px; width: 100%; }
+.foreign-sheet th { top: 0; }
+.foreign-sheet th, .foreign-sheet td { text-align: left; white-space: normal; }
+.foreign-sheet .configuration-cell, .foreign-sheet th.model-heading { width: 38%; min-width: 270px; max-width: 420px; }
+.foreign-sheet .configuration-badge { min-height: 0; font-family: inherit; cursor: pointer; border: 1px solid transparent; }
+.foreign-sheet .configuration-badge:hover { border-color: #b7c6df; background: #edf3ff; color: var(--accent); }
+.foreign-sheet .configuration-badge[aria-pressed="true"] { border-color: #759aff; background: #edf3ff; color: #2454c6; }
+.foreign-sheet .price-cell { width: 16%; white-space: nowrap; }
+.foreign-configuration { margin-top: 10px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.foreign-configuration summary { cursor: pointer; }
+.foreign-configuration p { margin: 7px 0 0; overflow-wrap: anywhere; }
+.foreign-sheet td:last-child p { font-size: 11px; line-height: 1.5; }
 .foreign-sheet #foreign-error { color: #99511c; overflow-wrap: anywhere; }
-@media (max-width: 600px) { .foreign-intro { padding: 0 18px 20px; } .foreign-sheet .filter-top { align-items: flex-start; flex-direction: column; } }
+@media (max-width: 600px) {
+  .foreign-intro { padding: 0 18px 20px; }
+  .foreign-sheet .filter-top { align-items: flex-start; flex-direction: column; }
+  .foreign-sheet .configuration-cell, .foreign-sheet th.model-heading { min-width: 180px; max-width: 200px; }
+  .foreign-sheet table { min-width: 670px; }
+}

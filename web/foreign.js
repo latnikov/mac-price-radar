@@ -1,8 +1,9 @@
-import { MAC_FAMILIES, COLORS, SPEC_KEYS, emptyForeignFilters, capacity, foreignSpecs, matchesForeignRow } from './foreign-filters.js';
+import { MAC_FAMILIES, COLORS, SPEC_KEYS, emptyForeignFilters, capacity, foreignSpecs, matchesForeignRow, foreignModelLabel, foreignBadges, selectForeignPage } from './foreign-filters.js';
 const $ = id => document.getElementById(id);
 const number = value => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 4 }).format(value);
 const date = value => new Date(value).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
-let snapshot = { rows: [] }, csrf, running = false, pending = false;
+let snapshot = { rows: [] }, csrf, running = false, pending = false, page = 1, pageCount = 1;
+const collator = new Intl.Collator('ru', { numeric: true });
 const filters = emptyForeignFilters();
 let restored;
 try { restored = JSON.parse(localStorage.getItem('foreign-filters') || '{}'); } catch { restored = {}; }
@@ -15,6 +16,7 @@ for (const [key, id] of [['query', 'foreign-search'], ['min', 'foreign-min'], ['
   const value = hash.has(key) ? hash.get(key) : restored[key];
   if (typeof value === 'string') $(id).value = value.slice(0, 120);
 }
+if (SPEC_KEYS.some(key => filters[key])) $('foreign-advanced').open = true;
 function persist() {
   const view = { ...filters, query: $('foreign-search').value, min: $('foreign-min').value, max: $('foreign-max').value, sort: $('foreign-sort').value };
   try { localStorage.setItem('foreign-filters', JSON.stringify(view)); } catch {}
@@ -25,6 +27,13 @@ function button(label, key, value, className = '') {
   node.dataset.foreignFilter = key; node.dataset.value = value;
   node.classList.toggle('active', filters[key] === value); node.setAttribute('aria-pressed', String(filters[key] === value)); node.textContent = label;
   return node;
+}
+function filterLabel(key, value) {
+  return key === 'family' ? MAC_FAMILIES.find(([id]) => id === value)?.[1] || value
+    : key === 'ram' ? `RAM ${value} GB` : key === 'storage' ? capacity(value)
+      : key === 'color' ? COLORS[value] || value : key === 'cpu' ? `CPU ${value}` : key === 'gpu' ? `GPU ${value}`
+        : key === 'display' ? value === 'Nano-texture' ? 'Нанотекстура' : 'Стандартный экран'
+          : key === 'connection' && value === '10GbE' ? 'Ethernet 10 Гбит/с' : value;
 }
 function renderControls() {
   const categories = [...new Set(snapshot.rows.map(row => row.category).filter(Boolean))].sort();
@@ -42,23 +51,40 @@ function renderControls() {
   }) : families.map(value => button(value, 'family', value));
   $('foreign-family-options').replaceChildren(...familyButtons, button('Все модели', 'family', '', 'all-models'));
   const modelRows = base.filter(row => !filters.family || row.specs.family === filters.family);
-  for (const key of SPEC_KEYS) {
-    const candidates = modelRows.filter(row => SPEC_KEYS.every(other => other === key || !filters[other] || row.specs[other] === filters[other]));
-    const values = [...new Set(candidates.map(row => row.specs[key]).filter(Boolean))].sort((a, b) => ['ram', 'storage', 'screen'].includes(key) ? parseFloat(a) - parseFloat(b) : b.localeCompare(a, 'en', { numeric: true }));
+  for (const [index, key] of SPEC_KEYS.entries()) {
+    const candidates = modelRows.filter(row => SPEC_KEYS.slice(0, index).every(other => !filters[other] || row.specs[other] === filters[other]));
+    const values = [...new Set(candidates.map(row => row.specs[key]).filter(Boolean))].sort((a, b) => ['ram', 'storage', 'screen', 'cpu', 'gpu'].includes(key) ? parseFloat(a) - parseFloat(b) : collator.compare(a, b));
     $('foreign-' + key + '-group').hidden = !modelRows.some(row => row.specs[key]);
-    const format = value => key === 'ram' ? `${value} GB` : key === 'storage' ? capacity(value) : key === 'color' ? COLORS[value] || value : value;
-    $('foreign-' + key + '-options').replaceChildren(button(key === 'chip' ? 'Все процессоры' : 'Любой', key, ''), ...values.map(value => button(format(value), key, value)));
+    if (key === 'chip') {
+      // Compare generations within each family and chip tier using this price list.
+      const generationKey = row => `${row.specs.family}:${row.specs.chip.replace(/\d+/, '')}`;
+      const generations = new Map();
+      for (const row of modelRows) generations.set(generationKey(row), Math.max(generations.get(generationKey(row)) || 0, Number(row.specs.chip.match(/\d+/)?.[0]) || 0));
+      const current = values.filter(value => modelRows.some(row => row.specs.chip === value && Number(value.match(/\d+/)?.[0]) === generations.get(generationKey(row))));
+      const older = values.filter(value => !current.includes(value));
+      $('foreign-chip-options').replaceChildren(button('Все процессоры', key, ''), ...current.map(value => button(value, key, value, 'current')));
+      $('foreign-chip-older').replaceChildren(...older.map(value => button(value, key, value)));
+      $('foreign-chip-history').hidden = !older.length;
+      $('foreign-chip-history').querySelector('summary').textContent = `Предыдущие поколения · ${older.length}`;
+      if (older.includes(filters.chip)) $('foreign-chip-history').open = true;
+    } else $('foreign-' + key + '-options').replaceChildren(button('Любой', key, ''), ...values.map(value => button(filterLabel(key, value), key, value)));
   }
   const active = [];
   for (const [key, value] of Object.entries(filters)) {
     if (!value) continue;
-    const label = key === 'family' ? MAC_FAMILIES.find(([id]) => id === value)?.[1] || value : key === 'ram' ? `${value} GB RAM` : key === 'storage' ? capacity(value) : key === 'color' ? COLORS[value] || value : value;
+    const label = filterLabel(key, value);
     const node = button(`${label} ×`, key, ''); node.className = 'filter-tag'; node.setAttribute('aria-label', `Убрать фильтр: ${label}`); active.push(node);
+  }
+  for (const [id, label] of [['foreign-search', 'Поиск'], ['foreign-min', 'От'], ['foreign-max', 'До']]) {
+    const value = $(id).value;
+    if (!value) continue;
+    const node = button(`${label}: ${value}${id === 'foreign-search' ? '' : ' ₽'} ×`, id, '');
+    node.className = 'filter-tag'; node.setAttribute('aria-label', `Убрать фильтр: ${label}`); active.push(node);
   }
   $('foreign-active-filters').replaceChildren(...active); $('foreign-active-filters').hidden = !active.length;
   $('foreign-clear-search').hidden = !$('foreign-search').value;
 }
-function change() { render(); persist(); }
+function change() { page = 1; render(); persist(); }
 function showFailure(message) { $('foreign-status').textContent = message; $('foreign-summary').textContent = message; }
 const endpoint = path => new URL(`../api/${path}`, import.meta.url);
 async function request(path, body) {
@@ -72,17 +98,37 @@ async function request(path, body) {
 function render() {
   renderControls();
   const rows = snapshot.rows.filter(row => matchesForeignRow(row, filters, { query: $('foreign-search').value, min: $('foreign-min').value, max: $('foreign-max').value }));
-  if ($('foreign-sort').value === 'price') rows.sort((a, b) => (a.rub ?? Infinity) - (b.rub ?? Infinity));
-  if ($('foreign-sort').value === 'price-down') rows.sort((a, b) => (b.rub ?? -Infinity) - (a.rub ?? -Infinity));
+  const selection = selectForeignPage(rows, { sort: $('foreign-sort').value, page });
+  page = selection.page; pageCount = selection.pages;
   const fragment = document.createDocumentFragment();
-  for (const row of rows) {
+  for (const row of selection.rows) {
     const tr = document.createElement('tr');
-    for (const [index, value] of [row.model, row.configuration, number(row.usd), row.rub == null ? '—' : number(row.rub)].entries()) {
+    tr.className = 'configuration-row';
+    const config = document.createElement('td'); config.className = 'configuration-cell';
+    const name = document.createElement('span'); name.className = 'configuration-model'; name.textContent = foreignModelLabel(row);
+    const badges = document.createElement('span'); badges.className = 'configuration-badges';
+    for (const badge of foreignBadges(row)) {
+      const node = button(badge.label, badge.key, badge.value);
+      node.className = 'configuration-badge'; node.title = `Выбрать ${filterLabel(badge.key, badge.value)}`;
+      node.dataset.category = row.category; node.dataset.family = row.specs.family;
+      badges.append(node);
+    }
+    config.append(name, badges);
+    // Details keep every source distinction, including bands, stands and accessories.
+    if (!badges.childElementCount || row.category !== 'Mac') {
+      const variant = document.createElement('span'); variant.className = 'variant'; variant.textContent = row.configuration; config.append(variant);
+    }
+    const original = document.createElement('details'); original.className = 'foreign-configuration';
+    const caption = document.createElement('summary'); caption.textContent = 'Описание источника';
+    const description = document.createElement('p'); description.textContent = row.configuration;
+    original.append(caption, description); config.append(original); tr.append(config);
+    for (const [index, value] of [number(row.usd), row.rub == null ? '—' : number(row.rub)].entries()) {
       const td = document.createElement('td');
-      if (index >= 2 && value !== '—') {
+      td.className = `price-cell${index === 1 ? ' best-price-cell' : ''}`;
+      if (value !== '—') {
         const priceLink = document.createElement('a'); priceLink.href = row.offerUrl || row.guideUrl;
-        priceLink.target = '_blank'; priceLink.rel = 'noopener noreferrer'; priceLink.textContent = value;
-        priceLink.setAttribute('aria-label', `${value} ${index === 2 ? 'долларов' : 'рублей'} — открыть предложение ${row.configuration}`);
+        priceLink.className = 'price'; priceLink.target = '_blank'; priceLink.rel = 'noopener noreferrer'; priceLink.textContent = `${value} ${index === 0 ? '$' : '₽'}`;
+        priceLink.setAttribute('aria-label', `${value} ${index === 0 ? 'долларов' : 'рублей'} — открыть предложение ${row.configuration}`);
         td.append(priceLink);
       } else td.textContent = value;
       tr.append(td);
@@ -91,14 +137,24 @@ function render() {
     link.href = row.guideUrl; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'AppleInsider ↗';
     td.append(link);
     if (row.terms) { const note = document.createElement('p'); note.textContent = row.terms; td.append(note); }
-    if (row.stale) { const note = document.createElement('p'); note.textContent = `Предыдущая проверка: ${date(row.fetchedAt)}. Обновление раздела не удалось.`; td.append(note); }
+    const checked = document.createElement('span'); checked.className = 'variant'; checked.textContent = `Проверено: ${date(row.fetchedAt)}`; td.append(checked);
+    if (row.stale || Date.now() - Date.parse(row.fetchedAt) > 4 * 3600000) {
+      const note = document.createElement('span'); note.className = 'tag warn'; note.textContent = 'Старая проверка';
+      note.title = row.stale ? 'Обновление раздела не удалось. Показана сохранённая цена.' : 'С последней проверки прошло больше четырёх часов.'; td.append(note);
+    }
     tr.append(td); fragment.append(tr);
   }
   $('foreign-rows').replaceChildren(fragment);
   $('foreign-count').textContent = `Конфигураций: ${rows.length} из ${snapshot.rows.length}`;
+  $('foreign-pagination').hidden = selection.pages <= 1;
+  $('foreign-page-prev').disabled = page === 1; $('foreign-page-next').disabled = page === pageCount;
+  $('foreign-page-info').textContent = `${selection.start}–${selection.end} из ${selection.total} · страница ${page} / ${pageCount}`;
   $('foreign-table').hidden = !rows.length;
   $('foreign-empty').hidden = Boolean(rows.length);
   $('foreign-empty').textContent = snapshot.rows.length ? 'По этому запросу ничего не найдено.' : 'Цены появятся после первого успешного сбора.';
+  renderStatus();
+}
+function renderStatus() {
   const rate = snapshot.usdRate || snapshot.googleRate;
   $('foreign-rate').textContent = rate ? `${snapshot.rateSource || 'Google'}: ${number(rate)} ₽/$ + 4 ₽ = ${number(snapshot.effectiveRate)} ₽/$. ${snapshot.rateDate ? `Дата курса: ${snapshot.rateDate}. ` : ''}Проверено: ${date(snapshot.updatedAt)} (Москва).` : 'Курс ещё не получен. Пересчёт появится после успешной проверки.';
   const stale = snapshot.updatedAt && Date.now() - Date.parse(snapshot.updatedAt) > 4 * 3600000;
@@ -109,9 +165,14 @@ function render() {
   $('foreign-refresh').disabled = !csrf || running || pending;
   $('foreign-refresh').textContent = running || pending ? 'Обновляем цены…' : 'Обновить цены';
 }
+let snapshotVersion;
 async function reload() {
   const [prices, status] = await Promise.all([request('foreign-prices'), request('status')]);
-  snapshot = { ...prices, rows: prices.rows.map(row => ({ ...row, specs: foreignSpecs(row) })) }; running = status.state === 'running'; render();
+  running = status.state === 'running';
+  const version = JSON.stringify([prices, prices.rows.map(row => Boolean(row.stale || Date.now() - Date.parse(row.fetchedAt) > 4 * 3600000))]);
+  if (snapshotVersion !== version) {
+    snapshotVersion = version; snapshot = { ...prices, rows: prices.rows.map(row => ({ ...row, specs: foreignSpecs(row) })) }; render();
+  } else renderStatus();
 }
 for (const id of ['foreign-search', 'foreign-min', 'foreign-max']) $(id).addEventListener('input', change);
 $('foreign-sort').addEventListener('change', change);
@@ -124,28 +185,39 @@ $('foreign-clear-search').addEventListener('click', () => { $('foreign-search').
 document.addEventListener('click', event => {
   const node = event.target.closest('[data-foreign-filter]'); if (!node) return;
   const key = node.dataset.foreignFilter;
+  if (key.startsWith('foreign-')) { $(key).value = ''; change(); return; }
+  if (node.classList.contains('configuration-badge')) {
+    if (filters.category !== node.dataset.category || filters.family !== node.dataset.family) {
+      Object.assign(filters, emptyForeignFilters(), { category: node.dataset.category, family: node.dataset.family });
+    }
+    $('foreign-advanced').open = true;
+  }
   filters[key] = node.dataset.value;
   if (key === 'category' || key === 'family') {
     if (key === 'category') filters.family = '';
     for (const spec of SPEC_KEYS) filters[spec] = '';
     $('foreign-min').value = ''; $('foreign-max').value = '';
-  } else if (key === 'chip') {
-    for (const spec of SPEC_KEYS) if (spec !== 'chip') filters[spec] = '';
+    $('foreign-advanced').open = true;
+  } else {
+    for (const spec of SPEC_KEYS.slice(SPEC_KEYS.indexOf(key) + 1)) filters[spec] = '';
   }
   change();
 });
+for (const [id, direction] of [['foreign-page-prev', -1], ['foreign-page-next', 1]]) $(id).addEventListener('click', () => {
+  page += direction; render(); $('foreign-table').scrollTop = 0;
+});
 $('foreign-refresh').addEventListener('click', async () => {
-  pending = true; render();
+  pending = true; renderStatus();
   let failure;
   try { await request('refresh', { retailer: 'AppleInsider' }); running = true; await reload(); }
   catch (error) { failure = error.message; }
-  finally { pending = false; render(); if (failure) showFailure(failure); }
+  finally { pending = false; renderStatus(); if (failure) showFailure(failure); }
 });
 async function poll() {
   try { if (!document.hidden || !snapshot.updatedAt) await reload(); }
   catch (error) { showFailure(`Не удалось обновить лист: ${error.message}`); }
   finally { setTimeout(poll, running ? 3000 : 30000); }
 }
-request('session').then(session => { csrf = session.csrfToken; render(); }).catch(error => { showFailure(error.message); });
+request('session').then(session => { csrf = session.csrfToken; renderStatus(); }).catch(error => { showFailure(error.message); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void reload().catch(error => showFailure(error.message)); });
 void poll();
