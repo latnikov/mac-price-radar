@@ -1,4 +1,7 @@
 export const AVITO = 'Авито НН';
+export function sheetOffers(offers, sheet) {
+  return offers.filter(offer => sheet === 'avito' ? offer.retailer === AVITO : offer.retailer !== AVITO);
+}
 const collator = new Intl.Collator('ru', { numeric: true });
 const sellerId = offer => String(offer.marketplaceSellerId ?? '').trim();
 

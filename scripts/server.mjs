@@ -16,6 +16,7 @@ import { FOREIGN_SOURCE, readForeignPrices } from './foreign-prices.mjs';
 
 const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'RifaStore', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
 const STATIC_FILES = new Map([
+  ['/web/avito.html', ['web/avito.html', 'text/html; charset=utf-8']],
   ['/web/foreign.html', ['web/foreign.html', 'text/html; charset=utf-8']],
   ['/web/foreign.js', ['web/foreign.js', 'text/javascript; charset=utf-8']],
   ['/web/foreign.css', ['web/foreign.css', 'text/css; charset=utf-8']],
@@ -225,6 +226,8 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       }
       if (path === '/api/desktop-prices') return cachedReply(req, res, await cachedFile(responseCache, join(root, 'data/desktop-prices.json')));
       if (path === '/api/table') {
+        const sheet = url.searchParams.get('sheet') || 'all';
+        if (!['all', 'retail', 'avito'].includes(sheet)) return send(res, 400, { error: 'Неизвестный лист цен' });
         const revision = store.getRevision();
         const channelData = await channelSnapshot();
         if (tableSource?.revision !== revision) {
@@ -233,12 +236,13 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
           tableSource = { revision, offers, hasAvito: offers.some(offer => offer.retailer === AVITO) };
         }
         const source = tableSource;
-        const snapshot = await responseCache('table', `${revision}:${channelData.etag}:${source.hasAvito ? Math.floor(Date.now() / 60000) : ''}`, () => {
+        const snapshot = await responseCache('table', `${sheet}:${revision}:${channelData.etag}:${source.hasAvito ? Math.floor(Date.now() / 60000) : ''}`, () => {
           const fields = ['listingId', 'sourceVariantId', 'optionId', 'sku', 'article', 'displayType', 'bundle', 'retailer', 'title', 'model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color', 'cpuCores', 'gpuCores', 'keyboard', 'region', 'price', 'currency', 'stock', 'url', 'fetchedAt', 'submittedAt', 'validFrom', 'validUntil', 'condition', 'paymentMethod', 'minimumQuantity', 'priceType', 'validationStatus', 'qualityWarnings', 'marketplaceSellerId', 'sellerName', 'matchedRetailer', 'sourceCity', 'avitoRank'];
           fields.push('sourceType', 'sourceTitle', 'sourceChatId', 'sourceUsername');
           const offers = rankAvitoOffers(source.offers)
+            .filter(offer => sheet === 'all' || (sheet === 'avito' ? offer.retailer === AVITO : offer.retailer !== AVITO))
             .map(offer => Object.fromEntries(fields.filter(field => offer[field] !== undefined).map(field => [field, offer[field]])));
-          return { schemaVersion: 1, offers, telegramSources: channelData.sources };
+          return { schemaVersion: 1, offers, telegramSources: sheet === 'avito' ? [] : channelData.sources };
         });
         return cachedReply(req, res, snapshot);
       }

@@ -1,16 +1,18 @@
 import { priceStatus } from './price-status.js';
 import { isProcurementOffer } from './retail-analytics.js';
-import { AVITO, avitoSellerColumns, priceColumnKey, groupOffersByPriceColumn } from './avito-columns.js';
+import { AVITO, avitoSellerColumns, priceColumnKey, groupOffersByPriceColumn, sheetOffers } from './avito-columns.js';
+import { avitoStatus } from './avito-status.js';
 import { emptyFilters, readView, writeView, searchTerms, offerSearchText, matchesSearch, searchScore } from './view-state.js';
 import { prepareTableOffers, buildPriceTable, selectTablePage, currentPrice, searchOverview, validMacColor, TABLE_PAGE_SIZE } from './price-table.js';
 
 const $ = id => document.getElementById(id);
+const avitoSheet = document.body.dataset.sheet === 'avito';
 const state = {
   offers: [], retailers: [], telegramSources: [], csrf: '', wasRunning: false, refreshPending: false,
   filters: emptyFilters(), page: 1,
 };
 const searchIndex = new WeakMap();
-const COLUMN_STORAGE_KEY = 'mac-price-radar:columns:v1';
+const COLUMN_STORAGE_KEY = avitoSheet ? 'mac-price-radar:avito-columns:v1' : 'mac-price-radar:columns:v1';
 const hiddenGroups = new Set(), hiddenColumns = new Set();
 try {
   const saved = JSON.parse(localStorage.getItem(COLUMN_STORAGE_KEY) || '{}');
@@ -73,6 +75,14 @@ const message = value => {
 function renderStatus() {
   if (!state.latestStatus) return;
   const summary = priceStatus(state.latestStatus, state.offers);
+  if (avitoSheet) {
+    const avito = state.latestStatus.avito;
+    summary.title = state.latestStatus.state === 'running' ? 'Обновляем цены Авито' : 'Цены Авито';
+    summary.detail = avitoStatus(avito) || 'Показываем последние сохранённые объявления.';
+    summary.tone = state.latestStatus.state === 'running' ? 'loading' : avito?.state === 'ready' ? 'success' : 'warning';
+  } else {
+    Object.assign(summary, priceStatus({ ...state.latestStatus, avito: undefined }, state.offers));
+  }
   $('status').textContent = summary.title;
   $('status-detail').textContent = summary.detail;
   $('status-schedule').textContent = summary.schedule;
@@ -261,6 +271,10 @@ function filtered() {
 
 const retailerLabel = offer => state.telegramSources.find(source => source.retailer === offer?.retailer)?.sourceTitle || offer?.sourceTitle || offer?.retailer;
 function retailerGroups(offers) {
+  if (avitoSheet) {
+    const sellers = avitoSellerColumns(offers);
+    return sellers.length ? [{ key: 'avito', label: 'НН (Авито)', retailers: sellers }] : [];
+  }
   const present = new Set(offers.map(offer => offer.retailer));
   for (const source of state.telegramSources) present.add(source.retailer);
   const configured = new Set(CONFIGURED_RETAILERS);
@@ -316,6 +330,7 @@ function priceRow(group, priceGroups) {
   const configCell = configurationCell(group.sample);
   configCell.append(text('span', variantLabel(group.sample), 'variant'));
   row.append(configCell);
+  if (!avitoSheet) {
   const procurementCell = text('td', null, 'price-cell retailer-analytics retailer-group-start');
   procurementCell.append(text('span', rubles(group.analytics.minimumProcurement), 'price'));
   if (group.analytics.procurementBenchmark) procurementCell.append(text('span', retailerLabel(group.analytics.procurementBenchmark), 'variant'));
@@ -334,6 +349,7 @@ function priceRow(group, priceGroups) {
   if (group.analytics.benchmark) recommendationCell.append(text('span', `на 500 ₽ ниже ${retailerLabel(group.analytics.benchmark)}`, 'variant'));
   if (group.analytics.recommendedPrice != null && group.analytics.minimumProcurement != null && group.analytics.recommendedPrice <= group.analytics.minimumProcurement) recommendationCell.append(text('span', 'Не выше минимальной закупки', 'tag warn'));
   row.append(recommendationCell);
+  }
   const byColumn = priceGroups.length ? groupOffersByPriceColumn(group.offers) : new Map();
   for (const retailerGroup of priceGroups) for (const [index, retailer] of retailerGroup.retailers.entries()) {
     const cell = text('td', null, `price-cell retailer-${retailerGroup.key}${index === 0 ? ' retailer-group-start' : ''}`);
@@ -358,7 +374,7 @@ function priceRow(group, priceGroups) {
 // The model and price calculations always include all sources. Only presentation changes.
 function renderColumnControls(priceGroups) {
   const headings = [...$('head').querySelector('.retailer-headings').children];
-  const groups = [{ key: 'analytics', label: 'Ритейл-аналитика', retailers: ['minimum', 'average', 'difference', 'recommendation'].map((key, i) => ({ key: `analytics:${key}`, label: headings[i].textContent })) }, ...priceGroups];
+  const groups = [...(avitoSheet ? [] : [{ key: 'analytics', label: 'Ритейл-аналитика', retailers: ['minimum', 'average', 'difference', 'recommendation'].map((key, i) => ({ key: `analytics:${key}`, label: headings[i].textContent })) }]), ...priceGroups];
   const columns = groups.flatMap(group => group.retailers.map(column => ({ ...column, group: group.key })));
   const groupHeadings = [...$('head').querySelector('.column-groups').children].slice(1);
   const rows = [...$('rows').children];
@@ -452,6 +468,7 @@ function render({ keepPage = false } = {}) {
   const modelHeading = text('th', 'Конфигурация и цвет', 'model-heading');
   modelHeading.rowSpan = 2; modelHeading.scope = 'col'; groupHeading.append(modelHeading);
   const retailerHeading = text('tr', null, 'retailer-headings');
+  if (!avitoSheet) {
   const analyticsHeading = text('th', 'Ритейл-аналитика', 'retailer-group-heading retailer-group-analytics');
   analyticsHeading.colSpan = 4; analyticsHeading.scope = 'colgroup'; groupHeading.append(analyticsHeading);
   for (const [label, title] of [
@@ -462,6 +479,7 @@ function render({ keepPage = false } = {}) {
   ]) {
     const heading = text('th', label, 'retailer-heading retailer-analytics');
     heading.scope = 'col'; heading.title = title; retailerHeading.append(heading);
+  }
   }
   for (const group of priceGroups) {
     const cell = text('th', group.label, `retailer-group-heading retailer-group-${group.key}`);
@@ -537,6 +555,7 @@ function renderActiveFilters() {
 
 let reloadPending;
 function updateOffers(market) {
+  market = sheetOffers(market, avitoSheet ? 'avito' : 'retail');
   state.offers = prepareTableOffers(market);
   state.tableModel = null;
   for (const offer of state.offers) searchIndex.set(offer, offerSearchText(offer));
@@ -547,7 +566,7 @@ function updateOffers(market) {
 }
 function reload() {
   if (reloadPending) return reloadPending;
-  reloadPending = fetch(new URL('../api/table', import.meta.url), {
+  reloadPending = fetch(new URL(`../api/table?sheet=${avitoSheet ? 'avito' : 'retail'}`, import.meta.url), {
     signal: AbortSignal.timeout(30000), headers: state.tableEtag ? { 'if-none-match': state.tableEtag } : {},
   }).then(async response => {
     state.rankedAtMinute = Math.floor(Date.now() / 60000);
@@ -600,7 +619,7 @@ $('refresh').addEventListener('click', async () => {
   $('refresh').disabled = true;
   $('refresh').textContent = 'Обновляем цены…';
   try {
-    await api('/api/refresh', {});
+    await api('/api/refresh', avitoSheet ? { retailer: AVITO } : {});
     state.wasRunning = true;
     await poll();
     clearTimeout(pollTimer);

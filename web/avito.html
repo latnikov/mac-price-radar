@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Mac Price Radar — цены Mac в магазинах Нижнего Новгорода</title>
-  <meta name="description" content="Закупочные прайсы и цены Mac в соседних магазинах Нижнего Новгорода в одной таблице.">
+  <title>Авито — цены Mac в Нижнем Новгороде</title>
+  <meta name="description" content="Объявления Авито по конфигурациям и цветам Mac. Отдельные столбцы продавцов, цены и доверие.">
   <meta name="theme-color" content="#f5f6f8">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
-  <meta property="og:title" content="Mac Price Radar — сравнение цен Mac">
-  <meta property="og:description" content="Сравниваем закупочные прайсы и цены магазинов Нижнего Новгорода по конфигурациям и цветам.">
-  <meta property="og:url" content="https://dev.macbookbro.ru/web/">
+  <meta property="og:title" content="Авито — сравнение цен Mac">
+  <meta property="og:description" content="Сравниваем предложения продавцов Авито в Нижнем Новгороде.">
+  <meta property="og:url" content="https://dev.macbookbro.ru/web/avito.html">
   <meta property="og:image" content="https://dev.macbookbro.ru/web/og-image.jpg">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:image:alt" content="Ретро-баннер Mac Price Radar с таблицей цен и видом Нижнего Новгорода">
   <meta name="twitter:card" content="summary_large_image">
-  <link rel="canonical" href="https://dev.macbookbro.ru/web/">
+  <link rel="canonical" href="https://dev.macbookbro.ru/web/avito.html">
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
@@ -26,12 +26,12 @@
   <link rel="modulepreload" href="./view-state.js">
   <script type="module" src="./app.js"></script>
 </head>
-<body>
+<body data-sheet="avito">
 <main class="workspace">
-<nav class="sheet-tabs" aria-label="Листы цен"><a href="./index.html" aria-current="page">Российские цены</a><a href="./foreign.html">Зарубежные цены ↗</a><a href="./avito.html">Авито</a></nav>
+<nav class="sheet-tabs" aria-label="Листы цен"><a href="./index.html">Российские цены</a><a href="./foreign.html">Зарубежные цены ↗</a><a href="./avito.html" aria-current="page">Авито</a></nav>
 <section class="filters" id="filters">
   <div class="filter-top">
-    <h1>Цены на Mac</h1>
+    <h1>Цены на Mac · Авито</h1>
     <button id="reset" class="secondary">Сбросить выбор</button>
   </div>
   <div class="search-bar">
@@ -76,7 +76,7 @@
   <span class="status-icon" aria-hidden="true"></span>
   <div class="status-copy" role="status" aria-live="polite" aria-atomic="true">
     <strong id="status">Загружаем цены…</strong>
-    <p id="status-detail">Проверяем, когда обновлялись закупка и магазины.</p>
+    <p id="status-detail">Проверяем состояние сбора объявлений Авито.</p>
     <span id="status-schedule" class="status-schedule"></span>
     <p id="message" hidden></p>
   </div>
@@ -87,8 +87,8 @@
 <p id="search-overview" class="search-overview" role="status" aria-live="polite" hidden></p>
 <div class="table-meta" id="table-meta" hidden><span id="count"></span><div><button id="avito-jump" class="secondary" type="button" aria-controls="table-wrap" hidden>К продавцам Авито →</button><label>Сортировать <select id="sort"><option value="relevance">По совпадению</option><option value="model">По модели</option><option value="price-up">Сначала дешевле</option><option value="price-down">Сначала дороже</option><option value="fresh">Сначала свежие</option><option value="coverage">Больше продавцов</option></select></label><button id="export" class="secondary">Скачать срез JSON</button></div></div>
 <div id="column-controls" class="column-controls" aria-label="Видимость столбцов" hidden></div>
-<div id="selection-prompt" class="selection-prompt"><span class="empty-symbol" aria-hidden="true">↗</span><strong>Ваш Mac. Все цены.</strong><p>Выберите модель выше, чтобы сравнить закупку<br>и предложения магазинов.</p></div>
-<div class="table-wrap" id="table-wrap" tabindex="0" aria-label="Таблица цен, прокручивается по горизонтали" hidden><table><caption class="sr-only">Цены магазинов по конфигурациям и цветам Mac.</caption><thead id="head"></thead><tbody id="rows"></tbody></table></div>
+<div id="selection-prompt" class="selection-prompt"><span class="empty-symbol" aria-hidden="true">↗</span><strong>Ваш Mac. Все цены.</strong><p>Выберите модель выше, чтобы сравнить<br>предложения продавцов Авито.</p></div>
+<div class="table-wrap" id="table-wrap" tabindex="0" aria-label="Таблица цен, прокручивается по горизонтали" hidden><table><caption class="sr-only">Цены продавцов Авито по конфигурациям и цветам Mac.</caption><thead id="head"></thead><tbody id="rows"></tbody></table></div>
 <nav id="pagination" class="pagination" aria-label="Страницы таблицы" hidden><button id="page-prev" type="button">← Назад</button><span id="page-info" role="status" aria-live="polite"></span><button id="page-next" type="button">Далее →</button></nav>
 <div id="empty" hidden><strong>Подходящих предложений нет</strong><p>Уберите один из фильтров выше или попробуйте другой запрос.</p><button id="clear-specs" type="button">Сбросить параметры и поиск</button></div>
 </section>

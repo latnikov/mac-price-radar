@@ -57,6 +57,29 @@ async function setup(t, options = {}) {
   const post=(path,body)=>request(path,{method:'POST',headers:{origin,'content-type':'application/json','x-csrf-token':session.csrfToken},body:JSON.stringify(body)});
   return {request,post,store,refreshes:()=>refreshes,origin};
 }
+test('Avito and retail sheets separate data and cache while preserving combined API', async t => {
+  const app = await setup(t, { env: {} });
+  const offer = normalizeAvitoListing(avitoRecord({ observedAt: new Date().toISOString() })).offer;
+  app.store.ingestRun({ observations: [offer, {
+    retailer: 'BigGeek', externalId: 'retail-sheet', title: 'MacBook Air 13 M5 16GB 512GB Silver',
+    model: 'MacBook Air', url: 'https://biggeek.ru/products/retail-sheet', price: 100000,
+    fetchedAt: new Date().toISOString(), visibility: 'public', dataKind: 'live',
+  }] });
+  const avitoResponse = await app.request('/api/table?sheet=avito');
+  const avito = await avitoResponse.json();
+  assert.equal(avito.offers.length, 1);
+  assert.equal(avito.offers[0].retailer, 'Авито НН');
+  assert.ok(avito.offers[0].avitoRank);
+  assert.deepEqual(avito.telegramSources, []);
+  const retailResponse = await app.request('/api/table?sheet=retail', { headers: { 'if-none-match': avitoResponse.headers.get('etag') } });
+  assert.equal(retailResponse.status, 200);
+  const retail = await retailResponse.json();
+  assert.equal(retail.offers.length, 1);
+  assert.equal(retail.offers[0].retailer, 'BigGeek');
+  assert.equal((await (await app.request('/api/table')).json()).offers.length, 2);
+  assert.equal((await app.request('/api/table?sheet=invalid')).status, 400);
+  assert.equal((await app.request('/web/avito.html')).status, 200);
+});
 test('foreign sheet has separate API and refresh through existing CSRF protection', async t => {
   const root = await mkdtemp(`${tmpdir()}/foreign-api-`);
   t.after(() => rm(root, { recursive: true, force: true }));
