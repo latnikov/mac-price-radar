@@ -31,6 +31,14 @@ export async function connectForeignBrowser(root = process.cwd()) {
     const timer = setTimeout(() => { pending.delete(requestId); reject(new Error(`Браузер: таймаут ${method}`)); }, 30000);
     pending.set(requestId, { resolve: resolveCommand, reject, timer }); ws.send(JSON.stringify({ id: requestId, method, params }));
   });
+  await command('Page.enable');
+  ws.addEventListener('message', e => {
+    const message = JSON.parse(e.data);
+    if (message.method === 'Page.javascriptDialogOpening') {
+      // A site's leave-page dialog must not hold the hourly collection open.
+      void command('Page.handleJavaScriptDialog', { accept: message.params.type === 'beforeunload' }).catch(() => {});
+    }
+  });
   return {
     close: () => ws.close(),
     async fetchPage(url) {
@@ -43,7 +51,11 @@ export async function connectForeignBrowser(root = process.cwd()) {
         const result = await command('Runtime.evaluate', { expression: `JSON.stringify({url:location.href,ready:document.readyState,title:document.title,html:document.documentElement.outerHTML})`, returnByValue: true });
         const page = JSON.parse(result.result.value || '{}');
         if (page.ready !== 'complete' || page.url === 'about:blank') continue;
-        if (new URL(page.url).hostname === target.hostname && new URL(page.url).pathname.replace(/\/$/, '') !== target.pathname.replace(/\/$/, '')) continue;
+        if (new URL(page.url).hostname === target.hostname && new URL(page.url).pathname.replace(/\/$/, '') !== target.pathname.replace(/\/$/, '')) {
+          if (attempt === 10 || attempt === 20) await command('Page.navigate', { url });
+          if (attempt >= 30) throw new Error(`Браузер не перешёл на ${target.pathname}; открыт ${new URL(page.url).pathname}`);
+          continue;
+        }
         if (/Just a moment|Attention Required|Checking your browser/i.test(page.title)) continue;
         if (new URL(page.url).hostname !== target.hostname) throw new Error(`Источник перенаправил на ${page.url}`);
         await mkdir(join(root, 'data/private/foreign-html'), { recursive: true, mode: 0o700 });

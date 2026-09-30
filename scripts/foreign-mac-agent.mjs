@@ -46,6 +46,7 @@ async function run() {
           throw new Error('Не найдена таблица или список моделей');
         }
       } catch (error) {
+        console.warn(`Не обновлён раздел ${url}: ${error.message}`);
         warnings.push(`${url}: ${error.message}`); coverage.push({ url, state: 'error', error: error.message });
         rows.push(...previous.rows.filter(row => row.guideUrl === url).map(row => ({ ...row, stale: true })));
       }
