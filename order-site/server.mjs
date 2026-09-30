@@ -11,6 +11,21 @@ import { pixelPricingCheckedAt } from './pixel-pricing.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const fault = (status, message) => Object.assign(new Error(message), { status });
+const pricingDate = configuration => configuration.model === 'pixel' ? pixelPricingCheckedAt : configuration.model === 'other' ? null : pricingInfo.checkedAt;
+export function priceStatusForDate(checkedAt, now, maxAgeMs) {
+  if (maxAgeMs === 0) return 'estimated'; // Isolated tests only.
+  const age = now - Date.parse(checkedAt);
+  if (!Number.isFinite(age) || age < 0) return 'on_request';
+  return age <= maxAgeMs ? 'estimated' : 'stale_estimate';
+}
+function orderPrice(payload) {
+  const priced = Number.isInteger(payload.priceRub) && payload.priceRub > 0;
+  return {
+    priceRub: priced ? payload.priceRub : null,
+    priceStatus: priced ? (payload.priceStatus === 'stale_estimate' ? 'stale_estimate' : 'estimated') : 'on_request',
+    pricingAsOf: Number.isFinite(Date.parse(payload.pricingAsOf)) ? payload.pricingAsOf : null,
+  };
+}
 async function readJson(req) {
   if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) throw fault(415, 'Неверный формат запроса.');
   if (Number(req.headers['content-length']) > 8192) throw fault(413, 'Слишком большой запрос.');
@@ -20,11 +35,15 @@ async function readJson(req) {
 }
 function notificationText(row) {
   const p = JSON.parse(row.payload);
-  const priceLine = Number.isInteger(p.priceRub) ? `\nПредварительная цена: ${formatPublicPrice(p.priceRub)}` : '\nЦена: по запросу, требуется расчёт';
+  const stale = p.priceStatus === 'stale_estimate';
+  const asOf = Number.isFinite(Date.parse(p.pricingAsOf)) ? new Date(p.pricingAsOf).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : null;
+  const priceLine = Number.isInteger(p.priceRub)
+    ? `\n${stale ? 'Ориентировочная' : 'Предварительная'} цена: ${formatPublicPrice(p.priceRub)}${stale ? `\nПоследний прайс${asOf ? ` от ${asOf}` : ''}; стоимость требует подтверждения.` : ''}`
+    : '\nЦена: по запросу, требуется расчёт';
   const payment = p.paymentMethod === 'invoice' ? 'Перевод на расчётный счёт от ИП/юрлица' : p.paymentMethod === 'cash' ? 'Наличные' : 'Уточнить у клиента';
   return `Новая заявка · Макбучная\n№ ${row.id}\n${new Date(row.created_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} (МСК)\n\n${p.configurationDescription || describeConfiguration(p.configuration)}${priceLine}\nОплата: ${payment}\n\nИмя: ${p.name || 'не указано'}\nТелефон: ${p.phone}\nГород: Нижний Новгород\n\nСвяжитесь с клиентом для подтверждения стоимости и срока.`;
 }
-export function validateOrder(body, { includeQuote = true, priceAllowed = () => true } = {}) {
+export function validateOrder(body, { includeQuote = true, priceState = () => 'estimated' } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw fault(400, 'Некорректная заявка.');
   let configuration;
   try { configuration = validateConfiguration(body.configuration); } catch (e) { throw fault(400, e.message); }
@@ -39,8 +58,9 @@ export function validateOrder(body, { includeQuote = true, priceAllowed = () => 
   if (body.paymentMethod !== undefined && !['cash', 'invoice'].includes(body.paymentMethod)) throw fault(400, 'Выберите наличные или перевод на расчётный счёт от ИП/юрлица.');
   const intent = { configuration, paymentMethod: body.paymentMethod || 'cash', phone: `+${phone}`, name: (body.name || '').trim(), consentVersion: '2026-09-27' };
   if (!includeQuote) return intent;
-  const priceRub = priceAllowed(configuration) ? quoteCustomerPrice(configuration) : null;
-  return { ...intent, configurationDescription: describeConfiguration(configuration), priceRub, priceStatus: Number.isInteger(priceRub) ? 'estimated' : 'on_request', pricingAsOf: configuration.model === 'pixel' ? pixelPricingCheckedAt : configuration.model === 'other' ? null : pricingInfo.checkedAt };
+  const state = priceState(configuration);
+  const priceRub = state === 'on_request' ? null : quoteCustomerPrice(configuration);
+  return { ...intent, configurationDescription: describeConfiguration(configuration), priceRub, priceStatus: Number.isInteger(priceRub) ? state : 'on_request', pricingAsOf: pricingDate(configuration) };
 }
 
 const intentFingerprint = value => createHash('sha256').update(JSON.stringify(Object.fromEntries(
@@ -67,12 +87,7 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
   const allowedOrigin = env.ORDER_ORIGIN || 'http://127.0.0.1:4180';
   const priceMaxAgeMs = env.ORDER_PRICE_MAX_AGE_MS === undefined ? 72 * 3600000 : Number(env.ORDER_PRICE_MAX_AGE_MS);
   if (!Number.isSafeInteger(priceMaxAgeMs) || priceMaxAgeMs < 0) throw new Error('ORDER_PRICE_MAX_AGE_MS must be a non-negative integer');
-  const priceAllowed = configuration => {
-    if (priceMaxAgeMs === 0) return true;
-    const checkedAt = configuration.model === 'pixel' ? pixelPricingCheckedAt : pricingInfo.checkedAt;
-    const age = now() - Date.parse(checkedAt);
-    return Number.isFinite(age) && age >= 0 && age <= priceMaxAgeMs;
-  };
+  const priceState = configuration => priceStatusForDate(pricingDate(configuration), now(), priceMaxAgeMs);
   const rate = new Map();
   let working = false;
   async function dispatch() {
@@ -138,10 +153,13 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
         // Custom requests are validated only when posted; free text never enters URLs/cache.
         if (normalized.model === 'other') throw fault(400, 'Стоимость другого товара уточним по заявке.');
         // Only valid catalogue keys enter this bounded cache, never raw URLs.
-        const fresh = priceAllowed(normalized);
-        const key = JSON.stringify([normalized, fresh]);
+        const state = priceState(normalized);
+        const key = JSON.stringify([normalized, state]);
         if (!quotes.has(key)) {
-          try { quotes.set(key, representation({ ...(fresh ? quoteConfigurator(normalized) : { priceRub: null, priceStatus: 'on_request', stepPricesRub: {} }), currency: 'RUB' })); }
+          try {
+            const quote = state === 'on_request' ? { priceRub: null, stepPricesRub: {} } : quoteConfigurator(normalized);
+            quotes.set(key, representation({ ...quote, priceStatus: Number.isInteger(quote.priceRub) ? state : 'on_request', pricingAsOf: pricingDate(normalized), currency: 'RUB' }));
+          }
           catch (e) { throw fault(400, e.message); }
         }
         sendRepresentation(req, res, quotes.get(key), 'application/json'); return;
@@ -193,10 +211,10 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
         // Older rows hashed the complete price-bearing payload. Compare the
         // normalized customer intent so retries survive pricebook changes.
         if (intentFingerprint(saved) !== fingerprint) throw fault(409, 'Заявка изменилась. Обновите страницу и отправьте её заново.');
-        json(200, { orderId: existing.id, accepted: true, priceRub: Number.isInteger(saved.priceRub) ? saved.priceRub : null }); return;
+        json(200, { orderId: existing.id, accepted: true, ...orderPrice(saved) }); return;
       }
       if (!acceptingOrders) throw fault(503, 'Приём заявок пока не подключён. Попробуйте позже.');
-      const payload = validateOrder(body, { priceAllowed });
+      const payload = validateOrder(body, { priceState });
       const serialized = JSON.stringify(payload);
       // Caddy overwrites X-Forwarded-For; only trust it behind the loopback proxy.
       const peer = req.socket.remoteAddress;
@@ -208,7 +226,7 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
       const id = `MB-${randomUUID().slice(0, 8).toUpperCase()}`;
       db.prepare('INSERT INTO orders (id, request_key, fingerprint, payload, created_at) VALUES (?, ?, ?, ?, ?)').run(id, key, fingerprint, serialized, now());
       hits.push(now()); rate.set(ip, hits);
-      json(201, { orderId: id, accepted: true, priceRub: payload.priceRub });
+      json(201, { orderId: id, accepted: true, ...orderPrice(payload) });
       if (runWorker) void dispatch().catch(() => console.error('Notification worker unavailable'));
     } catch (e) {
       if (!e.status) console.error('Order request failed');

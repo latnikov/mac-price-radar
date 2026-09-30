@@ -8,6 +8,8 @@ let requestId = crypto.randomUUID();
 let pendingPayload = null;
 let sending = false;
 let currentQuoteRub = null;
+let currentQuoteStatus = 'on_request';
+let currentPricingAsOf = null;
 let quoteReady = false;
 let quoteVersion = 0;
 let currentStep = 'configuration';
@@ -24,7 +26,13 @@ function syncMobileOrder() {
   $('mobile-continue').textContent = Number.isInteger(currentQuoteRub) ? 'Оформить →' : 'Продолжить →';
 }
 const formatPublicPrice = price => `${Number(price).toLocaleString('ru-RU')} ₽`;
-const priceText = price => Number.isInteger(price) ? `Предварительная цена: ${formatPublicPrice(price)}` : 'Цена по запросу';
+const priceText = (price, status = currentQuoteStatus) => Number.isInteger(price) ? `${status === 'stale_estimate' ? 'Ориентировочная' : 'Предварительная'} цена: ${formatPublicPrice(price)}` : 'Цена по запросу';
+const quoteNote = (price, status, asOf) => {
+  if (!Number.isInteger(price)) return 'Оставьте заявку на выбранную конфигурацию. Стоимость, наличие и срок привоза подтвердим по телефону.';
+  const date = Number.isFinite(Date.parse(asOf)) ? new Date(asOf).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : null;
+  const basis = status === 'stale_estimate' ? `Это ориентир по последнему прайсу${date ? ` от ${date}` : ''}.` : 'Это предварительная цена.';
+  return `${basis} Точную стоимость и срок привоза в Нижний Новгород подтвердим по телефону.`;
+};
 const paymentMethod = () => document.querySelector('input[name="payment"]:checked').value;
 const paymentText = () => paymentMethod() === 'invoice' ? 'Перевод на расчётный счёт от ИП/юрлица' : 'Наличные';
 const selectedValue = id => $(id).querySelector('[aria-pressed="true"]')?.dataset.value;
@@ -33,6 +41,10 @@ const setStepPricesLoading = () => document.querySelectorAll('.option-step').for
   step.closest('button').classList.remove('is-upgrade', 'is-downgrade');
 });
 const showStepPrices = (stepPrices, currentPrice) => {
+  document.querySelectorAll('.option-step').forEach(step => {
+    step.textContent = 'Цена по запросу';
+    step.closest('button').classList.remove('is-upgrade', 'is-downgrade');
+  });
   for (const [group, prices] of Object.entries(stepPrices)) {
     $(`${group}-options`)?.querySelectorAll('button').forEach(button => {
       const price = prices[button.dataset.value];
@@ -111,6 +123,8 @@ function selection() {
 async function refreshQuote(configuration) {
   const version = ++quoteVersion;
   currentQuoteRub = null;
+  currentQuoteStatus = 'on_request';
+  currentPricingAsOf = null;
   quoteReady = false;
   $('continue-order').disabled = true;
   $('retry-quote').hidden = true;
@@ -122,13 +136,13 @@ async function refreshQuote(configuration) {
     const data = await loadQuote(configuration);
     if (version !== quoteVersion) return;
     currentQuoteRub = data.priceRub;
+    currentQuoteStatus = data.priceStatus;
+    currentPricingAsOf = data.pricingAsOf;
     quoteReady = true;
     showStepPrices(data.stepPricesRub, currentQuoteRub);
     $('price').textContent = priceText(currentQuoteRub);
     $('continue-order').textContent = Number.isInteger(currentQuoteRub) ? 'Оформить заказ' : 'Запросить стоимость';
-    $('quote-note').textContent = Number.isInteger(currentQuoteRub)
-      ? 'Это предварительная цена. Точную стоимость и срок привоза в Нижний Новгород подтвердим по телефону.'
-      : 'Оставьте заявку на выбранную конфигурацию. Стоимость, наличие и срок привоза подтвердим по телефону.';
+    $('quote-note').textContent = quoteNote(currentQuoteRub, currentQuoteStatus, currentPricingAsOf);
     $('price-help').textContent = Number.isInteger(currentQuoteRub)
       ? 'Под выбранными вариантами показана текущая цена, под остальными — насколько цена увеличится или уменьшится.'
       : 'Выберите нужную конфигурацию и отправьте запрос стоимости. Цену подтвердим перед покупкой.';
@@ -151,7 +165,7 @@ function summary() {
   $('retry-quote').hidden = true;
   $('selection').textContent = describeConfiguration(configuration);
   if (model.id === 'other') {
-    ++quoteVersion; currentQuoteRub = null; quoteReady = configuration.description.length >= 3;
+    ++quoteVersion; currentQuoteRub = null; currentQuoteStatus = 'on_request'; currentPricingAsOf = null; quoteReady = configuration.description.length >= 3;
     $('selection').textContent = configuration.description || 'Укажите товар и нужные параметры.';
     $('price').textContent = 'Цена по запросу';
     $('quote-note').textContent = 'Стоимость и возможность заказа уточним по вашей заявке.';
@@ -234,6 +248,7 @@ $('configuration').addEventListener('submit', async e => {
   const configuration = selection();
   $('contact-selection').textContent = describeConfiguration(configuration);
   $('contact-price').textContent = priceText(currentQuoteRub);
+  $('contact-quote-note').textContent = quoteNote(currentQuoteRub, currentQuoteStatus, currentPricingAsOf);
   $('contact-payment').textContent = `Оплата: ${paymentText()}`;
   showStep('contact');
   $('form-error').hidden = true;
@@ -273,7 +288,8 @@ $('order').addEventListener('submit', async e => {
     if (!response.ok) throw new Error(data.error || 'Не удалось отправить заявку. Попробуйте ещё раз.');
     $('order-number').textContent = data.orderId;
     $('success-selection').textContent = describeConfiguration(body.configuration);
-    $('success-price').textContent = priceText(data.priceRub);
+    $('success-price').textContent = priceText(data.priceRub, data.priceStatus);
+    $('success-quote-note').textContent = quoteNote(data.priceRub, data.priceStatus, data.pricingAsOf);
     showStep('success'); $('success-title').focus();
   } catch (error) {
     $('form-error').textContent = error.name === 'TypeError' || error.name === 'TimeoutError' ? 'Ответ сервера не получен. Нажмите «Отправить заявку» ещё раз — повторная отправка не создаст дубль.' : error.message;
