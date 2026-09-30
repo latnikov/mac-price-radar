@@ -20,7 +20,7 @@ export function accessError(failure) {
 // /api/status must never return route credentials, cookie jars or raw HTML.
 export function publicAvitoState(state = {}) {
   const result = {};
-  for (const key of ['state','message','startedAt','updatedAt','retryAfter']) if (typeof state[key] === 'string') result[key] = state[key].slice(0,250);
+  for (const key of ['state','message','startedAt','updatedAt','retryAfter','nextRunAt']) if (typeof state[key] === 'string') result[key] = state[key].slice(0,250);
   if (state.transport) result.transport = ['proxy', 'apify'].includes(state.transport) ? state.transport : 'direct';
   if (state.access) result.access = { reason: state.access.reason, status: state.access.status, challenge: Boolean(state.access.challenge) };
   if (state.counts) result.counts = Object.fromEntries(Object.entries(state.counts).filter(([k,v])=>['pages','discovered','detailed','inspected','remaining','expectedTotal','requests'].includes(k)&&Number.isFinite(v)));

@@ -51,10 +51,10 @@ export function monitorSummary(data = {}) {
     message: typeof state.message === 'string' && state.message.trim() ? state.message : state.transport === 'apify'
       ? 'Объявления поступают через Apify. Подтверждённые предложения попадают в таблицу по продавцам.'
       : 'Сохраняем найденные объявления и проверяем их перед добавлением в таблицу.',
-    updated: date(state.updatedAt) ? `Последний сбор: ${date(state.updatedAt)}` : 'Успешный сбор пока не подтверждён',
+    updated: date(state.updatedAt) ? `Последний импорт: ${date(state.updatedAt)}` : 'Успешный импорт пока не подтверждён',
     schedule: date(state.nextRunAt) ? `Следующий запуск: ${date(state.nextRunAt)}` : 'Следующий запуск пока не назначен',
     budget: max ? trialBudget
-      ? `Тест Apify: ${spent} из ${max}${remaining}${date(budget.periodEndsAt) ? ` · до ${date(budget.periodEndsAt)}` : ''}. После первой недели или исчерпания лимита сбор остановится.`
+      ? `Тест Apify: ${spent} из ${max}${remaining}${date(budget.periodEndsAt) ? ` · до ${date(budget.periodEndsAt)}` : ''}. Сбор остановится после первой недели, исчерпания бюджета или 10 запусков на бесплатном тарифе.`
       : `Бюджет Apify за месяц: ${spent} из ${max}${remaining}`
       : 'Бюджет Apify пока не задан',
     notifications: notifications.enabled === true
@@ -136,7 +136,7 @@ function render(data, root) {
   set('avito-monitor-badge', summary.badge);
   set('avito-monitor-message', summary.message);
   document.getElementById('avito-monitor-counts').replaceChildren(
-    metric('Получено объявлений', summary.counts.total), metric('В таблице', summary.counts.accepted),
+    metric('В последней порции', summary.counts.total), metric('Принято из порции', summary.counts.accepted),
     metric('Требуют проверки', summary.counts.review), metric('Не подходят', summary.counts.excluded),
   );
   for (const field of ['updated', 'schedule', 'budget', 'notifications', 'coverage']) set(`avito-monitor-${field}`, summary[field]);

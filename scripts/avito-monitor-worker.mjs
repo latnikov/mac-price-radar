@@ -12,3 +12,4 @@ try { opportunities = calculateAvitoOpportunities(store.getOffers({ includeRejec
 finally { store.close(); }
 const notifications = await sendAvitoAlerts({ opportunities, env, dir: resolve(root, env.AVITO_DATA_DIR || 'data/private/avito') });
 console.log(JSON.stringify({ state: state.state, message: state.message, counts: state.counts, notifications }));
+if (['error', 'needs_attention'].includes(state.state)) process.exitCode = 1;

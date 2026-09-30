@@ -80,6 +80,9 @@ function renderStatus() {
     summary.title = state.latestStatus.state === 'running' ? 'Обновляем цены Авито' : 'Цены Авито';
     summary.detail = avitoStatus(avito) || 'Показываем последние сохранённые объявления.';
     summary.tone = state.latestStatus.state === 'running' ? 'loading' : avito?.state === 'ready' ? 'success' : 'warning';
+    if (avito?.transport === 'apify') summary.schedule = Number.isFinite(Date.parse(avito.nextRunAt))
+      ? `Следующий сбор Apify: ${new Date(avito.nextRunAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК`
+      : 'Новый сбор Apify пока не назначен';
   } else {
     Object.assign(summary, priceStatus({ ...state.latestStatus, avito: undefined }, state.offers));
   }
