@@ -15,18 +15,18 @@
   <section class="filters">
     <div class="filter-top"><h1>Зарубежные цены</h1><button id="foreign-refresh" disabled>Обновить цены</button></div>
     <div class="foreign-intro">
-      <p>Лучшие цены на Mac из <a href="https://prices.appleinsider.com/current-gen" target="_blank" rel="noopener noreferrer">AppleInsider</a>.</p>
-      <p class="foreign-formula">Цена в рублях = цена в $ × (курс <a href="https://www.google.com/finance/quote/USD-RUB" target="_blank" rel="noopener noreferrer">Google</a> + 4 ₽)</p>
+      <p>Лучшие цены на Mac, iPad, iPhone, Apple Watch, AirPods, дисплеи и аксессуары из <a href="https://prices.appleinsider.com/" target="_blank" rel="noopener noreferrer">AppleInsider</a>.</p>
+      <p class="foreign-formula">Цена в рублях = цена в $ × (официальный курс <a href="https://www.cbr.ru/currency_base/daily/" target="_blank" rel="noopener noreferrer">ЦБ РФ</a> + 4 ₽)</p>
       <p id="foreign-rate">Курс ещё не получен.</p>
       <p class="foreign-note">Цены из колонки Best Price. Условия скидки уточняйте по ссылке. Доставка, налоги и пошлины не включены.</p>
       <p id="foreign-status" role="status" aria-live="polite">Загрузка…</p>
       <details id="foreign-error" hidden><summary>Подробнее об ошибке сбора</summary><p id="foreign-error-text"></p></details>
-      <div class="foreign-controls"><label>Поиск по модели и конфигурации<input id="foreign-search" type="search" placeholder="Например: M5 16GB Silver" maxlength="120"></label><label>Сортировка<select id="foreign-sort"><option value="model">По модели</option><option value="price">Сначала дешевле</option></select></label></div>
+      <div class="foreign-controls"><label>Линейка<select id="foreign-category"><option value="">Все линейки</option></select></label><label>Поиск по модели и конфигурации<input id="foreign-search" type="search" placeholder="Например: M5 16GB Silver" maxlength="120"></label><label>Сортировка<select id="foreign-sort"><option value="model">По модели</option><option value="price">Сначала дешевле</option></select></label></div>
     </div>
   </section>
   <p id="foreign-count"></p>
   <div class="table-wrap" id="foreign-table" tabindex="0" aria-label="Таблица зарубежных цен" hidden>
-    <table><caption class="sr-only">Зарубежные цены Mac в долларах и рублях</caption><thead><tr><th>Модель</th><th>Конфигурация</th><th>Цена, $</th><th>Цена, ₽</th><th>Источник и условия</th></tr></thead><tbody id="foreign-rows"></tbody></table>
+    <table><caption class="sr-only">Зарубежные цены Apple в долларах и рублях</caption><thead><tr><th>Модель</th><th>Конфигурация</th><th>Цена, $</th><th>Цена, ₽</th><th>Источник и условия</th></tr></thead><tbody id="foreign-rows"></tbody></table>
   </div>
   <p id="foreign-empty" hidden></p>
 </main>

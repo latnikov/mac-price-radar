@@ -1,12 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseGoogleRate, findMacGuides, parseAppleGuide, convertForeignPrices, refreshForeignPrices, readForeignPrices, GUIDE_URL, RATE_URL } from '../scripts/foreign-prices.mjs';
+import { parseGoogleRate, parseCbrRate, findAppleGuides, findMacGuides, parseAppleGuide, convertForeignPrices, refreshForeignPrices, readForeignPrices, GUIDE_URL, RATE_URL } from '../scripts/foreign-prices.mjs';
 
 const guideUrl = 'https://prices.appleinsider.com/macbook-air-13-inch-m5';
-// Contract fixture, not a saved live scrape: live access currently returns HTTP 403.
+// Synthetic contract fixture; real browser samples are tested below.
 const guide = `<h1>M5 MacBook Air 13-inch Prices</h1><table>
 <tr><th>Configurations</th><th>Best Price</th><th>Apple</th><th>Discount</th></tr>
 <tr><td>M5, 16GB, 512GB, Silver</td><td><a href="/go/shop">$1,239.99</a></td><td>$1,299</td><td>$60</td></tr>
@@ -70,4 +70,43 @@ test('first blocked collection saves honest empty error state', async t => {
   assert.equal(saved.state, 'error');
   assert.deepEqual(saved.rows, []);
   assert.equal(saved.googleRate, undefined);
+});
+
+test('real browser tables read full prices and exclude carrier installments and other speaker brands', async () => {
+  const fixture = path => readFile(new URL(`./fixtures/foreign/${path}.html`, import.meta.url), 'utf8');
+  const air = parseAppleGuide(await fixture('macbook-air-15-inch-m5'), 'https://prices.appleinsider.com/macbook-air-15-inch-m5');
+  assert.deepEqual(air.map(row => row.usd), [1399, 1429]);
+  assert.equal(air[0].category, 'Mac');
+  const phone = parseAppleGuide(await fixture('iphone-18-pro'), 'https://prices.appleinsider.com/iphone-18-pro');
+  assert.deepEqual(phone.map(row => row.usd), [1199, 1199]);
+  const speakers = parseAppleGuide(await fixture('smart-speakers'), 'https://prices.appleinsider.com/smart-speakers');
+  assert.equal(speakers.length, 7);
+  assert.ok(speakers.every(row => /HomePod/.test(row.configuration)));
+});
+
+test('CBR rate selects USD and accounts for nominal with an explicit date', () => {
+  const xml = '<ValCurs Date="30.09.2026"><Valute><CharCode>EUR</CharCode><Nominal>1</Nominal><Value>99,1234</Value></Valute><Valute><CharCode>USD</CharCode><Nominal>10</Nominal><Value>844,2830</Value></Valute></ValCurs>';
+  const rate = parseCbrRate(xml);
+  assert.equal(rate.usdRate, 84.4283);
+  assert.equal(rate.rateDate, '30.09.2026');
+  assert.equal(convertForeignPrices([{ usd: 1399 }], rate.usdRate)[0].rub, 123711);
+  assert.throws(() => parseCbrRate(xml.replace('<Nominal>10</Nominal>', '<Nominal>0</Nominal>')));
+  assert.throws(() => parseCbrRate(xml.replace('USD', 'GBP')));
+  assert.throws(() => parseCbrRate('<html>403</html>'));
+});
+
+test('all-line discovery excludes external hosts, retailer redirects and trade-in', () => {
+  assert.deepEqual(findAppleGuides('<a href="/ipad-pro-11-inch-m5">iPad</a><a href="/iphone-18-pro">Phone</a><a href="/apple-watch-series-12">Watch</a><a href="/product/ipad/x">SKU</a><a href="/trade-in">Trade</a><a href="https://other.test/macbook-pro">Other</a>'), ['https://prices.appleinsider.com/ipad-pro-11-inch-m5', 'https://prices.appleinsider.com/iphone-18-pro', 'https://prices.appleinsider.com/apple-watch-series-12']);
+});
+
+test('pending Mac request is visible without changing saved prices or collection date', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'foreign-mac-request-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const fetchPage = async url => url === GUIDE_URL ? `<a href="${guideUrl}">Air</a>` : url === RATE_URL ? rateHtml : guide;
+  const original = await refreshForeignPrices({ root, fetchPage, now: () => '2026-09-30T00:00:00Z' });
+  await writeFile(join(root, 'data/private/foreign-request.json'), JSON.stringify({ requestedAt: '2026-09-30T01:00:00Z' }));
+  const saved = await readForeignPrices(root);
+  assert.equal(saved.requestedAt, '2026-09-30T01:00:00Z');
+  assert.equal(saved.updatedAt, original.updatedAt);
+  assert.deepEqual(saved.rows, original.rows);
 });

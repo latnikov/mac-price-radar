@@ -5,7 +5,29 @@ import { join } from 'node:path';
 export const FOREIGN_SOURCE = 'AppleInsider';
 export const GUIDE_URL = 'https://prices.appleinsider.com/current-gen';
 export const RATE_URL = 'https://www.google.com/finance/quote/USD-RUB?hl=en';
+export const CBR_RATE_URL = 'https://www.cbr.ru/scripts/XML_daily.asp';
 const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
+export const APPLE_CATEGORIES = ['current-gen', 'ipad', 'iphone', 'apple-watch', 'airpods-beats', 'tv-home', 'vision', 'accessories', 'apple-displays'];
+export function parseCbrRate(xml) {
+  const $ = load(xml, { xmlMode: true });
+  const dollar = $('Valute').filter((_, el) => $(el).find('CharCode').text() === 'USD');
+  const nominal = Number(dollar.find('Nominal').text());
+  const value = Number(dollar.find('Value').text().replace(',', '.'));
+  const rateDate = $('ValCurs').attr('Date');
+  if (dollar.length !== 1 || !(nominal > 0) || !(value > 0) || value / nominal > 10000 || !/^\d{2}\.\d{2}\.\d{4}$/.test(rateDate || '')) throw new Error('ЦБ: не найден однозначный курс USD/RUB с датой');
+  return { usdRate: Math.round(value / nominal * 1e6) / 1e6, rateDate, rateSource: 'ЦБ РФ', rateUrl: CBR_RATE_URL };
+}
+export function findAppleGuides(html) {
+  const $ = load(html), urls = new Set();
+  $('a[href]').each((_, a) => {
+    let url;
+    try { url = new URL($(a).attr('href'), GUIDE_URL); } catch { return; }
+    if (url.origin === 'https://prices.appleinsider.com' && /^\/(?:macbook|mac-mini|mac-studio|mac-pro|imac|ipad|iphone|apple-watch|apple-airpods|airpods|apple-tv|smart-speakers|apple-vision|airtag|magic-accessories|apple-displays|beats|earbuds|over-ear-headphones)[a-z0-9-]*\/?$/.test(url.pathname)) {
+      url.hash = ''; url.search = ''; urls.add(url.href.replace(/\/$/, ''));
+    }
+  });
+  return [...urls];
+}
 
 export function parseGoogleRate(html) {
   const $ = load(html);
@@ -28,20 +50,26 @@ export function findMacGuides(html) {
   return [...urls];
 }
 
-export function parseAppleGuide(html, guideUrl) {
+export function parseAppleGuide(html, guideUrl, { allowEmpty = false } = {}) {
   const $ = load(html);
   const model = clean($('h1').first().text()).replace(/\s+Prices.*$/i, '');
-  if (!/MacBook|Mac mini|Mac Studio|Mac Pro|iMac/i.test(model)) throw new Error('AppleInsider: не распознана модель');
+  if (!model || /Just a moment|Access denied|Error 403|Attention Required/i.test(model)) throw new Error('AppleInsider: не распознана модель');
   const rows = [];
+  let recognized = false;
   $('table').each((_, table) => {
     const headers = $(table).find('tr').first().children('th,td').toArray().map(cell => clean($(cell).text()));
     const configIndex = headers.findIndex(text => /^Configurations?$/i.test(text));
     const priceIndex = headers.findIndex(text => /^Best Price$/i.test(text));
     if (configIndex < 0 || priceIndex < 0) return;
+    recognized = true;
     $(table).find('tr').slice(1).each((_, tr) => {
       const cells = $(tr).children('td');
       const configCell = cells.eq(configIndex), priceCell = cells.eq(priceIndex);
       const configuration = clean(configCell.text());
+      const path = new URL(guideUrl).pathname;
+      if (path === '/smart-speakers' && !/HomePod/i.test(configuration)) return;
+      if (path === '/apple-displays' && !/Apple|Studio Display|Pro Display/i.test(configuration)) return;
+      if (['/earbuds', '/over-ear-headphones'].includes(path) && !/AirPods|Beats/i.test(configuration)) return;
       const priceText = clean(priceCell.text());
       // Read only Best Price, never MSRP, savings, installments or another row.
       const amount = priceText.match(/^\$\s*((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{2})?)(?=\s|$)/);
@@ -54,12 +82,21 @@ export function parseAppleGuide(html, guideUrl) {
         const parsed = new URL(link.attr('href'), guideUrl);
         if (parsed.protocol === 'https:') offerUrl = parsed.href;
       }
-      rows.push({ id: `${guideUrl}|${configuration}`, model, configuration, usd, guideUrl, offerUrl,
+      const category = /macbook|mac-mini|mac-studio|mac-pro|imac/.test(path) ? 'Mac' : path.startsWith('/ipad') ? 'iPad' : path.startsWith('/iphone') ? 'iPhone' : path.startsWith('/apple-watch') ? 'Apple Watch' : /airpods|beats|earbuds|headphones/.test(path) ? 'AirPods и Beats' : path === '/apple-displays' ? 'Дисплеи' : /apple-tv|smart-speakers/.test(path) ? 'TV и HomePod' : /vision/.test(path) ? 'Vision Pro' : 'Аксессуары';
+      rows.push({ id: `${guideUrl}|${configuration}`, model, category, configuration, usd, guideUrl, offerUrl,
         terms: priceText.slice(amount[0].length).trim(), priceLabel: 'Best Price' });
     });
   });
-  if (!rows.length) throw new Error(`AppleInsider: не найдены цены в таблице ${guideUrl}`);
+  if (!recognized || (!rows.length && !allowEmpty)) throw new Error(`AppleInsider: не найдены цены в таблице ${guideUrl}`);
   return rows;
+}
+
+export async function saveForeignPrices(snapshot, root = '.') {
+  const directory = join(root, 'data/private');
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const path = join(directory, 'foreign-prices.json'), temporary = `${path}.${process.pid}.tmp`;
+  await writeFile(temporary, JSON.stringify(snapshot), { mode: 0o600 });
+  await rename(temporary, path);
 }
 
 export function convertForeignPrices(rows, googleRate) {
@@ -69,7 +106,12 @@ export function convertForeignPrices(rows, googleRate) {
 }
 
 export async function readForeignPrices(root = '.') {
-  try { return JSON.parse(await readFile(join(root, 'data/private/foreign-prices.json'), 'utf8')); }
+  try {
+    const snapshot = JSON.parse(await readFile(join(root, 'data/private/foreign-prices.json'), 'utf8'));
+    const request = await readFile(join(root, 'data/private/foreign-request.json'), 'utf8').then(JSON.parse).catch(() => null);
+    if (request && Date.parse(request.requestedAt) > Date.parse(snapshot.attemptedAt || 0)) snapshot.requestedAt = request.requestedAt;
+    return snapshot;
+  }
   catch (error) {
     if (error.code !== 'ENOENT') throw error;
     return { state: 'pending', rows: [], error: null, sourceUrl: GUIDE_URL, rateUrl: RATE_URL };
@@ -102,11 +144,7 @@ export async function refreshForeignPrices({ fetchPage, root = '.', now = () => 
   } catch (error) {
     snapshot = { ...previous, state: 'error', attemptedAt, error: error.message };
   }
-  const directory = join(root, 'data/private');
-  await mkdir(directory, { recursive: true, mode: 0o700 });
-  const path = join(directory, 'foreign-prices.json'), temporary = `${path}.${process.pid}.tmp`;
-  await writeFile(temporary, JSON.stringify(snapshot), { mode: 0o600 });
-  await rename(temporary, path);
+  await saveForeignPrices(snapshot, root);
   if (snapshot.state === 'error') throw new Error(snapshot.error);
   return snapshot;
 }

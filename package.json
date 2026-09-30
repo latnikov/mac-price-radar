@@ -7,6 +7,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --import tsx test/*.test.ts test/*.test.mjs",
     "build:data": "node scripts/build-data.mjs",
+    "collect:foreign:mac": "node scripts/foreign-mac-agent.mjs --force",
+    "install:foreign:mac": "node scripts/install-foreign-mac-agent.mjs",
     "collect:avito": "node scripts/avito-collector.mjs",
     "sync:sheet": "node scripts/sync-sheet.mjs",
     "dev": "node scripts/server.mjs",

@@ -13,18 +13,26 @@ async function request(path, body) {
 }
 function render() {
   const terms = $('foreign-search').value.toLowerCase().split(/\s+/).filter(Boolean);
-  const rows = snapshot.rows.filter(row => terms.every(term => `${row.model} ${row.configuration}`.toLowerCase().includes(term)));
+  const category = $('foreign-category').value;
+  const categories = [...new Set(snapshot.rows.map(row => row.category).filter(Boolean))].sort();
+  if ($('foreign-category').dataset.categories !== categories.join('|')) {
+    $('foreign-category').replaceChildren(new Option('Все линейки', ''), ...categories.map(value => new Option(value, value)));
+    $('foreign-category').value = categories.includes(category) ? category : '';
+    $('foreign-category').dataset.categories = categories.join('|');
+  }
+  const rows = snapshot.rows.filter(row => (!category || row.category === category) && terms.every(term => `${row.model} ${row.configuration}`.toLowerCase().includes(term)));
   if ($('foreign-sort').value === 'price') rows.sort((a, b) => a.rub - b.rub);
   const fragment = document.createDocumentFragment();
   for (const row of rows) {
     const tr = document.createElement('tr');
-    for (const value of [row.model, row.configuration, number(row.usd), number(row.rub)]) {
+    for (const value of [row.model, row.configuration, number(row.usd), row.rub == null ? '—' : number(row.rub)]) {
       const td = document.createElement('td'); td.textContent = value; tr.append(td);
     }
     const td = document.createElement('td'), link = document.createElement('a');
     link.href = row.guideUrl; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'AppleInsider ↗';
     td.append(link);
     if (row.terms) { const note = document.createElement('p'); note.textContent = row.terms; td.append(note); }
+    if (row.stale) { const note = document.createElement('p'); note.textContent = `Предыдущая проверка: ${date(row.fetchedAt)}. Обновление раздела не удалось.`; td.append(note); }
     tr.append(td); fragment.append(tr);
   }
   $('foreign-rows').replaceChildren(fragment);
@@ -32,11 +40,12 @@ function render() {
   $('foreign-table').hidden = !rows.length;
   $('foreign-empty').hidden = Boolean(rows.length);
   $('foreign-empty').textContent = snapshot.rows.length ? 'По этому запросу ничего не найдено.' : 'Цены появятся после первого успешного сбора.';
-  $('foreign-rate').textContent = snapshot.googleRate ? `Google: ${number(snapshot.googleRate)} ₽/$ + 4 ₽ = ${number(snapshot.effectiveRate)} ₽/$. Проверено: ${date(snapshot.updatedAt)} (Москва).` : 'Курс ещё не получен. Пересчёт появится после успешной проверки Google.';
+  const rate = snapshot.usdRate || snapshot.googleRate;
+  $('foreign-rate').textContent = rate ? `${snapshot.rateSource || 'Google'}: ${number(rate)} ₽/$ + 4 ₽ = ${number(snapshot.effectiveRate)} ₽/$. ${snapshot.rateDate ? `Дата курса: ${snapshot.rateDate}. ` : ''}Проверено: ${date(snapshot.updatedAt)} (Москва).` : 'Курс ещё не получен. Пересчёт появится после успешной проверки.';
   const stale = snapshot.updatedAt && Date.now() - Date.parse(snapshot.updatedAt) > 4 * 3600000;
-  $('foreign-status').textContent = running ? 'Идёт обновление цен. Сохранённый результат показан ниже.' : snapshot.state === 'error' ? `Сбор недоступен. ${snapshot.rows.length ? 'Показаны последние сохранённые цены.' : 'Подтверждённых цен пока нет.'} Последняя попытка: ${date(snapshot.attemptedAt)} (Москва).` : snapshot.state === 'ready' ? `${stale ? 'Старая проверка. ' : ''}Обновление каждый час. Последний сбор: ${date(snapshot.updatedAt)} (Москва).` : 'Первый сбор ещё не завершён. Автоматическое обновление — каждый час.';
-  $('foreign-error').hidden = !snapshot.error;
-  $('foreign-error-text').textContent = snapshot.error || '';
+  $('foreign-status').textContent = snapshot.requestedAt ? `Обновление запрошено ${date(snapshot.requestedAt)}. Сбор начнётся на Mac при доступном подключении. Показаны сохранённые цены.` : running ? 'Идёт обновление цен. Сохранённый результат показан ниже.' : snapshot.state === 'error' ? `Сбор недоступен. ${snapshot.rows.length ? 'Показаны последние сохранённые цены.' : 'Подтверждённых цен пока нет.'} Последняя попытка: ${date(snapshot.attemptedAt)} (Москва).` : ['ready', 'partial'].includes(snapshot.state) ? `${stale ? 'Старая проверка. ' : ''}${snapshot.state === 'partial' ? 'Часть разделов не обновилась. ' : ''}Обновление каждый час${snapshot.transport === 'mac-browser' ? ', пока Mac включён и подключён к интернету' : ''}. Последний сбор: ${date(snapshot.updatedAt)} (Москва). Таблиц: ${snapshot.guides}.` : 'Первый сбор ещё не завершён. Автоматическое обновление — каждый час.';
+  $('foreign-error').hidden = !snapshot.error && !snapshot.warnings?.length;
+  $('foreign-error-text').textContent = snapshot.error || snapshot.warnings?.join('\n') || '';
   $('foreign-refresh').disabled = !csrf || running || pending;
   $('foreign-refresh').textContent = running || pending ? 'Обновляем цены…' : 'Обновить цены';
 }
@@ -46,6 +55,7 @@ async function reload() {
 }
 $('foreign-search').addEventListener('input', render);
 $('foreign-sort').addEventListener('change', render);
+$('foreign-category').addEventListener('change', render);
 $('foreign-refresh').addEventListener('click', async () => {
   pending = true; render();
   let failure;
