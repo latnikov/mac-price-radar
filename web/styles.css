@@ -24,6 +24,9 @@ input, select { min-width: 0; min-height: 40px; padding: 8px 11px; border: 1px s
 input::placeholder { color: #8793a4; }
 h1 { margin: 0; font-size: clamp(25px, 2.5vw, 34px); letter-spacing: -1.15px; line-height: 1.2; font-weight: 650; }
 .workspace { max-width: 1680px; margin: 0 auto; }
+.sheet-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+.sheet-tabs a { padding: 11px 16px; border-radius: 10px; color: var(--muted); }
+.sheet-tabs a[aria-current="page"] { color: var(--accent); background: #e8efff; font-weight: 600; }
 .filters { background: #fff; border: 1px solid var(--line); border-radius: 22px; box-shadow: 0 4px 20px #263a5d03; overflow: hidden; }
 .filter-top { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 30px 30px 28px; }
 .secondary { background: transparent; color: #637187; font-size: 13px; }

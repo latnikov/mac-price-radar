@@ -26,6 +26,7 @@ import { inPublicSourceScope } from './domain.mjs';
 import { createCollectorFetch } from './collector-fetch.mjs';
 import { collectSources, collectionFailures, scheduleSources } from './collection-runner.mjs';
 import { crawlQueue } from './crawl-queue.mjs';
+const FOREIGN_SOURCE = 'AppleInsider';
 
 const privateDir = 'data/private';
 await mkdir(`${privateDir}/backups`, { recursive: true, mode: 0o700 });
@@ -68,7 +69,7 @@ try {
     });
     store.ingestRun({ runId: 'legacy-migration-v1', observations, sources: [...new Set(observations.map(o => o.retailer))].map(retailer => ({ retailer, status: 'partial' })), actor: 'migration', reason: 'Сохранение исходного снимка; прежние предположения требуют проверки' });
   }
-  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'BSA', 'Дима', AVITO];
+  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
   const telegram = new Map((await readTelegramSources()).map(source => [source.retailer, source]));
   retailers.push(...[...telegram.keys()].filter(retailer => !retailers.includes(retailer)));
   const selected = process.env.RETAILER && process.env.RETAILER !== 'all' ? [...new Set(process.env.RETAILER.split(',').map(x => x.trim() === 'Iphoriya' ? 'Айфория' : x.trim()))] : retailers;
@@ -90,6 +91,11 @@ try {
     const { fetchPage, fetchResponse, metrics } = createCollectorFetch({ signal: runSignal });
     networkBySource.set(retailer, metrics);
     const out = [], failures = [];
+    if (retailer === FOREIGN_SOURCE) {
+      const { refreshForeignPrices } = await import('./foreign-prices.mjs');
+      const snapshot = await refreshForeignPrices({ fetchPage });
+      return { foreign: true, offers: [], counts: { published: snapshot.rows.length, guides: snapshot.guides } };
+    }
     if (retailer.startsWith('Telegram:') && telegram.has(retailer)) {
       const result = await fetchTelegramChannel(telegram.get(retailer));
       return { offers: result.offers, failures: result.failures, counts: result.stats };
@@ -206,6 +212,10 @@ try {
     });
     for (const { retailer, value: result, error, durationMs } of collected) {
       if (error) { sources.push({ retailer, durationMs, status: error.code === 'AVITO_NOT_READY' ? 'not_ready' : 'failed', error: error.message, counts: { published: 0 } }); continue; }
+      if (result.foreign) {
+        sources.push({ retailer, durationMs, status: 'success', counts: result.counts, error: null });
+        continue;
+      }
       if (retailer === AVITO) {
         sources.push({ retailer, sourceId: 'avito:nn', sellerId: 'avito:marketplace', sourceType: 'marketplace', durationMs,
           status: result.counts.complete ? 'success' : 'partial', counts: { ...result.counts, published: result.offers.filter(visibleAvitoOffer).length }, error: result.failures.join('; ') || null });

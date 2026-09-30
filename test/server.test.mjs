@@ -57,6 +57,16 @@ async function setup(t, options = {}) {
   const post=(path,body)=>request(path,{method:'POST',headers:{origin,'content-type':'application/json','x-csrf-token':session.csrfToken},body:JSON.stringify(body)});
   return {request,post,store,refreshes:()=>refreshes,origin};
 }
+test('foreign sheet has separate API and refresh through existing CSRF protection', async t => {
+  const root = await mkdtemp(`${tmpdir()}/foreign-api-`);
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const app = await setup(t, { root });
+  assert.deepEqual((await (await app.request('/api/foreign-prices')).json()).rows, []);
+  assert.equal(app.refreshes(), 0);
+  assert.equal((await app.post('/api/refresh', { retailer: 'AppleInsider' })).status, 202);
+  assert.equal(app.refreshes(), 1);
+  assert.deepEqual((await (await app.request('/api/table')).json()).offers, []);
+});
 test('AC17 project files and cross-site mutation are blocked; reading never refreshes',async t=>{
   const app=await setup(t);
   for(const path of ['/data/private/master.sqlite','/.git/config','/requirements.md','/data/cheapest.json','/package.json'])assert.equal((await app.request(path)).status,404,path);

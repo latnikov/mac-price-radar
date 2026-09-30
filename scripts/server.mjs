@@ -12,9 +12,13 @@ import { createResponseCache, cachedFile, sendCached } from './response-cache.mj
 import { AVITO, visibleAvitoOffer } from './avito-policy.mjs';
 import { rankAvitoOffers } from './avito-ranking.mjs';
 import { publicAvitoState } from './avito-access.mjs';
+import { FOREIGN_SOURCE, readForeignPrices } from './foreign-prices.mjs';
 
-const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'RifaStore', 'BSA', 'Дима', AVITO];
+const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'RifaStore', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
 const STATIC_FILES = new Map([
+  ['/web/foreign.html', ['web/foreign.html', 'text/html; charset=utf-8']],
+  ['/web/foreign.js', ['web/foreign.js', 'text/javascript; charset=utf-8']],
+  ['/web/foreign.css', ['web/foreign.css', 'text/css; charset=utf-8']],
   ['/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/index.html', ['web/index.html', 'text/html; charset=utf-8']],
@@ -213,6 +217,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       }
       if (path === '/web/public-config.json') return send(res, 200, { mode: 'local' });
       if (path === '/api/session') return send(res, 200, { mode: 'local', csrfToken, retailers: await availableRetailers() });
+      if (path === '/api/foreign-prices') return send(res, 200, await readForeignPrices(root));
       if (path === '/status' || path === '/api/status') {
         const avito = await readFile(join(resolve(root, env.AVITO_DATA_DIR || 'data/private/avito'), 'state.json'), 'utf8').then(JSON.parse)
           .catch(() => ({ state: 'not_configured', message: 'Доступ серверного сборщика к Авито ещё не подтверждён' }));

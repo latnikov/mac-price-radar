@@ -1,0 +1,13 @@
+.foreign-intro { padding: 0 30px 26px; }
+.foreign-intro p { line-height: 1.55; }
+.foreign-formula { font-size: 17px; font-weight: 600; }
+.foreign-note { color: var(--muted); }
+.foreign-controls { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 24px; }
+.foreign-controls label { display: grid; gap: 8px; }
+.foreign-controls label:first-child { flex: 1; min-width: 230px; }
+.foreign-sheet table { min-width: 800px; width: 100%; }
+.foreign-sheet th, .foreign-sheet td { padding: 16px; text-align: left; white-space: normal; position: static; }
+.foreign-sheet td:nth-child(3), .foreign-sheet td:nth-child(4) { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.foreign-sheet td:nth-child(4) { font-weight: 650; }
+.foreign-sheet #foreign-error { color: #99511c; overflow-wrap: anywhere; }
+@media (max-width: 600px) { .foreign-intro { padding: 0 18px 20px; } .foreign-sheet .filter-top { align-items: flex-start; flex-direction: column; } }
