@@ -489,10 +489,12 @@ function render({ keepPage = false } = {}) {
     const cell = text('th', null, `retailer-heading retailer-${group.key}${index === 0 ? ' retailer-group-start' : ''}`);
     cell.append(text('span', retailer.label)); cell.scope = 'col';
     const channel = state.telegramSources.find(source => source.retailer === retailer.name);
+    if (retailer.name !== AVITO) {
+      const count = state.offers.filter(offer => offer.retailer === retailer.name).length;
+      cell.append(text('span', channel && !count ? 'Прайс получен · пока нет распознанных цен' : `${count} цен`, 'variant'));
+    }
     if (channel) {
       cell.title = `Telegram · ${channel.sourceUsername ? '@' + channel.sourceUsername : channel.sourceChatId}`;
-      const count = state.offers.filter(offer => offer.retailer === retailer.name).length;
-      cell.append(text('span', count ? `${count} цен` : 'Прайс получен · пока нет распознанных цен', 'variant'));
       if (state.telegramSources.filter(source => source.sourceTitle === channel.sourceTitle).length > 1) cell.append(text('span', channel.sourceUsername ? '@' + channel.sourceUsername : channel.sourceChatId, 'variant'));
     }
     if (retailer.name === AVITO) {
