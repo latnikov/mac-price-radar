@@ -4,9 +4,10 @@ import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { apifySnapshot } from './avito-apify.mjs';
 import { parseAvitoSnapshot } from './avito.mjs';
-import { AVITO, avitoUrl } from './avito-policy.mjs';
+import { AVITO, avitoUrl, avitoSellerType, avitoUsedCondition } from './avito-policy.mjs';
 import { writeAvitoJson } from './avito-storage.mjs';
 import { openMasterStore } from './master-store.mjs';
+export const APIFY_IMPORT_VERSION = 'private-used-v2';
 
 async function readJson(path, fallback) {
   try { return JSON.parse(await readFile(path, 'utf8')); }
@@ -24,7 +25,7 @@ export async function importApifyRun({ records, run, root = process.cwd(), dir =
     startedAt: run.startedAt, finishedAt: run.finishedAt })).digest('hex');
   const receipts = join(dir, 'apify-runs');
   await mkdir(receipts, { recursive: true, mode: 0o700 });
-  const receiptPath = join(receipts, `${run.id}-import.json`);
+  const receiptPath = join(receipts, `${run.id}-${APIFY_IMPORT_VERSION}-import.json`);
   const receipt = await readJson(receiptPath, null);
   if (receipt && receipt.digest !== digest) throw new Error('Apify: данные ранее импортированного запуска изменились');
   if (receipt?.runFingerprint && receipt.runFingerprint !== runFingerprint) throw new Error('Apify: метаданные ранее импортированного запуска изменились');
@@ -42,7 +43,7 @@ export async function importApifyRun({ records, run, root = process.cwd(), dir =
       for (const rejected of [...result.review, ...result.excluded]) {
         const old = prior.get(`avito:${rejected.id}`);
         const observedAt = byId.get(String(rejected.id))?.observedAt;
-        if (!old || !observedAt || Date.parse(old.fetchedAt) >= Date.parse(observedAt)) continue;
+        if (!old || !observedAt || Date.parse(old.fetchedAt) > Date.parse(observedAt)) continue;
         const excluded = rejected.status === 'excluded';
         // A new check gets its own append-only identity. Copying the prior
         // observationId would collide with its row in the master store.
@@ -53,7 +54,7 @@ export async function importApifyRun({ records, run, root = process.cwd(), dir =
             : { rejected: true, validationStatus: 'rejected', qualityWarnings: [rejected.reason] }),
           evidence: { method: 'apify-observed-rejection-v1', reason: rejected.reason } });
       }
-      payload = { runId: `apify:${run.id}`, startedAt: run.startedAt, observations,
+      payload = { runId: `apify:${run.id}:${APIFY_IMPORT_VERSION}`, startedAt: run.startedAt, observations,
         sources: [{ sourceId: 'avito:nn', sellerId: 'avito:marketplace', retailer: AVITO, status: 'partial', counts: result.stats }],
         actor: 'apify', reason: 'Импорт наблюдений Apify; неполный охват, исходные даты сохранены' };
       // Persist the exact replay payload before committing to SQLite.
@@ -76,13 +77,13 @@ export async function importApifyRun({ records, run, root = process.cwd(), dir =
     if (Math.max(Date.parse(watermarks[id]) || 0, Date.parse(index[id]?.observedAt) || 0, currentObservations.get(id) || 0) > observed) continue;
     watermarks[id] = item.observedAt;
     delete index[id];
-    if (!review.has(id) || item.city !== 'Нижний Новгород') continue;
+    if (!review.has(id) || item.city !== 'Нижний Новгород' || !avitoUsedCondition(item.condition) || avitoSellerType(item) !== 'private') continue;
     // Keep unresolved local cards accessible without treating them as prices
     // suitable for comparisons or sending them as automatic opportunities.
     let url;
     try { url = avitoUrl(item.url); } catch { continue; }
     if (!url || !new URL(url).pathname.match(new RegExp(`(?:_|/)${id}$`))) continue;
-    index[id] = { id, title: String(item.title || '').slice(0, 300), url, city: item.city,
+    index[id] = { id, title: String(item.title || '').slice(0, 300), url, city: item.city, sellerType: 'private', sellerName: item.seller.name,
       price: Number.isFinite(item.price) ? item.price : null, condition: item.condition,
       reason: review.get(id).reason, observedAt: item.observedAt };
   }
@@ -91,7 +92,7 @@ export async function importApifyRun({ records, run, root = process.cwd(), dir =
   return { counts: { total: snapshot.discovered, accepted: result.offers.length, review: result.review.length,
     excluded: result.excluded.length, detailed: snapshot.diagnostics.detailed },
     snapshotAt: run.finishedAt, runId: run.id, duplicate: ingested.duplicate,
-    coverage: { complete: false, message: 'Новые и б/у MacBook в Нижнем Новгороде. Получена ограниченная порция выдачи; полный охват не подтверждён.' } };
+    coverage: { complete: false, message: 'Только б/у MacBook частных продавцов в Нижнем Новгороде. Получена ограниченная порция выдачи; полный охват не подтверждён.' } };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

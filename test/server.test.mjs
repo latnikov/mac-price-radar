@@ -19,7 +19,9 @@ test('Avito API exposes ranked seller prices, honest readiness and no excluded s
     { ...offer, listingId: 'gone', stock: 'Discontinued' }, { ...offer, listingId: 'private', visibility: 'private' }] });
   const table = await (await app.request('/api/table')).json();
   assert.equal(table.offers.length, 1);
-  assert.equal(table.offers[0].sellerName, 'Магазин техники');
+  assert.equal(table.offers[0].sellerName, 'Алексей');
+  assert.equal(table.offers[0].marketplaceSellerType, 'private');
+  assert.equal(table.offers[0].condition, 'used');
   assert.equal(table.offers[0].avitoRank.version, 'seller-robust-logprice-v1');
   assert.equal(table.offers[0].avitoRank.independentSellers, 0);
   assert.equal((await (await app.request('/api/status')).json()).avito.state, 'not_configured');
@@ -32,8 +34,8 @@ test('table API preserves marketplace profile IDs for per-seller Air M5 15 compa
     const externalId = String(1234567800 + index);
     return normalizeAvitoListing(avitoRecord({ id: externalId,
       url: `https://www.avito.ru/nizhniy_novgorod/noutbuki/macbook_${externalId}`,
-      title: 'MacBook Air 15 M5 16/512 Silver новый', price: 130000 + index * 1000,
-      priceText: `${130000 + index * 1000} ₽`, seller: { id, name: 'Apple' },
+      title: 'MacBook Air 15 M5 16/512 Silver б/у', price: 130000 + index * 1000,
+      priceText: `${130000 + index * 1000} ₽`, seller: { id, name: 'Алексей', type: 'private' },
       observedAt: new Date().toISOString() })).offer;
   });
   assert.ok(observations.every(Boolean));

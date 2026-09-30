@@ -31,7 +31,9 @@ test('persisted queue resumes with unvisited cards after a blocked run; only fre
   assert.deepEqual(visits, [search, url(ids[1]), url(ids[2]), url(ids[0])]);
   assert.equal(result.complete, true);
   assert.deepEqual(result.listings.map(item => item.observedAt), [later, later, later]);
-  assert.equal(parseAvitoSnapshot(result, { now: Date.parse(later) }).offers.length, 3);
+  const parsed = parseAvitoSnapshot(result, { now: Date.parse(later) });
+  assert.equal(parsed.offers.length, 0, 'corporate detail fixtures must not become private used offers');
+  assert.equal(parsed.excluded.length, 3);
 });
 
 test('deadline preserves all received cards since the last periodic checkpoint and stops before another request', async () => {

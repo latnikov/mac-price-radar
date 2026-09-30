@@ -1,12 +1,10 @@
 import { canonicalModelName, canonicalStorageGb, canonicalUrl, known, moneyMinor, normalize } from './domain.mjs';
-import { AVITO, avitoUrl, excludedSeller } from './avito-policy.mjs';
-import { NIZHNY_RETAILERS } from '../web/retail-analytics.js';
+import { AVITO, avitoUrl, excludedSeller, businessSellerName } from './avito-policy.mjs';
 
-export const AVITO_OPPORTUNITIES_VERSION = 'independent-shop-spread-v1';
+export const AVITO_OPPORTUNITIES_VERSION = 'private-used-asking-spread-v2';
 const BASIC_FIELDS = ['model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color'];
 const EXTRA_FIELDS = ['cpuCores', 'gpuCores', 'keyboard', 'region', 'displayType', 'bundle'];
 const AVAILABLE = new Set(['InStock', 'source_reported', 'confirmed']);
-const LOCAL_SHOPS = new Set(NIZHNY_RETAILERS);
 const timestamp = offer => Date.parse(offer.observedAt || offer.fetchedAt);
 const field = (offer, name) => name === 'storageGb' ? canonicalStorageGb(offer[name])
   : name === 'model' ? canonicalModelName(offer[name]) : offer[name];
@@ -22,11 +20,11 @@ const percentage = (value, name) => {
   return value;
 };
 
-function usable(offer, now, maxAgeHours, { allowUsed = false } = {}) {
+function usable(offer, now, maxAgeHours) {
   const at = timestamp(offer);
   return offer && offer.visibility !== 'private' && offer.currency === 'RUB'
     && typeof offer.price === 'number' && moneyMinor(offer.price) !== null
-    && (offer.condition === 'new' || (allowUsed && offer.condition === 'used')) && offer.priceType === 'full'
+    && offer.condition === 'used' && offer.marketplaceSellerType === 'private' && !offer.matchedRetailer && offer.priceType === 'full'
     && AVAILABLE.has(offer.stock) && offer.active !== false && !offer.withdrawn
     && !offer.rejected && !['rejected', 'invalid'].includes(offer.validationStatus)
     && offer.status !== 'rejected' && offer.matchStatus !== 'rejected'
@@ -55,30 +53,23 @@ function uniqueListings(offers) {
   return [...result.values()];
 }
 
-// Collapse aliases connected by either a retailer name OR a real seller ID.
-// Marketplace-wide IDs are never used as independent shop identities.
-function independentShops(offers) {
-  const groups = [];
-  for (const offer of offers) {
-    const aliases = new Set([`retailer:${normalize(offer.retailer)}`]);
-    if (known(offer.sellerId) && offer.sellerId !== 'avito:marketplace') aliases.add(`seller:${offer.sellerId}`);
-    const related = groups.filter(group => [...aliases].some(alias => group.aliases.has(alias)));
-    const group = { aliases, offers: [offer] };
-    for (const previous of related) {
-      for (const alias of previous.aliases) group.aliases.add(alias);
-      group.offers.push(...previous.offers);
-      groups.splice(groups.indexOf(previous), 1);
-    }
-    groups.push(group);
-  }
-  return groups;
+function inScope(offer, now, maxAgeHours) {
+  if (offer.retailer !== AVITO || offer.sourceCity !== 'Нижний Новгород' || !offer.marketplaceSellerId || !offer.sellerName
+    || excludedSeller(offer.sellerName) || businessSellerName(offer.sellerName) || excludedSeller(offer.marketplaceSellerId) || !usable(offer, now, maxAgeHours)
+    || offer.avitoRisks?.some(reason => /под\s*заказ|предзаказ|срок\s+поставки/i.test(reason))) return false;
+  try {
+    const url = avitoUrl(offer.url, { listing: true });
+    const externalId = new URL(url).pathname.match(/_(\d+)$/)[1];
+    return !known(offer.externalId) || String(offer.externalId) === externalId;
+  } catch { return false; }
 }
 
 /**
- * Screen Avito listings for a potential spread against the LOWEST independent
- * local shop price. This is a lead for human review, never a sale-price promise
- * or a profit calculation. deltaPercent is after the reserve, divided by the
- * reference retail price. No network, persistence or input mutation occurs.
+ * Screen only USED MacBooks from PRIVATE sellers in Nizhny Novgorod. Compare
+ * with the LOWEST asking price from at least three OTHER independent private
+ * sellers, selecting one minimum per seller. Asking prices are not completed
+ * sales or a resale/profit prediction. deltaPercent is after the reserve,
+ * divided by that conservative reference. No network or input mutation occurs.
  */
 export function calculateAvitoOpportunities(offers, {
   now = Date.now(), minDeltaRub = 10_000, minDeltaPercent = 10,
@@ -91,71 +82,62 @@ export function calculateAvitoOpportunities(offers, {
   const minimumMinor = minor(minDeltaRub, 'minDeltaRub'), reserveMinor = minor(costReserveRub, 'costReserveRub');
   percentage(minDeltaPercent, 'minDeltaPercent');
   const all = uniqueListings(offers);
-  const shops = all.filter(offer => LOCAL_SHOPS.has(offer.retailer)
-    && (!offer.sourceType || offer.sourceType === 'website') && usable(offer, now, maxAgeHours)
-    && !/(^|\.)avito\.ru$/i.test(new URL(offer.url).hostname));
-  const shopGroups = independentShops(shops), byConfig = new Map();
-  for (const group of shopGroups) for (const offer of group.offers) {
-    const key = configKey(offer), items = byConfig.get(key) || [];
-    items.push({ offer, group }); byConfig.set(key, items);
-  }
   const avito = all.filter(offer => offer.retailer === AVITO);
+  const scoped = avito.filter(offer => inScope(offer, now, maxAgeHours));
+  const byConfig = new Map();
+  for (const offer of scoped) {
+    if (offer.avitoRisks?.length) continue;
+    const key = configKey(offer), items = byConfig.get(key) || [];
+    items.push(offer); byConfig.set(key, items);
+  }
   const candidates = [];
-  let eligibleCount = 0, insufficientBaselineCount = 0;
-  for (const offer of avito) {
-    if (offer.sourceCity !== 'Нижний Новгород' || !offer.marketplaceSellerId || !offer.sellerName
-      || excludedSeller(offer.sellerName) || excludedSeller(offer.marketplaceSellerId) || excludedSeller(offer.matchedRetailer)
-      || !usable(offer, now, maxAgeHours, { allowUsed: true })
-      || offer.avitoRisks?.some(reason => /под\s*заказ|предзаказ|срок\s+поставки/i.test(reason))) continue;
-    let url;
-    try { url = avitoUrl(offer.url, { listing: true }); } catch { continue; }
+  let insufficientBaselineCount = 0;
+  for (const offer of scoped) {
+    const url = avitoUrl(offer.url, { listing: true });
     const externalId = new URL(url).pathname.match(/_(\d+)$/)[1];
-    if (known(offer.externalId) && String(offer.externalId) !== externalId) continue;
-    eligibleCount++;
     const independent = new Map();
-    for (const { offer: shop, group } of byConfig.get(configKey(offer)) || []) {
-      if (!compatible(offer, shop)) continue;
-      if (offer.matchedRetailer && group.aliases.has(`retailer:${normalize(offer.matchedRetailer)}`)) continue;
-      if (known(offer.sellerId) && offer.sellerId !== 'avito:marketplace' && group.aliases.has(`seller:${offer.sellerId}`)) continue;
-      const prior = independent.get(group);
-      if (!prior || shop.price < prior.price || (shop.price === prior.price && timestamp(shop) > timestamp(prior))) independent.set(group, shop);
+    for (const peer of byConfig.get(configKey(offer)) || []) {
+      const sellerId = String(peer.marketplaceSellerId);
+      if (sellerId === String(offer.marketplaceSellerId) || !compatible(offer, peer)) continue;
+      const prior = independent.get(sellerId);
+      if (!prior || peer.price < prior.price || (peer.price === prior.price && timestamp(peer) > timestamp(prior))) independent.set(sellerId, peer);
     }
-    const evidence = [...independent.values()].sort((a, b) => a.price - b.price || a.retailer.localeCompare(b.retailer)).map(shop => ({
-      retailer: shop.retailer, sellerId: shop.sellerId || null, listingId: shop.listingId || null,
-      url: canonicalUrl(shop.url), price: shop.price, observedAt: new Date(timestamp(shop)).toISOString(),
-      cpuCores: shop.cpuCores ?? null, gpuCores: shop.gpuCores ?? null,
+    const evidence = [...independent.values()].sort((a, b) => a.price - b.price || String(a.marketplaceSellerId).localeCompare(String(b.marketplaceSellerId))).map(peer => ({
+      retailer: AVITO, sellerId: String(peer.marketplaceSellerId), marketplaceSellerId: String(peer.marketplaceSellerId),
+      sellerName: peer.sellerName, listingId: peer.listingId || null, condition: 'used', marketplaceSellerType: 'private',
+      url: avitoUrl(peer.url, { listing: true }), price: peer.price, observedAt: new Date(timestamp(peer)).toISOString(),
+      cpuCores: peer.cpuCores ?? null, gpuCores: peer.gpuCores ?? null,
     }));
-    if (evidence.length < 2) { insufficientBaselineCount++; continue; }
+    if (evidence.length < 3) { insufficientBaselineCount++; continue; }
     const priceMinor = moneyMinor(offer.price), referenceMinor = moneyMinor(evidence[0].price);
     const grossMinor = referenceMinor - priceMinor, deltaMinor = grossMinor - reserveMinor;
     const deltaPercent = deltaMinor / referenceMinor * 100;
     if (deltaMinor < minimumMinor || deltaPercent < minDeltaPercent) continue;
     const reviewReasons = [...(offer.avitoRisks || [])];
-    if (offer.condition === 'used') reviewReasons.push('Б/у: сравнение с новым товаром показывает только скидку; проверить состояние, аккумулятор, ремонт и реальную цену перепродажи');
-    const missingCores = ['cpuCores', 'gpuCores'].filter(name => !known(offer[name]) || evidence.some(shop => !known(shop[name])));
+    reviewReasons.push('Б/у от частного продавца: проверить состояние, аккумулятор, ремонт и комплектацию; цены других объявлений не подтверждают цену сделки или прибыль');
+    const missingCores = ['cpuCores', 'gpuCores'].filter(name => !known(offer[name]) || evidence.some(peer => !known(peer[name])));
     if (missingCores.length) reviewReasons.push(`Проверить число ядер CPU/GPU: не все сопоставимые карточки указывают ${missingCores.join(', ')}`);
     const priceAnomaly = priceMinor < referenceMinor * 0.6;
-    if (priceAnomaly) reviewReasons.push('Цена более чем на 40% ниже самой низкой цены магазинов; проверить цену и комплектацию вручную');
+    if (priceAnomaly) reviewReasons.push('Цена более чем на 40% ниже самого дешёвого сопоставимого объявления других частников; проверить цену и состояние вручную');
     const priceJump = typeof offer.previousPrice === 'number' && offer.previousPrice > 0 && Math.abs(offer.price / offer.previousPrice - 1) > 0.25;
     if (priceJump) reviewReasons.push('Цена изменилась более чем на 25%; требуется ручная проверка');
     const baselineSpread = evidence.at(-1).price > evidence[0].price * 1.4;
-    if (baselineSpread) reviewReasons.push('Цены сопоставимых магазинов расходятся более чем на 40%; проверить конфигурации');
+    if (baselineSpread) reviewReasons.push('Цены сопоставимых объявлений частников расходятся более чем на 40%; проверить состояние и конфигурации');
     const observedAt = new Date(timestamp(offer)).toISOString();
     candidates.push({
       listingId: offer.listingId || `avito:${externalId}`, externalId, url,
       title: offer.title || offer.rawTitle || '', sellerName: offer.sellerName,
-      condition: offer.condition,
-      comparisonKind: offer.condition === 'used' ? 'discount-from-new-retail' : 'potential-retail-spread',
-      comparisonNote: offer.condition === 'used'
-        ? 'Скидка к цене нового MacBook после резерва расходов; цена перепродажи б/у не определена, прибыль не рассчитана.'
-        : 'Потенциальная разница с ценой нового MacBook после резерва расходов; не гарантированная прибыль.',
-      marketplaceSellerId: offer.marketplaceSellerId, matchedRetailer: offer.matchedRetailer || null,
+      condition: 'used', marketplaceSellerType: 'private', sellerType: 'private',
+      comparisonKind: 'used-asking-price-spread',
+      comparisonNote: 'Разница с минимальной запрашиваемой ценой других независимых частных продавцов б/у MacBook после резерва расходов. Это цены объявлений, не состоявшихся сделок; цена перепродажи и прибыль не определены.',
+      marketplaceSellerId: offer.marketplaceSellerId, matchedRetailer: null,
       configurationKey: configKey(offer), model: offer.model, chip: offer.chip,
       ramGb: offer.ramGb, storageGb: canonicalStorageGb(offer.storageGb), screenIn: offer.screenIn, color: offer.color,
       price: offer.price, referencePrice: referenceMinor / 100, grossDeltaRub: grossMinor / 100,
       costReserveRub, deltaRub: deltaMinor / 100, estimatedDeltaRub: deltaMinor / 100,
       deltaPercent: Math.round(deltaPercent * 100) / 100,
-      shopCount: evidence.length, evidence, baselineMethod: 'lowest-independent-local-shop',
+      shopCount: 0, peerCount: evidence.length, independentSellerCount: evidence.length,
+      evidence, baselineMethod: 'lowest-independent-private-used-asking-price',
       observedAt, fetchedAt: observedAt,
       dedupKey: `avito:${externalId}:${priceMinor}`,
       requiresReview: reviewReasons.length > 0, reviewReasons, reasons: [...reviewReasons],
@@ -167,8 +149,8 @@ export function calculateAvitoOpportunities(offers, {
   return {
     version: AVITO_OPPORTUNITIES_VERSION, generatedAt: new Date(now).toISOString(),
     thresholds: { minDeltaRub, minDeltaPercent, maxAgeHours, costReserveRub },
-    note: 'Сравнение с минимальной ценой нового MacBook в независимых магазинах после резерва расходов. Для б/у это только скидка к новому товару. Это не гарантированная цена продажи, выручка или чистая прибыль; перед покупкой проверить состояние, объявление и затраты.',
+    note: 'Только б/у MacBook частных продавцов Нижнего Новгорода. Ориентир — минимальная запрашиваемая цена минимум трёх других независимых частников с сопоставимой конфигурацией и цветом. Разница после резерва расходов не является гарантированной ценой перепродажи, выручкой или прибылью; состояние и фактическую цену сделки нужно проверить.',
     candidates,
-    summary: { avitoCount: avito.length, eligibleCount, insufficientBaselineCount, candidateCount: candidates.length, alertEligibleCount: candidates.filter(candidate => candidate.alertEligible).length },
+    summary: { avitoCount: avito.length, eligibleCount: scoped.length, insufficientBaselineCount, candidateCount: candidates.length, alertEligibleCount: candidates.filter(candidate => candidate.alertEligible).length },
   };
 }

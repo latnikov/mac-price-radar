@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { writeAvitoJson } from './avito-storage.mjs';
 
 export const APIFY_AVITO_ACTOR_ID = '4SsKYeXxLtIJLtzHp';
+export const APIFY_AVITO_PAGING_ACTOR_ID = 'km2oo0mCahDBKPOa6';
 export const APIFY_AVITO_SEARCH_URL = 'https://www.avito.ru/nizhniy_novgorod/noutbuki?q=macbook&s=104';
 const API = 'https://api.apify.com/v2';
 const HOUR = 3_600_000;
@@ -41,7 +42,7 @@ function validateLedger(ledger) {
 /** Pure, conservative budget gate. Unknown charges continue to consume their reservation. */
 export function evaluateApifyBudget(ledger, {
   now = Date.now(), limitUsd = ledger?.limitUsd ?? 5, maxRunUsd = 0.40, runLimit = 10,
-  periodStartedAt = ledger?.periodStartedAt, periodEndsAt = ledger?.periodEndsAt,
+  periodStartedAt = ledger?.periodStartedAt, periodEndsAt = ledger?.periodEndsAt, actorId = null,
 } = {}) {
   validateLedger(ledger);
   now = Number(now);
@@ -49,8 +50,8 @@ export function evaluateApifyBudget(ledger, {
   if (!Number.isFinite(now) || !Number.isFinite(start) || !Number.isFinite(end) || end <= start || end - start > 7 * 24 * HOUR)
     throw safeError('CONFIG', 'Apify: нужен явно заданный период не длиннее семи дней');
   const limit = usd(limitUsd), perRun = usd(maxRunUsd);
-  if (limit <= 0 || limit > 5_000_000 || perRun <= 0 || perRun > 400_000 || perRun > limit
-    || !Number.isInteger(runLimit) || runLimit < 1 || runLimit > 10) throw safeError('CONFIG', 'Apify: лимиты превышают согласованные $5, $0.40 на запуск или 10 запусков');
+  if (limit <= 0 || limit > 5_000_000 || perRun <= 0 || perRun > 5_000_000 || perRun > limit
+    || !Number.isInteger(runLimit) || runLimit < 1 || runLimit > 168) throw safeError('CONFIG', 'Apify: лимиты превышают согласованные $5, недельный резерв или 168 запусков');
   let spent = 0, reserved = 0;
   for (const entry of ledger.entries) {
     const cost = entry.costUsd == null ? null : usd(entry.costUsd);
@@ -64,11 +65,12 @@ export function evaluateApifyBudget(ledger, {
   const scheduledNext = Math.ceil(Math.max(next, now) / HOUR) * HOUR;
   const unknown = ledger.entries.some(entry => !entry.runId && ['POSTING', 'POST_UNKNOWN'].includes(entry.status));
   const pending = ledger.entries.some(entry => entry.runId && (RUNNING.has(entry.status) || (entry.status === 'SUCCEEDED' && !entry.importedAt)));
+  const actorRuns = actorId ? ledger.entries.filter(entry => (entry.actorId || APIFY_AVITO_ACTOR_ID) === actorId).length : ledger.entries.length;
   let reason = null;
   if (ledger.halted || unknown) reason = 'needs_reconciliation';
   else if (now >= end) reason = 'period_ended';
   else if (now < start) reason = 'period_not_started';
-  else if (ledger.entries.length >= runLimit) reason = 'run_limit';
+  else if (actorRuns >= runLimit) reason = 'run_limit';
   else if (spent + perRun > limit) reason = 'budget_limit';
   else if (pending) reason = 'run_pending';
   else if (now < next) reason = 'hourly_wait';
@@ -77,7 +79,7 @@ export function evaluateApifyBudget(ledger, {
     nextRunAt: ['period_ended', 'run_limit', 'budget_limit', 'needs_reconciliation'].includes(reason) || scheduledNext >= end ? null : new Date(scheduledNext).toISOString(),
     budget: { limitUsd: dollars(limit), spentUsd: dollars(spent), reservedUsd: dollars(reserved),
       remainingUsd: dollars(Math.max(0, limit - spent)), periodStartedAt, periodEndsAt,
-      runLimit, runsUsed: ledger.entries.length, runsRemaining: Math.max(0, runLimit - ledger.entries.length) },
+      runLimit, runsUsed: actorRuns, runsRemaining: Math.max(0, runLimit - actorRuns) },
   };
 }
 
@@ -89,9 +91,15 @@ function configuration(env, ledger) {
   if (at(periodStartedAt) !== at(ledger.periodStartedAt) || at(periodEndsAt) !== at(ledger.periodEndsAt))
     throw safeError('CONFIG', 'Apify: период окружения не совпадает с сохранённым журналом бюджета');
   const limitUsd = Math.min(number('AVITO_APIFY_BUDGET_USD', 5), ledger.limitUsd ?? 5);
-  const maxResults = number('AVITO_APIFY_MAX_RESULTS', 45);
-  if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > 3000) throw safeError('CONFIG', 'Apify: число результатов должно быть от 1 до 3000');
-  return { periodStartedAt, periodEndsAt, limitUsd, maxResults,
+  const actorId = env.AVITO_APIFY_ACTOR_ID || APIFY_AVITO_ACTOR_ID;
+  if (![APIFY_AVITO_ACTOR_ID, APIFY_AVITO_PAGING_ACTOR_ID].includes(actorId)) throw safeError('CONFIG', 'Apify: неизвестный парсер');
+  const maxResults = number('AVITO_APIFY_MAX_RESULTS', actorId === APIFY_AVITO_ACTOR_ID ? 45 : 0);
+  if (!Number.isInteger(maxResults) || maxResults < (actorId === APIFY_AVITO_ACTOR_ID ? 1 : 0) || maxResults > (actorId === APIFY_AVITO_ACTOR_ID ? 100 : 3000)) throw safeError('CONFIG', 'Apify: некорректный предел результатов');
+  if (actorId === APIFY_AVITO_ACTOR_ID && number('AVITO_APIFY_RUN_LIMIT', 10) > 10) throw safeError('CONFIG', 'Apify: бесплатный Actor ограничен 10 запусками');
+  const priceMin = number('AVITO_APIFY_PRICE_MIN', null), priceMax = number('AVITO_APIFY_PRICE_MAX', null);
+  for (const value of [priceMin, priceMax]) if (value !== null && (!Number.isSafeInteger(value) || value < 0 || value > 1_000_000_000)) throw safeError('CONFIG', 'Apify: некорректный диапазон цен');
+  if (priceMin !== null && priceMax !== null && priceMin > priceMax) throw safeError('CONFIG', 'Apify: обратный диапазон цен');
+  return { periodStartedAt, periodEndsAt, limitUsd, maxResults, actorId, priceMin, priceMax,
     maxRunUsd: number('AVITO_APIFY_MAX_RUN_USD', 0.40), runLimit: number('AVITO_APIFY_RUN_LIMIT', 10) };
 }
 
@@ -165,10 +173,10 @@ async function apiJson(path, { token, fetchImpl, method = 'GET', body, timeoutMs
   return { json, headers: response.headers };
 }
 
-function checkedRun(json, expectedId) {
+function checkedRun(json, expectedId, expectedActor = APIFY_AVITO_ACTOR_ID) {
   const run = json?.data;
   if (!run || !validId(run.id) || (expectedId && run.id !== expectedId)
-    || (run.actId && run.actId !== APIFY_AVITO_ACTOR_ID) || ![...RUNNING, ...TERMINAL].includes(run.status))
+    || (run.actId && run.actId !== expectedActor) || ![...RUNNING, ...TERMINAL].includes(run.status))
     throw safeError('API_RESPONSE', 'Apify: не удалось подтвердить ID, Actor или статус запуска');
   return run;
 }
@@ -213,7 +221,7 @@ const gateMessage = reason => ({
   needs_reconciliation: 'Новые запуски остановлены: требуется сверить последний запуск и расходы в Apify',
   period_ended: 'Согласованная неделя завершена; платные запуски остановлены',
   period_not_started: 'Ожидаем начала согласованного периода',
-  run_limit: 'Достигнут предел 10 запусков бесплатного Actor; новые запуски остановлены',
+  run_limit: 'Достигнут настроенный предел запусков; новые запуски остановлены',
   budget_limit: 'Остатка бюджета недостаточно для полного резерва следующего запуска',
   run_pending: 'Продолжается ранее оплаченный запуск Apify',
   hourly_wait: 'Результат сохранён; следующее обновление не чаще чем через час после предыдущего запуска',
@@ -221,7 +229,7 @@ const gateMessage = reason => ({
 
 export async function runApifyWorker({
   env = process.env, root = process.cwd(), fetchImpl = fetch, now = () => Date.now(),
-  sleep = delay, maxPolls = 7, importRun, onImported,
+  sleep = delay, maxPolls = 7, importRun, onImported, manualRun = false, requestKey = null,
 } = {}) {
   root = resolve(root);
   const dir = resolve(root, env.AVITO_DATA_DIR || 'data/private/avito');
@@ -247,6 +255,9 @@ export async function runApifyWorker({
     if (Number.isFinite(at(prior.updatedAt))) updatedAt = prior.updatedAt;
     ledger = await readLedger(ledgerPath);
     config = configuration(env, ledger);
+    if (requestKey !== null && !/^[A-Za-z0-9:_-]{1,100}$/.test(requestKey)) throw safeError('CONFIG', 'Apify: некорректный ключ ручного сбора');
+    const existingRequest = requestKey && ledger.entries.find(entry => entry.requestKey === requestKey);
+    if (existingRequest?.importedAt) return state('partial', 'Этот ручной сбор уже сохранён; повторный платный запуск не создаётся');
     gate = evaluateApifyBudget(ledger, { ...config, now: time() });
     const lastImported = ledger.entries.filter(entry => entry.importedAt).sort((a, b) => at(a.importedAt) - at(b.importedAt)).at(-1);
     updatedAt ||= lastImported?.importedAt;
@@ -254,7 +265,7 @@ export async function runApifyWorker({
     if (!env.APIFY_TOKEN) return state('not_configured', 'Apify: токен API не настроен', { schedule: { enabled: false, intervalMinutes: 60 }, nextRunAt: null });
     if (gate.reason === 'needs_reconciliation') return state('needs_attention', gateMessage(gate.reason));
     const token = String(env.APIFY_TOKEN);
-    const getRun = async id => checkedRun((await apiJson(`/actor-runs/${id}?waitForFinish=30`, { token, fetchImpl })).json, id);
+    const getRun = async entry => checkedRun((await apiJson(`/actor-runs/${entry.runId}?waitForFinish=30`, { token, fetchImpl })).json, entry.runId, entry.actorId || APIFY_AVITO_ACTOR_ID);
     const persistRun = async (entry, run, settled = false) => {
       Object.assign(entry, { runId: run.id, status: run.status, startedAt: run.startedAt || entry.startedAt,
         ...(run.finishedAt ? { finishedAt: run.finishedAt } : {}),
@@ -267,7 +278,7 @@ export async function runApifyWorker({
     const finish = async (entry, initialRun) => {
       let run = initialRun;
       for (let poll = 0; poll < maxPolls && (!run || !TERMINAL.has(run.status)); poll++) {
-        run = await getRun(entry.runId);
+        run = await getRun(entry);
         await persistRun(entry, run);
         if (!TERMINAL.has(run.status)) await state('running', 'Apify собирает объявления; новый оплачиваемый запуск не создаётся');
       }
@@ -276,7 +287,7 @@ export async function runApifyWorker({
       const elapsed = time() - at(run.finishedAt);
       if (!Number.isFinite(elapsed) || elapsed < 10_000) {
         await sleep(Number.isFinite(elapsed) ? Math.max(0, 10_000 - elapsed) : 10_000);
-        run = await getRun(entry.runId);
+        run = await getRun(entry);
         if (!TERMINAL.has(run.status)) throw safeError('API_RESPONSE', 'Apify: завершение запуска не подтверждено повторной проверкой');
       }
       await persistRun(entry, run, true);
@@ -316,23 +327,31 @@ export async function runApifyWorker({
       if (!await finish(entry)) return state('running', 'Ранее запущенный сбор ещё выполняется; продолжим проверку без нового платного запуска');
     }
     gate = evaluateApifyBudget(ledger, { ...config, now: time() });
-    if (!gate.allowed) return state(['run_limit', 'budget_limit', 'period_ended'].includes(gate.reason) ? 'paused' : 'partial', gateMessage(gate.reason));
+    if (pending.length || (!gate.allowed && !(manualRun && gate.reason === 'hourly_wait'))) return state(['run_limit', 'budget_limit', 'period_ended'].includes(gate.reason) ? 'paused' : 'partial', gateMessage(gate.reason));
     startedAt = new Date(time()).toISOString();
-    const entry = { attemptId: randomUUID(), status: 'POSTING', startedAt, requestedAt: startedAt, reservationUsd: config.maxRunUsd };
+    const entry = { attemptId: randomUUID(), status: 'POSTING', startedAt, requestedAt: startedAt, reservationUsd: config.maxRunUsd, actorId: config.actorId, ...(requestKey ? { requestKey } : {}),
+      scope: { priceMin: config.priceMin, priceMax: config.priceMax } };
     ledger.entries.push(entry);
     await saveLedger(ledgerPath, ledger);
     await state('running', 'Бюджет зарезервирован; запускаем сбор Apify');
     let run;
     try {
-      const response = await apiJson(`/acts/${APIFY_AVITO_ACTOR_ID}/runs?maxTotalChargeUsd=${config.maxRunUsd}&waitForFinish=0&timeout=180&restartOnError=false`, {
-        token, fetchImpl, method: 'POST', body: {
-          searchUrl: APIFY_AVITO_SEARCH_URL, sort: 'newest', query: 'MacBook', location: 'Нижний Новгород', category: 'laptops',
+      const response = await apiJson(`/acts/${config.actorId}/runs?maxTotalChargeUsd=${config.maxRunUsd}&waitForFinish=0&timeout=${config.actorId === APIFY_AVITO_PAGING_ACTOR_ID ? 3600 : 180}&restartOnError=false${config.actorId === APIFY_AVITO_PAGING_ACTOR_ID ? '&memory=1024' : ''}`, {
+        token, fetchImpl, method: 'POST', body: config.actorId === APIFY_AVITO_PAGING_ACTOR_ID ? {
+          mode: 'search', regions: ['nizhniy_novgorod'], category: 'noutbuki', dealType: 'any', query: 'MacBook',
+          sortBy: 'date_desc', ownerOnly: true, maxListings: config.maxResults, fetchDetails: true,
+          incrementalMode: true, stateKey: 'macbookbro-avito-private-used-nn-v1', emitUnchanged: false, emitExpired: false,
+          proxy: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] },
+        } : {
+          ...(config.priceMin === null && config.priceMax === null ? { searchUrl: APIFY_AVITO_SEARCH_URL } : {}),
+          sort: 'newest', query: 'MacBook', location: 'Нижний Новгород', category: 'laptops',
+          ...(config.priceMin === null ? {} : { priceMin: config.priceMin }), ...(config.priceMax === null ? {} : { priceMax: config.priceMax }),
           maxResults: config.maxResults, includeDetails: true, includePhone: false, includeReviews: false, includeComparables: false,
         },
       });
       // Even a malformed status with an ID is resumable; persist that ID first.
       if (validId(response.json?.data?.id)) { entry.runId = response.json.data.id; entry.status = 'RUNNING'; await saveLedger(ledgerPath, ledger); }
-      run = checkedRun(response.json, entry.runId);
+      run = checkedRun(response.json, entry.runId, config.actorId);
       await persistRun(entry, run);
     } catch (error) {
       if (!entry.runId) {

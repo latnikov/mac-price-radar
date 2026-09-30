@@ -3,6 +3,7 @@ import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { avitoUrl } from './avito-policy.mjs';
 import { writeAvitoJson } from './avito-storage.mjs';
+import { googleRelayUrl, sendGoogleRelay } from './avito-google-relay.mjs';
 
 const MAX_ALERTS = 5;
 const SITE_URL = 'https://dev.macbookbro.ru/web/avito.html';
@@ -24,7 +25,9 @@ function validChat(value) {
 }
 
 function formatCandidate(candidate, opportunities, now) {
-  if (!candidate || candidate.alertEligible !== true || !['new', 'used'].includes(candidate.condition)
+  if (!candidate || candidate.alertEligible !== true || candidate.condition !== 'used'
+    || candidate.marketplaceSellerType !== 'private' || candidate.comparisonKind !== 'used-asking-price-spread'
+    || !Number.isInteger(candidate.peerCount) || candidate.peerCount < 3
     || typeof candidate.dedupKey !== 'string' || !/^avito:\d+:\d+$/.test(candidate.dedupKey)
     || candidate.dedupKey.length > 150 || !positive(candidate.price) || !positive(candidate.referencePrice)) return null;
   const delta = candidate.estimatedDeltaRub ?? candidate.deltaRub;
@@ -36,19 +39,16 @@ function formatCandidate(candidate, opportunities, now) {
   let url;
   try { url = avitoUrl(candidate.url, { listing: true }); } catch { return null; }
   if (url.length > 1500) return null;
-  const used = candidate.condition === 'used';
   const title = oneLine(candidate.title, 240) || 'MacBook на Авито';
   const seller = oneLine(candidate.sellerName, 100) || 'не указан';
   const fraction = Number.isFinite(candidate.deltaPercent) ? ` (${percent.format(candidate.deltaPercent)}% от ориентира)` : '';
   const text = [
-    'Авито · стоит проверить', title, `Состояние: ${used ? 'б/у' : 'новый'}. Продавец: ${seller}.`, '',
+    'Авито Сигналы · стоит проверить', title, `Б/у · частный продавец: ${seller}.`, '',
     `Цена Авито: ${rubles(candidate.price)}`,
-    `Минимальная цена нового в сопоставимых магазинах НН: ${rubles(candidate.referencePrice)}`,
+    `Минимальная цена сопоставимых б/у у других частников: ${rubles(candidate.referencePrice)}`,
     `Резерв на дополнительные расходы: ${rubles(reserve)}`,
-    `${used ? 'Скидка к новому после резерва' : 'Потенциальная разница после резерва'}: ${rubles(delta)}${fraction}`,
-    '', used
-      ? 'Б/у: это скидка к цене нового, а не прибыль. Цена перепродажи не определена. Проверьте состояние, аккумулятор и ремонт.'
-      : 'Это оценка разницы, а не гарантированная прибыль. Проверьте комплектацию, состояние, наличие и цену.',
+    `Разница после резерва: ${rubles(delta)}${fraction}`,
+    '', 'Ориентир — цены объявлений, а не состоявшихся сделок. Проверьте состояние, аккумулятор, ремонт и комплектацию.',
     `Объявление проверено: ${atMoscow(observedAt)}`, '', url, `Таблица: ${SITE_URL}`,
   ].join('\n');
   return { key: candidate.dedupKey, text };
@@ -87,15 +87,19 @@ export async function sendAvitoAlerts({ opportunities, env = process.env,
   };
   const token = String(env.AVITO_ALERT_BOT_TOKEN || '').trim();
   const chat = String(env.AVITO_ALERT_CHAT_ID || '').trim();
-  if (!token || !chat) return report(publicState({ message: 'Отдельный бот Авито пока не подключён. Предложения доступны на сайте.' }));
-  if (!/^\d{4,16}:[A-Za-z0-9_-]{20,100}$/.test(token) || !validChat(chat)) {
+  const relay = Boolean(env.AVITO_ALERT_RELAY_URL || env.AVITO_ALERT_RELAY_SECRET);
+  if (relay && !env.AVITO_ALERT_RELAY_URL) return report(publicState({ channel: 'telegram',
+    message: 'Реле Google подготовлено; ожидаем разрешения владельца и публикации. Доставка ещё не включена.' }));
+  if (!relay && (!token || !chat)) return report(publicState({ message: 'Отдельный бот Авито пока не подключён. Предложения доступны на сайте.' }));
+  if (relay ? !googleRelayUrl(env.AVITO_ALERT_RELAY_URL) || String(env.AVITO_ALERT_RELAY_SECRET || '').length < 32
+    : !/^\d{4,16}:[A-Za-z0-9_-]{20,100}$/.test(token) || !validChat(chat)) {
     return report(publicState({ channel: 'telegram', message: 'Уведомления Telegram остановлены: проверьте настройки отдельного бота Авито и получателя.' }));
   }
   const time = typeof now === 'function' ? now() : now;
   const timestamp = typeof time === 'string' ? Date.parse(time) : Number(time);
   if (!Number.isFinite(timestamp) || !Number.isFinite(new Date(timestamp).getTime())) throw new TypeError('A valid alert timestamp is required');
   const at = new Date(timestamp).toISOString();
-  const fingerprint = createHash('sha256').update(`${token}\n${chat}`).digest('hex');
+  const fingerprint = createHash('sha256').update(relay ? `${env.AVITO_ALERT_RELAY_URL}\n${env.AVITO_ALERT_RELAY_SECRET}` : `${token}\n${chat}`).digest('hex');
   const path = join(dir, 'alerts.json');
   const lockPath = join(dir, 'alerts.lock');
   await mkdir(dir, { recursive: true, mode: 0o700 });
@@ -138,12 +142,14 @@ export async function sendAvitoAlerts({ opportunities, env = process.env,
       await writeAvitoJson(path, ledger);
       let response, body;
       try {
-        response = await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
+        if (relay) ({ response, body } = await sendGoogleRelay({ key: alert.key, text: alert.text, env, now: timestamp, fetchImpl }));
+        else { response = await fetchImpl(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: 'POST', redirect: 'error', signal: AbortSignal.timeout(20_000),
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ chat_id: chat, text: alert.text, link_preview_options: { is_disabled: true }, allow_paid_broadcast: false }),
         });
         try { body = await response.json(); } catch { body = null; }
+        }
       } catch {
         // Fetch errors can contain the token-bearing URL. Never persist or log them.
         entry.status = 'unknown'; entry.reason = 'network_outcome_unknown';
@@ -156,6 +162,10 @@ export async function sendAvitoAlerts({ opportunities, env = process.env,
         continue;
       }
       const errorCode = Number.isInteger(body?.error_code) ? body.error_code : response.status;
+      if (body?.delivery_unknown) {
+        entry.status = 'unknown'; entry.reason = 'relay_delivery_unknown';
+        return finish('Реле Google не подтвердило доставку. Автоматический повтор заблокирован; проверьте чат.');
+      }
       if (errorCode === 429) {
         const seconds = Number(body?.parameters?.retry_after ?? response.headers?.get?.('retry-after'));
         const retryAfter = new Date(timestamp + (Number.isSafeInteger(seconds) && seconds > 0 ? Math.min(seconds, 604_800) : 60) * 1000).toISOString();

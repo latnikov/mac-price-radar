@@ -35,7 +35,8 @@ export function monitorSummary(data = {}) {
   const reserve = finite(threshold.costReserveRub) ? threshold.costReserveRub : 3000;
   const minRub = finite(threshold.minDeltaRub) ? threshold.minDeltaRub : 10000;
   const minPercent = finite(threshold.minDeltaPercent) ? threshold.minDeltaPercent : 10;
-  const candidates = Array.isArray(opportunities.candidates) ? opportunities.candidates.filter(item => item && typeof item === 'object') : [];
+  const candidates = Array.isArray(opportunities.candidates) ? opportunities.candidates.filter(item => item && typeof item === 'object'
+    && item.condition === 'used' && (item.sellerType ?? item.marketplaceSellerType) === 'private' && item.comparisonKind === 'used-asking-price-spread') : [];
   const budget = state.budget || {};
   const spent = finite(budget.spentUsd) ? dollars.format(budget.spentUsd) : 'неизвестно';
   const trialBudget = finite(budget.limitUsd);
@@ -54,7 +55,7 @@ export function monitorSummary(data = {}) {
     updated: date(state.updatedAt) ? `Последний импорт: ${date(state.updatedAt)}` : 'Успешный импорт пока не подтверждён',
     schedule: date(state.nextRunAt) ? `Следующий запуск: ${date(state.nextRunAt)}` : 'Следующий запуск пока не назначен',
     budget: max ? trialBudget
-      ? `Тест Apify: ${spent} из ${max}${remaining}${date(budget.periodEndsAt) ? ` · до ${date(budget.periodEndsAt)}` : ''}. Сбор остановится после первой недели, исчерпания бюджета или 10 запусков на бесплатном тарифе.`
+      ? `Тест Apify: ${spent} из ${max}${remaining}${date(budget.periodEndsAt) ? ` · до ${date(budget.periodEndsAt)}` : ''}. Сбор остановится после первой недели, исчерпания бюджета или ограничения выбранного парсера.`
       : `Бюджет Apify за месяц: ${spent} из ${max}${remaining}`
       : 'Бюджет Apify пока не задан',
     notifications: notifications.enabled === true
@@ -63,7 +64,7 @@ export function monitorSummary(data = {}) {
         ? `Уведомления Telegram: ${notificationMessage || 'отправка приостановлена'}`
         : `Уведомления: ${notificationMessage || 'предложения видны здесь; внешние уведомления не подключены'}`,
     coverage: typeof coverage.message === 'string' && coverage.message.trim() ? coverage.message
-      : 'Новые и б/у MacBook в Нижнем Новгороде. Охват ограничен настроенными поисками и доступной выдачей; полный охват Авито не подтверждён.',
+      : 'Б/у MacBook от частных продавцов в Нижнем Новгороде. Новые товары и компании исключены; тип продавца подтверждаем по карточке. Полный охват Авито не подтверждён.',
     threshold: `Порог: от ${rubles(minRub)} и ${decimal.format(minPercent)}% после резерва ${rubles(reserve)} на дополнительные расходы.`,
     generatedAt: date(opportunities.generatedAt),
   };
@@ -94,14 +95,14 @@ function candidateCard(candidate) {
   };
   heading.append(url ? link(title) : node('span', title));
   const prices = node('dl', null, 'avito-opportunity-prices');
-  for (const [label, value] of [['Цена Авито', candidate.price], ['Рыночный ориентир', candidate.referencePrice]]) {
+  for (const [label, value] of [['Цена Авито', candidate.price], ['Цена сопоставимых б/у', candidate.referencePrice]]) {
     const item = node('div'); item.append(node('dt', label), node('dd', rubles(value))); prices.append(item);
   }
   const delta = node('p', null, 'avito-opportunity-delta');
   const percent = finite(candidate.deltaPercent) ? ` · ${decimal.format(candidate.deltaPercent)}%` : '';
-  delta.append(node('span', candidate.condition === 'used' ? 'Скидка к новому после резерва' : 'Потенциальная разница после резерва'), node('strong', `${rubles(candidate.estimatedDeltaRub ?? candidate.deltaRub)}${percent}`));
+  delta.append(node('span', 'Разница с объявлениями частников после резерва'), node('strong', `${rubles(candidate.estimatedDeltaRub ?? candidate.deltaRub)}${percent}`));
   card.append(heading, node('p', candidate.sellerName || 'Продавец не указан', 'avito-opportunity-seller'), prices, delta);
-  if (candidate.condition === 'used') card.append(node('p', 'Б/у: сравнение с ценой нового; нужна проверка состояния', 'avito-opportunity-review'));
+  if (candidate.condition === 'used') card.append(node('p', 'Цены в объявлениях частников — не цены состоявшихся сделок. Нужна проверка состояния.', 'avito-opportunity-review'));
   else if (candidate.requiresReview) card.append(node('p', 'Нужна ручная проверка объявления', 'avito-opportunity-review'));
   const reasons = Array.isArray(candidate.reasons) ? candidate.reasons.filter(reason => typeof reason === 'string').slice(0, 3) : [];
   if (reasons.length) {
@@ -122,7 +123,7 @@ function reviewCard(item) {
   if (url) { label.href = url; label.target = '_blank'; label.rel = 'noopener noreferrer'; }
   heading.append(label);
   const detail = node('p', null, 'avito-review-detail');
-  const condition = { new: 'Новое', used: 'Б/у' }[item.condition] || 'Состояние требует проверки';
+  const condition = { new: 'Новое', used: 'Б/у' }[item.condition] || (/^(?:б\s*\/\s*у|как новый|как новое|отличное|хорошее|удовлетворительное)$/i.test(item.condition || '') ? `Б/у: ${item.condition}` : 'Состояние требует проверки');
   detail.append(node('span', `${condition} · ${date(item.observedAt) ? `Найдено ${date(item.observedAt)}` : 'Время наблюдения не указано'}`));
   detail.append(node('span', typeof item.reason === 'string' ? item.reason : 'Характеристики требуют ручной проверки', 'avito-review-reason'));
   card.append(heading, node('p', finite(item.price) && item.price > 0 ? rubles(item.price) : 'Цена не подтверждена', 'avito-review-price'), detail);
@@ -153,9 +154,9 @@ function render(data, root) {
   more.textContent = `Показаны первые ${LIMIT} предложений из ${number.format(summary.candidates.length)}. Остальные объявления доступны в таблице ниже.`;
   document.getElementById('avito-review').hidden = summary.reviews.length === 0;
   set('avito-review-count', number.format(summary.reviews.length));
-  document.getElementById('avito-review-list').replaceChildren(...summary.reviews.slice(0, REVIEW_LIMIT).map(reviewCard));
+  document.getElementById('avito-review-list').replaceChildren(...summary.reviews.map(reviewCard));
   const reviewMore = document.getElementById('avito-review-more');
-  reviewMore.hidden = summary.reviews.length <= REVIEW_LIMIT;
+  reviewMore.hidden = true;
   reviewMore.textContent = `На странице показаны первые ${REVIEW_LIMIT} из ${number.format(summary.reviews.length)} объявлений на проверке.`;
   document.getElementById('avito-monitor-content').hidden = false;
   document.getElementById('avito-monitor-error').hidden = true;

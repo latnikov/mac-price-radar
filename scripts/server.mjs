@@ -245,7 +245,7 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
         }
         const source = tableSource;
         const snapshot = await responseCache('table', `${sheet}:${revision}:${channelData.etag}:${source.hasAvito ? Math.floor(Date.now() / 60000) : ''}`, () => {
-          const fields = ['listingId', 'sourceVariantId', 'optionId', 'sku', 'article', 'displayType', 'bundle', 'retailer', 'title', 'model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color', 'cpuCores', 'gpuCores', 'keyboard', 'region', 'price', 'currency', 'stock', 'url', 'fetchedAt', 'submittedAt', 'validFrom', 'validUntil', 'condition', 'paymentMethod', 'minimumQuantity', 'priceType', 'validationStatus', 'qualityWarnings', 'marketplaceSellerId', 'sellerName', 'matchedRetailer', 'sourceCity', 'avitoRank'];
+          const fields = ['listingId', 'sourceVariantId', 'optionId', 'sku', 'article', 'displayType', 'bundle', 'retailer', 'title', 'model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color', 'cpuCores', 'gpuCores', 'keyboard', 'region', 'price', 'currency', 'stock', 'url', 'fetchedAt', 'submittedAt', 'validFrom', 'validUntil', 'condition', 'paymentMethod', 'minimumQuantity', 'priceType', 'validationStatus', 'qualityWarnings', 'marketplaceSellerId', 'marketplaceSellerType', 'sellerName', 'matchedRetailer', 'sourceCity', 'avitoRank'];
           fields.push('sourceType', 'sourceTitle', 'sourceChatId', 'sourceUsername');
           const offers = rankAvitoOffers(source.offers)
             .filter(offer => sheet === 'all' || (sheet === 'avito' ? offer.retailer === AVITO : offer.retailer !== AVITO))

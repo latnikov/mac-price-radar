@@ -27,7 +27,9 @@ function sellerFrom(record, reasons) {
     }
   }
   if (!/^[a-zA-Z0-9_-]{1,250}$/.test(id)) id = '';
-  return { id, name: tidy(seller.name).slice(0, 200), ...(profileUrl ? { profileUrl } : {}) };
+  return { id, name: tidy(seller.name).slice(0, 200), type: record.userType === 'private' ? 'private' : record.userType === 'company' ? 'company' : 'unknown',
+    declaredType: tidy(seller.sellerType || seller.type), isShop: seller.isShop === true,
+    shopName: tidy(seller.shopName), postfix: tidy(seller.postfix), ...(profileUrl ? { profileUrl } : {}) };
 }
 
 function cityFrom(record, reasons) {

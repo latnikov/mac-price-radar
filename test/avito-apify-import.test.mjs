@@ -14,9 +14,9 @@ const run = sequence => ({ id: `synthetic-${sequence}`, actId: '4SsKYeXxLtIJLtzH
 const card = (sequence = 1, id = '1234567890', overrides = {}) => ({ id,
   url: `https://www.avito.ru/nizhniy_novgorod/noutbuki/macbook_${id}`,
   title: 'MacBook Air 13 M5 16/512 Sky Blue', address: 'Нижний Новгород',
-  price: 100000, currency: '₽', priceFormatted: '100 000 ₽', status: 'active',
-  seller: { userKey: 'synthetic-seller', name: 'Тестовый продавец' },
-  parameters: [{ name: 'Состояние', value: 'Новое' }], scrapedAt: iso(sequence * 60 + 20), ...overrides });
+  userType: 'private', price: 100000, currency: '₽', priceFormatted: '100 000 ₽', status: 'active',
+  seller: { userKey: 'synthetic-seller', name: 'Алексей' },
+  parameters: [{ name: 'Состояние', value: 'Отличное' }], scrapedAt: iso(sequence * 60 + 20), ...overrides });
 async function workspace(t) {
   const root = await mkdtemp(join(tmpdir(), 'apify-import-test-'));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -78,7 +78,7 @@ test('partial Apify runs preserve missing listings instead of marking them sold'
 test('new review and exclusion observations keep exact card dates, independent IDs and prior valid prices', async t => {
   const work = await workspace(t);
   await imported(work, 1, [card()]);
-  const uncertain = card(2, '1234567890', { seller: {} });
+  const uncertain = card(2, '1234567890', { title: 'MacBook Air 13 M5' });
   await imported(work, 2, [uncertain]);
   let history = inspect(work.root, store => store.getHistory('avito:1234567890'));
   assert.equal(history.length, 2);
@@ -143,7 +143,7 @@ test('public monitor whitelists fields, local review cards and strips credential
   await writeFile(join(work.dir, 'apify-review-index.json'), JSON.stringify({ a: {
     id: '1234567890', title: `MacBook ${token}`, city: 'Нижний Новгород', reason: `token=${token}`,
     url: `https://www.avito.ru/noutbuki/macbook_1234567890?token=${token}`, observedAt: iso(80), price: 50000,
-    condition: 'Отличное', token, privateNotes: 'PRIVATE_EXTRA' }, b: { id: '1234567891', city: 'Москва', token },
+    condition: 'Отличное', sellerType: 'private', sellerName: 'Алексей', token, privateNotes: 'PRIVATE_EXTRA' }, b: { id: '1234567891', city: 'Москва', token },
     c: { id: '1234567892', city: 'Нижний Новгород', url: 'https://evil.test/a', observedAt: iso(80) } }));
   const result = await readAvitoMonitor({ ...work, env: {}, offers: [] });
   const publicJson = JSON.stringify(result);
@@ -161,4 +161,22 @@ test('public monitor safely handles missing or malformed state files', async t =
   await writeFile(join(work.dir, 'apify-state.json'), 'null');
   await writeFile(join(work.dir, 'apify-review-index.json'), 'not-json');
   assert.equal((await readAvitoMonitor({ ...work, env: {} })).state.state, 'not_configured');
+});
+
+test('policy migration reparses a paid archive without making the observation fresh or reusing legacy receipt', async t => {
+  const work = await workspace(t), source = card(), metadata = run(1);
+  const legacy = {sourceId:'avito:nn',sellerId:'avito:marketplace',sourceType:'marketplace',listingId:'avito:1234567890',externalId:'1234567890',retailer:'Авито НН',url:source.url,
+    model:'MacBook Air 13"',chip:'M5',screenIn:13,ramGb:16,storageGb:512,color:'Sky Blue',
+    price:100000,currency:'RUB',condition:'used',stock:'source_reported',priceType:'full',
+    sellerName:'Алексей',marketplaceSellerId:'synthetic-seller',fetchedAt:source.scrapedAt,observedAt:source.scrapedAt};
+  inspect(work.root, store=>store.ingestRun({runId:`apify:${metadata.id}`,observations:[legacy]}));
+  await mkdir(join(work.dir,'apify-runs'),{recursive:true});
+  await writeFile(join(work.dir,'apify-runs',`${metadata.id}-import.json`),JSON.stringify({payload:{runId:`apify:${metadata.id}`,observations:[legacy]}}));
+  const result=await imported(work,1,[source]);
+  assert.equal(result.duplicate,false);
+  assert.equal(result.counts.accepted,1);
+  const offer=inspect(work.root,store=>store.getOffers())[0];
+  assert.equal(offer.marketplaceSellerType,'private');
+  assert.equal(offer.observedAt,source.scrapedAt);
+  assert.equal((await imported(work,1,[source])).duplicate,true);
 });

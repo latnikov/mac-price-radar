@@ -11,7 +11,7 @@ const TOKEN = '123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk';
 const env = { AVITO_ALERT_BOT_TOKEN: TOKEN, AVITO_ALERT_CHAT_ID: '987654321' };
 const offer = (id = 1234567890, extra = {}) => ({
   dedupKey: `avito:${id}:8000000`, listingId: `avito:${id}`, title: 'MacBook Air M4 16/256 Silver',
-  condition: 'new', sellerName: 'Продавец', price: 80_000, referencePrice: 100_000,
+  condition: 'used', marketplaceSellerType: 'private', comparisonKind: 'used-asking-price-spread', peerCount: 3, sellerName: 'Продавец', price: 80_000, referencePrice: 100_000,
   estimatedDeltaRub: 17_000, deltaPercent: 17, costReserveRub: 3_000,
   url: `https://www.avito.ru/nizhniy_novgorod/noutbuki/macbook_${id}?tracking=1`,
   observedAt: new Date(NOW).toISOString(), alertEligible: true, ...extra,
@@ -69,12 +69,12 @@ test('persists intent before POST, sends plain Russian text, keeps secrets priva
   assert.equal(result.sentCount, 2);
   assert.equal(result.lastSentAt, new Date(NOW).toISOString());
   assert.match(sent[0], /<b>MacBook<\/b> другая строка/);
-  assert.match(sent[0], /Минимальная цена нового/);
-  assert.match(sent[0], /Потенциальная разница после резерва/);
+  assert.match(sent[0], /Минимальная цена сопоставимых б\/у/);
+  assert.match(sent[0], /Разница после резерва/);
   assert.match(sent[0], /dev\.macbookbro\.ru\/web\/avito\.html/);
   assert.doesNotMatch(sent[0], /tracking=/);
-  assert.match(sent[1], /Состояние: б\/у/);
-  assert.match(sent[1], /скидка к цене нового, а не прибыль/);
+  assert.match(sent[1], /Б\/у · частный продавец/);
+  assert.match(sent[1], /цены объявлений, а не состоявшихся сделок/);
   assert.equal((await run([first, used])).sentCount, 0);
   assert.equal((await run([offer(1234567890, { price: 79_000, dedupKey: 'avito:1234567890:7900000' })])).sentCount, 1);
   const saved = await readFile(join(dir, 'alerts.json'), 'utf8');
@@ -196,7 +196,8 @@ test('stale, incomplete, unsafe-link and non-eligible candidates never generate 
     offer(1234567891, { url: 'https://avito.ru.evil.test/noutbuki/macbook_1234567891' }),
     offer(1234567892, { alertEligible: false }), offer(1234567893, { condition: 'unknown' }),
     offer(1234567894, { estimatedDeltaRub: null }), offer(1234567895, { price: 0 }),
-    offer(1234567896, { dedupKey: '__proto__' })];
+    offer(1234567896, { dedupKey: '__proto__' }), offer(1234567897, {condition: 'new'}),
+    offer(1234567898, {marketplaceSellerType: 'company'}), offer(1234567899, {peerCount: 2})];
   let calls = 0;
   const state = await sendAvitoAlerts({ env, dir, now: NOW, opportunities: opportunities(candidates), fetchImpl: async () => { calls++; return response(); } });
   assert.equal(state.sentCount, 0);

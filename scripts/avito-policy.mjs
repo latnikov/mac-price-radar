@@ -2,9 +2,19 @@ import { canonicalStorageGb } from './domain.mjs';
 import { parseProduct } from './offer-normalization.mjs';
 
 export const AVITO = 'Авито НН';
-export const AVITO_VERSION = 'avito-nn-v2';
+export const AVITO_VERSION = 'avito-nn-private-used-v4';
 export const sellerNameKey = value => String(value || '').normalize('NFKC').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
 export const excludedSeller = value => /макбучн|мкбчн|macbookbro|makbuchn|mkbchn/.test(sellerNameKey(value));
+export const avitoUsedCondition = value => /^(?:б\s*\/\s*у|used|как\s+нов(?:ое|ый|ая)|отличное|хорошее|удовлетворительное)$/i.test(String(value || '').trim());
+export const businessSellerName = value => /магазин|компания|сервис|салон|\bstore\b|\bshop\b|re\s*[:.-]?\s*sale|ресейл|айдевайс|айфонберри|mac\s*&\s*devices|apple\s*[- ]*trade|оптов|ооо\b/i.test(String(value || ''));
+export const businessSellerDescription = value => /trade[\s-]*in|трейд[\s-]*ин|(?:выкуп|скупка)\s+(?:вашей|вашего|ваших|техники)|(?:наш|нашем|нашему)\s+магазин|(?:скидки|акции)[\s\S]{0,120}закрыто(?:му|е)\s+сообществ/i.test(String(value || ''));
+export const macBookIdentity = value => /mac[k]?book|макбук/i.test(String(value || ''));
+export function avitoSellerType(item) {
+  const seller = item?.seller || {};
+  if (seller.isShop === true || seller.shopName || businessSellerName(seller.name) || businessSellerDescription(item?.description)
+    || /company|business|компания|магазин/i.test(`${seller.type || ''} ${seller.declaredType || ''} ${seller.postfix || ''}`)) return 'company';
+  return seller.type === 'private' ? 'private' : 'unknown';
+}
 export const avitoGroupKey = o => [o.model, o.chip, o.screenIn, o.ramGb, canonicalStorageGb(o.storageGb), o.color, o.condition === 'used' ? 'used' : 'new'].join('|');
 export function avitoUrl(value, { listing = false } = {}) {
   let url;
@@ -23,19 +33,24 @@ export function avitoUrl(value, { listing = false } = {}) {
 export function normalizeAvitoListing(item, { observedAt, sellerMap = {} } = {}) {
   const reject = (reason, status = 'excluded') => ({ status, id: String(item.id || ''), reason });
   const seller = item.seller || {};
+  if (/^(новое|новый|новая|new)$/i.test(String(item.condition || '').trim())) return reject('Новые устройства исключены: только б/у от частных продавцов');
+  const sellerType = avitoSellerType(item);
+  if (sellerType === 'company' || sellerMap[String(seller.id)]) return reject('Магазин или компания исключены');
   if (!seller.name || !seller.id) return reject('Не установлен продавец', 'review');
   if (excludedSeller(seller.name) || excludedSeller(seller.id) || excludedSeller(sellerMap[String(seller.id)])) return reject('Исключённый продавец');
   if (!item.city || !item.condition) return reject('Не установлены город или состояние', 'review');
   if (!/^нижний\s+новгород$/i.test(String(item.city || '').trim())) return reject('Город не подтверждён как Нижний Новгород');
   const conditionText = String(item.condition || '').trim();
-  const condition = /^(новое|новый|новая|new)$/i.test(conditionText) ? 'new'
-    : /^(?:б\s*\/\s*у|used|как\s+нов(?:ое|ый|ая)|отличное|хорошее|удовлетворительное)$/i.test(conditionText) ? 'used' : null;
-  if (!condition) return reject('Не подтверждено новое или рабочее б/у состояние');
+  const condition = avitoUsedCondition(conditionText) ? 'used' : null;
+  if (!condition) return reject('Не подтверждено рабочее б/у состояние');
+  if (sellerType !== 'private') return reject('Не подтверждён частный продавец', 'review');
   const title = String(item.title || '').trim();
+  if (/^(?:ноутбук\s+)?(?:razer|honor|hp|huawei|asus|acer|lenovo|dell|msi)\b/i.test(title) || (!macBookIdentity(title) && !macBookIdentity(item.specs?.model))) return reject('Объявление не о MacBook');
   const conditionTitle = title.replace(/не\s+вскрыт[а-я]*/gi, 'запечатан').replace(/как\s+нов[а-я]*/gi, 'б/у');
   if (/скупк|выкуп|ремонт|запчаст|чехол|коробка\s+(?:от|для)|аренд|витрин|refurb|восстановлен|open.?box|не\s*рабоч|не\s*работа|неисправ|разбит|залит/i.test(conditionTitle)) return reject('Состояние или тип товара противоречат фильтрам');
   if (condition === 'new' && /б\s*\/\s*у|вскрыт|\bused\b/i.test(conditionTitle)) return reject('Заголовок противоречит новому состоянию');
   if (condition === 'used' && /(?:^|\s)(?:новый|новая|новое|запечатан[а-я]*|new)(?:\s|[,.!?]|$)/i.test(conditionTitle)) return reject('Заголовок противоречит б/у состоянию', 'review');
+  if (condition === 'used' && /(?:^|[.!?\n])\s*(?:ноутбук\s+|товар\s+)?(?:новый|новая|новое|запечатан[а-я]*)(?:\s|[,.!?]|$)|состояние\s*:\s*нов[а-я]+/i.test(item.description || '')) return reject('Описание противоречит б/у состоянию', 'review');
   if (condition === 'new' && /состояние\s*:\s*(?:б\s*\/\s*у|как\s+нов|витрин|восстановлен)|(?:^|[.!?])\s*(?:ноутбук|товар|макбук|устройство)\s+(?:б\s*\/\s*у|восстановлен|витрин)/i.test(item.description || '')) return reject('Описание противоречит новому состоянию');
   if (item.nonWorking === true || /(?:^|[.!?\n])\s*(?:ноутбук|товар|макбук|устройство|экран|клавиатура)\s+(?:не\s+работает|неисправ[а-я]*|разбит[а-я]*|залит[а-я]*)/i.test(item.description || '')) return reject('Неисправное устройство');
   if (Array.isArray(item.adapterReviewReasons) && item.adapterReviewReasons.length) return reject(item.adapterReviewReasons.map(String).join('; '), 'review');
@@ -77,17 +92,19 @@ export function normalizeAvitoListing(item, { observedAt, sellerMap = {} } = {})
   return { status: 'accepted', offer: {
     ...parsed, url, externalId, listingId: `avito:${externalId}`, sourceId: 'avito:nn', sourceType: 'marketplace',
     sellerId: 'avito:marketplace', marketplaceSellerId: sellerId, sellerName: String(seller.name).slice(0, 200),
+    marketplaceSellerType: 'private',
     matchedRetailer: sellerMap[sellerId] || null, sourceCity: 'Нижний Новгород',
     title, rawTitle: title, condition, stock: item.active === false ? 'Discontinued' : 'source_reported',
     priceType: 'full', paymentMethod: 'unknown', buyerType: 'retail', minimumQuantity: 1,
     validationStatus: 'accepted', avitoRisks: risks, adapterVersion: AVITO_VERSION,
     evidence: { method: item.method || 'avito-record-v1', observedAt: at, condition: item.condition, city: item.city,
-      sellerId, specs, priceText: item.priceText || String(item.price), documentHash: item.documentHash || null },
+      sellerId, sellerType: 'private', sellerName: String(seller.name).slice(0, 200), specs, priceText: item.priceText || String(item.price), documentHash: item.documentHash || null },
   } };
 }
 
 export function visibleAvitoOffer(offer) {
-  return offer.retailer !== AVITO || (['new', 'used'].includes(offer.condition) && offer.sourceCity === 'Нижний Новгород'
+  return offer.retailer !== AVITO || (offer.condition === 'used' && offer.marketplaceSellerType === 'private' && offer.sourceCity === 'Нижний Новгород'
     && offer.marketplaceSellerId && offer.sellerName && !excludedSeller(offer.sellerName) && !excludedSeller(offer.marketplaceSellerId)
+    && !businessSellerName(offer.sellerName) && !offer.matchedRetailer
     && !offer.rejected && offer.validationStatus !== 'rejected' && !['Discontinued', 'SoldOut', 'OutOfStock'].includes(offer.stock));
 }

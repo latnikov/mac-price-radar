@@ -272,3 +272,65 @@ test('an import failure retains raw data and never marks the already-paid result
   assert.equal(JSON.parse(await readFile(f.ledgerPath, 'utf8')).entries.at(-1).importedAt, undefined);
   assert.equal(JSON.parse(await readFile(join(f.root, 'apify-runs/runTwo.json'), 'utf8')).length, 1);
 });
+
+test('paging actor uses all pages, private sellers and stable incremental state while sharing the total budget', async t => {
+  const f = await fixture(t), actor = 'km2oo0mCahDBKPOa6';
+  f.options.env = { ...f.options.env, AVITO_APIFY_ACTOR_ID: actor, AVITO_APIFY_MAX_RESULTS: '0', AVITO_APIFY_RUN_LIMIT: '168', AVITO_APIFY_MAX_RUN_USD: '3' };
+  let posts = 0;
+  const result = await runApifyWorker({ ...f.options, fetchImpl: async (url, options) => {
+    if (options.method === 'POST') {
+      posts++; const input = JSON.parse(options.body);
+      assert.match(url, new RegExp(`/acts/${actor}/runs`));
+      assert.equal(new URL(url).searchParams.get('maxTotalChargeUsd'), '3');
+      assert.equal(new URL(url).searchParams.get('memory'), '1024');
+      assert.deepEqual(input.regions, ['nizhniy_novgorod']);
+      assert.equal(input.ownerOnly, true); assert.equal(input.maxListings, 0);
+      assert.equal(input.incrementalMode, true); assert.equal(input.emitUnchanged, false);
+      assert.equal(input.maxPages, undefined);
+      return reply({ data: run({ actId: actor, usageTotalUsd: 0.1 }) });
+    }
+    return reply([]);
+  }, importRun: async () => ({ counts: { accepted: 0 } }) });
+  assert.equal(posts, 1); assert.equal(result.budget.spentUsd, 0.259);
+  assert.equal(JSON.parse(await readFile(f.ledgerPath, 'utf8')).entries.at(-1).actorId, actor);
+});
+
+test('a requested manual scan may bypass the hourly wait but cannot bypass money or resume into a second paid run', async t => {
+  const f = await fixture(t), waitingNow = Date.parse(start) + 10 * 60_000;
+  let posts = 0;
+  const fetchImpl = async (url, options) => {
+    if (options.method === 'POST') { posts++; return reply({ data: run({ startedAt: start, finishedAt: start }) }); }
+    return reply([]);
+  };
+  await runApifyWorker({ ...f.options, now: () => waitingNow, manualRun: true, fetchImpl, importRun: async () => ({ counts: {} }) });
+  assert.equal(posts, 1);
+  const ledger = initialLedger(); ledger.entries.push({runId:'runTwo',status:'RUNNING',reservationUsd:0.4,startedAt:start});
+  await writeFile(f.ledgerPath, JSON.stringify(ledger));
+  await runApifyWorker({ ...f.options, manualRun: true, fetchImpl: async url => url.includes('/actor-runs/') ? reply({data:run()}) : reply([]), importRun: async () => ({counts:{}}) });
+  assert.equal(posts, 1);
+  ledger.entries[0].costUsd = 4.9; ledger.entries.splice(1);
+  await writeFile(f.ledgerPath, JSON.stringify(ledger));
+  const stopped = await runApifyWorker({ ...f.options, manualRun: true, fetchImpl: async () => assert.fail('budget must not be bypassed') });
+  assert.equal(stopped.state, 'paused'); assert.equal(stopped.budget.spentUsd, 4.9);
+});
+
+test('manual price-range collection uses documented filters and cannot repay an already saved request', async t => {
+  const f = await fixture(t); let posts = 0;
+  f.options.env = {...f.options.env,AVITO_APIFY_PRICE_MIN:'0',AVITO_APIFY_PRICE_MAX:'49999'};
+  const options = {...f.options,manualRun:true,requestKey:'initial:under50k',importRun:async()=>({counts:{accepted:0}}),fetchImpl:async(url,options)=>{
+    if(options.method==='POST') {posts++;const input=JSON.parse(options.body);assert.equal(input.searchUrl,undefined);assert.equal(input.priceMin,0);assert.equal(input.priceMax,49999);return reply({data:run()});}
+    return reply([]);
+  }};
+  await runApifyWorker(options); await runApifyWorker(options);
+  assert.equal(posts,1);
+  const entry=JSON.parse(await readFile(f.ledgerPath,'utf8')).entries.at(-1);
+  assert.equal(entry.requestKey,'initial:under50k');assert.deepEqual(entry.scope,{priceMin:0,priceMax:49999});
+});
+
+test('actor lifetime allowance is separate from the shared $5 expense of every tested provider', () => {
+  const ledger=initialLedger();
+  for(let i=0;i<2;i++)ledger.entries.push({runId:`probe${i}`,actorId:'km2oo0mCahDBKPOa6',status:'SUCCEEDED',costUsd:0.06,startedAt:start,importedAt:start});
+  const gate=evaluateApifyBudget(ledger,{now,actorId:APIFY_AVITO_ACTOR_ID});
+  assert.equal(gate.budget.runsUsed,1);assert.equal(gate.budget.spentUsd,0.279);
+  assert.equal(gate.budget.runsRemaining,9);
+});

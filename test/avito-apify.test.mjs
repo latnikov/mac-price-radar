@@ -9,11 +9,11 @@ const record = (overrides = {}) => ({
   id: 1234567890, url: 'https://www.avito.ru/nizhniy_novgorod/noutbuki/macbook_air_1234567890?tracking=1#top',
   title: 'MacBook Air 13 M5 16/512 Sky Blue', address: 'Нижегородская обл., г.о. Нижний Новгород, ул. Учебная, 1',
   price: 110900, priceFormatted: '110\u00a0900 ₽', currency: '₽', status: 'active',
-  description: 'Новый, запечатанный.', scrapedAt: '2026-09-30T12:00:30.123456+00:00',
-  parameters: parameters({ 'Состояние': 'Новое', 'Модель': 'Macbook Air 13 (2026, M5)', 'Процессор': 'Apple M5',
+  description: 'Использовался, полностью исправен.', userType: 'private', scrapedAt: '2026-09-30T12:00:30.123456+00:00',
+  parameters: parameters({ 'Состояние': 'Отличное', 'Модель': 'Macbook Air 13 (2026, M5)', 'Процессор': 'Apple M5',
     'Диагональ, дюйм': '13.6', 'Оперативная память, ГБ': '16', 'Объем накопителей, ГБ': '512', 'Цвет': 'Голубой',
     'Количество ядер процессора': '10', 'Видеокарта': 'Apple graphics 10-core' }),
-  seller: { name: 'Тестовый магазин', userKey: 'seller-key', profileUrl: 'https://www.avito.ru/user/seller-key/profile' },
+  seller: { name: 'Алексей', userKey: 'seller-key', profileUrl: 'https://www.avito.ru/user/seller-key/profile' },
   ...overrides,
 });
 const snapshot = records => apifySnapshot(records, options);
@@ -41,7 +41,7 @@ test('Apify adapter produces a partial importable snapshot using observation tim
 });
 
 test('Apify never uses generic catalogue productSpecs, URL slugs, or descriptions to complete configurations', () => {
-  const incomplete = record({ title: 'MacBook Air 13 M5', parameters: parameters({ 'Состояние': 'Новое' }),
+  const incomplete = record({ title: 'MacBook Air 13 M5', parameters: parameters({ 'Состояние': 'Отличное' }),
     url: 'https://www.avito.ru/nizhniy_novgorod/noutbuki/macbook_air_m5_16_512_sky_blue_1234567890',
     description: '16 GB RAM, 512 GB SSD, Sky Blue',
     productSpecs: { specs: [{ key: 'Оперативная память', value: '16' }, { key: 'Объем накопителей', value: '512' }] },
@@ -53,7 +53,7 @@ test('Apify never uses generic catalogue productSpecs, URL slugs, or description
 });
 
 test('Apify recognizes explicit Neo model ordering and yellow alias without inventing its chip or screen', () => {
-  const neo = record({ title: 'MacBook Neo 8/256GB Citrus', parameters: parameters({ 'Состояние': 'Новое',
+  const neo = record({ title: 'MacBook Neo 8/256GB Citrus', parameters: parameters({ 'Состояние': 'Отличное',
     'Модель': 'MacBook 13 Neo (2026)', 'Процессор': 'Apple A18 Pro', 'Диагональ, дюйм': '13',
     'Оперативная память, ГБ': '8', 'Объем накопителей, ГБ': '256', 'Цвет': 'Жёлтый' }) });
   const [offer] = parsed([neo]).offers;
@@ -64,7 +64,7 @@ test('Apify recognizes explicit Neo model ordering and yellow alias without inve
   noChip.parameters = noChip.parameters.filter(item => item.name !== 'Процессор');
   assert.equal(parsed([noChip]).offers.length, 0);
   const noSize = structuredClone(neo);
-  noSize.parameters = parameters({ 'Состояние': 'Новое', 'Модель': 'MacBook Neo', 'Процессор': 'Apple A18 Pro', 'Цвет': 'Citrus' });
+  noSize.parameters = parameters({ 'Состояние': 'Отличное', 'Модель': 'MacBook Neo', 'Процессор': 'Apple A18 Pro', 'Цвет': 'Citrus' });
   assert.equal(parsed([noSize]).offers.length, 0);
 });
 
