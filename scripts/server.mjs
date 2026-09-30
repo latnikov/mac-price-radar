@@ -19,6 +19,7 @@ const STATIC_FILES = new Map([
   ['/web/avito.html', ['web/avito.html', 'text/html; charset=utf-8']],
   ['/web/foreign.html', ['web/foreign.html', 'text/html; charset=utf-8']],
   ['/web/foreign.js', ['web/foreign.js', 'text/javascript; charset=utf-8']],
+  ['/web/foreign-filters.js', ['web/foreign-filters.js', 'text/javascript; charset=utf-8']],
   ['/web/foreign.css', ['web/foreign.css', 'text/css; charset=utf-8']],
   ['/', ['web/index.html', 'text/html; charset=utf-8']],
   ['/web/', ['web/index.html', 'text/html; charset=utf-8']],

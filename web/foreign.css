@@ -1,5 +1,13 @@
 .foreign-intro { padding: 0 30px 26px; }
 .foreign-intro p { line-height: 1.55; }
+.foreign-intro { border-top: 1px solid var(--line); padding-top: 16px; }
+.foreign-intro > summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+#foreign-family-options.mac-models { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+#foreign-family-options .all-models { grid-column: 1 / -1; justify-self: start; }
+.foreign-sheet .price-status { margin-bottom: 18px; }
+.foreign-sheet .status-copy p { margin: 0; line-height: 1.5; }
+@media (max-width: 850px) { #foreign-family-options.mac-models { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 600px) { #foreign-family-options.mac-models { grid-template-columns: repeat(2, minmax(0, 1fr)); } .foreign-sheet .price-status { flex-wrap: wrap; } .foreign-sheet .spec-group.wide { grid-column: auto; } .foreign-sheet .spec-step { grid-template-columns: 1fr; } }
 .foreign-formula { font-size: 17px; font-weight: 600; }
 .foreign-note { color: var(--muted); }
 .foreign-controls { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 24px; }
