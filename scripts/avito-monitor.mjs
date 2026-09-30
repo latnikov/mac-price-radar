@@ -66,3 +66,13 @@ export async function readAvitoMonitor({ root, env = process.env, offers = [], n
       lastSentAt: validDate(notifications.lastSentAt), message: safeText(notifications.message) },
     review: review.sort((a,b) => Date.parse(b.observedAt) - Date.parse(a.observedAt)).slice(0, 1000) };
 }
+
+export function avitoMonitorCsv(data, query='') {
+  const needle=String(query).slice(0,120).trim().toLocaleLowerCase('ru');
+  const items=(data.listings||[]).filter(o=>`${o.title} ${o.sellerName} ${o.configuration||''} ${o.price} ${o.rank?.procurement?.retailer||''}`.toLocaleLowerCase('ru').includes(needle));
+  const quote=v=>`"${String(v??'').replace(/^[=+@-]/,"'$&").replaceAll('"','""')}"`;
+  const rows=[['Место','Объявление','Продавец','Авито, ₽','Закуп нового, ₽','Поставщик','Цвет закупа','Дата закупа','Разница после резерва, ₽','Проверить','Ссылка'],
+    ...items.map(o=>[o.position,o.title,o.sellerName,o.price,o.rank?.referencePrice,o.rank?.procurement?.retailer,o.rank?.procurement?.color,
+      o.rank?.procurement?.observedAt,o.rank?.deltaRub,(o.rank?.reasons||[]).join('; '),o.url])];
+  return '\uFEFF'+rows.map(row=>row.map(quote).join(';')).join('\r\n');
+}

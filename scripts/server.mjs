@@ -12,7 +12,7 @@ import { createResponseCache, cachedFile, sendCached } from './response-cache.mj
 import { AVITO, visibleAvitoOffer } from './avito-policy.mjs';
 import { rankAvitoOffers } from './avito-ranking.mjs';
 import { publicAvitoState } from './avito-access.mjs';
-import { readAvitoMonitor } from './avito-monitor.mjs';
+import { readAvitoMonitor, avitoMonitorCsv } from './avito-monitor.mjs';
 import { FOREIGN_SOURCE, readForeignPrices } from './foreign-prices.mjs';
 
 const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'HitApple', 'RifaStore', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
@@ -223,8 +223,15 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
       if (path === '/web/public-config.json') return send(res, 200, { mode: 'local' });
       if (path === '/api/session') return send(res, 200, { mode: 'local', csrfToken, retailers: await availableRetailers() });
       if (path === '/api/foreign-prices') return send(res, 200, await readForeignPrices(root));
-      if (path === '/api/avito-monitor') return send(res, 200, await readAvitoMonitor({ root, env,
-        offers: store.getOffers({ includeRejected: true, summary: true }).filter(offer => offer.visibility !== 'private' && inPublicSourceScope(offer)) }));
+      if (path === '/api/avito-monitor' || path === '/api/avito-monitor.csv') {
+        const monitor=await readAvitoMonitor({ root, env,
+          offers: store.getOffers({ includeRejected: true, summary: true }).filter(offer => offer.visibility !== 'private' && inPublicSourceScope(offer)) });
+        if(path.endsWith('.csv')) {
+          res.setHeader('content-disposition','attachment; filename="avito-nn-russian-procurement.csv"');
+          return send(res,200,avitoMonitorCsv(monitor,url.searchParams.get('q')||''),'text/csv; charset=utf-8');
+        }
+        return send(res,200,monitor);
+      }
       if (path === '/status' || path === '/api/status') {
         const avitoDir = resolve(root, env.AVITO_DATA_DIR || 'data/private/avito');
         const avito = await readFile(join(avitoDir, 'apify-state.json'), 'utf8').then(JSON.parse)

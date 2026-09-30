@@ -195,11 +195,8 @@ function renderRanked(data) {
   drawRanked();
 }
 function exportRanked() {
-  const quote=v=>`"${String(v??'').replace(/^[=+@-]/,'\'$&').replaceAll('"','""')}"`;
-  const rows=[['Место','Объявление','Продавец','Авито, ₽','Закуп нового, ₽','Поставщик','Цвет закупа','Дата закупа','Разница после резерва, ₽','Проверить','Ссылка'],
-    ...filteredRanked().map(o=>[o.position,o.title,o.sellerName,o.price,o.rank?.referencePrice,o.rank?.procurement?.retailer,o.rank?.procurement?.color,o.rank?.procurement?.observedAt,o.rank?.deltaRub,(o.rank?.reasons||[]).join('; '),o.url])];
-  const url=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.map(quote).join(';')).join('\r\n')],{type:'text/csv;charset=utf-8'}));
-  const a=node('a');a.href=url;a.download='avito-nn-russian-procurement.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  const a=node('a');a.href=`/api/avito-monitor.csv?q=${encodeURIComponent(document.getElementById('avito-ranked-search').value)}`;
+  a.download='avito-nn-russian-procurement.csv';document.body.append(a);a.click();a.remove();
 }
 
 function startMonitor(root) {

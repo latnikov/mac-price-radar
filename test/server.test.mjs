@@ -37,6 +37,12 @@ test('Avito API exposes ranked seller prices, honest readiness and no excluded s
   assert.equal(compared.listings[0].rank.deltaRub, 17000);
   assert.equal(compared.listings[0].rank.procurement.retailer, 'BSA');
   assert.equal(compared.listingSummary.compared, 1);
+  const csv=await app.request('/api/avito-monitor.csv');
+  assert.match(csv.headers.get('content-type'),/text\/csv/);
+  assert.match(csv.headers.get('content-disposition'),/attachment/);
+  const body=await csv.text();assert.match(body,/17000/);assert.match(body,/BSA/);
+  const emptyCsv=await (await app.request('/api/avito-monitor.csv?q=not-a-matching-listing')).text();
+  assert.equal(emptyCsv.split('\r\n').length,1);
 });
 
 test('table API preserves marketplace profile IDs for per-seller Air M5 15 comparison', async t => {
