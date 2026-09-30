@@ -49,6 +49,40 @@ test('actual nearby shop prices determine the average once per shop; procurement
   assert.equal(row.analytics.markupPercent, 21);
 });
 
+test('HitApple joins comparable configurations and contributes once to all retail calculations', () => {
+  const [row] = build([base,
+    { ...base, retailer: 'HitApple', url: 'https://hitapple.ru/macbook-air/', price: 118000 },
+    { ...base, retailer: 'HitApple', url: 'https://hitapple.ru/macbook-air-second/', price: 119000 },
+    { ...base, retailer: 'Technichno', price: 122000 },
+  ]);
+  assert.equal(row.offers.length, 4);
+  assert.equal(row.analytics.minimumRetail, 118000);
+  assert.equal(row.analytics.averageRetail, 120000);
+  assert.equal(row.analytics.retailCount, 2);
+  assert.equal(row.analytics.minimumProcurement, 100000);
+  assert.equal(row.analytics.difference, 20000);
+  assert.equal(row.analytics.markupPercent, 20);
+  assert.equal(row.analytics.recommendedPrice, 117500);
+  assert.equal(row.analytics.benchmark.retailer, 'HitApple');
+});
+
+test('stale, rejected and unavailable HitApple prices cannot change averages or recommendations', () => {
+  for (const change of [{ fetchedAt: new Date(now - 4 * 3600000 - 1).toISOString() },
+    { validationStatus: 'rejected' }, { qualityWarnings: ['Конфликт конфигурации'] },
+    { stock: 'OutOfStock' }, { priceType: 'installment' }, { minimumQuantity: 5 }]) {
+    const hitapple = { ...base, retailer: 'HitApple', price: 110000, ...change };
+    const [row] = build([base, hitapple, { ...base, retailer: 'Technichno', price: 122000 }]);
+    assert.equal(row.offers.length, 3);
+    assert.equal(currentPrice(hitapple, now), false);
+    assert.equal(row.analytics.minimumRetail, 122000);
+    assert.equal(row.analytics.averageRetail, 122000);
+    assert.equal(row.analytics.retailCount, 1);
+    assert.equal(row.analytics.difference, 22000);
+    assert.equal(row.analytics.recommendedPrice, 121500);
+    assert.equal(row.analytics.benchmark.retailer, 'Technichno');
+  }
+});
+
 test('restored difference uses the displayed average even when the recommendation excludes low-trust prices', () => {
   const [row] = build([base, { ...base, retailer: 'AFM', price: 80000 },
     { ...base, retailer: 'Technichno', price: 110000 }, { ...base, retailer: 'Айфория', price: 110000 }]);

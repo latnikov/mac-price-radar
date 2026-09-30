@@ -15,6 +15,7 @@ import { fetchIphoriyaOffers } from './iphoriya.mjs';
 import { fetchMadstoreOffers } from './madstore.mjs';
 import { fetchSmartDeviceOffers } from './smart-device.mjs';
 import { fetchAfmOffers } from './afmcenter.mjs';
+import { fetchHitappleOffers } from './hitapple.mjs';
 import { afmWithdrawalObservations } from './afm-withdrawals.mjs';
 import { fetchAvitoOffers } from './avito.mjs';
 import { AVITO, visibleAvitoOffer } from './avito-policy.mjs';
@@ -69,7 +70,7 @@ try {
     });
     store.ingestRun({ runId: 'legacy-migration-v1', observations, sources: [...new Set(observations.map(o => o.retailer))].map(retailer => ({ retailer, status: 'partial' })), actor: 'migration', reason: 'Сохранение исходного снимка; прежние предположения требуют проверки' });
   }
-  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
+  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'HitApple', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
   const telegram = new Map((await readTelegramSources()).map(source => [source.retailer, source]));
   retailers.push(...[...telegram.keys()].filter(retailer => !retailers.includes(retailer)));
   const selected = process.env.RETAILER && process.env.RETAILER !== 'all' ? [...new Set(process.env.RETAILER.split(',').map(x => x.trim() === 'Iphoriya' ? 'Айфория' : x.trim()))] : retailers;
@@ -140,6 +141,10 @@ try {
     if (retailer === 'AFM') {
       const result = await fetchAfmOffers({ fetchPage });
       return { offers: result.offers, failures: result.failures, counts: result.stats, unpriced: result.unpriced };
+    }
+    if (retailer === 'HitApple') {
+      const result = await fetchHitappleOffers({ fetchPage });
+      return { offers: result.offers, failures: result.failures, counts: result.stats };
     }
     if (retailer === 'Smart Device') {
       const result = await fetchSmartDeviceOffers({ fetchPage });

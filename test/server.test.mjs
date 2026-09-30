@@ -175,7 +175,10 @@ test('SEO assets, custom 404 and privacy-preserving analytics are served', async
 test('automatic collection runs without browser input and shares the active-job lock', async t => {
   let runs = 0;
   let release;
-  const app = await setup(t, { autoRefreshIntervalMs: 25, refreshRunner: () => { runs++; return new Promise(resolve => { release = resolve; }); } });
+  const app = await setup(t, { autoRefreshIntervalMs: 25, refreshRunner: ({ retailers }) => {
+    assert.ok(retailers.includes('HitApple'));
+    runs++; return new Promise(resolve => { release = resolve; });
+  } });
   assert.equal(runs, 1);
   await new Promise(resolve => setTimeout(resolve, 80));
   assert.equal(runs, 1);
@@ -236,6 +239,16 @@ test('AFM is available in the session, full refresh and source-only refresh', as
   assert.ok(runs[0].includes('AFM'));
   assert.equal((await app.post('/api/refresh', { retailer: 'AFM' })).status, 202);
   assert.deepEqual(runs[1], ['AFM']);
+});
+
+test('HitApple is available in the session, full refresh and source-only refresh', async t => {
+  const runs = [];
+  const app = await setup(t, { refreshRunner: async ({ retailers }) => { runs.push(retailers); } });
+  assert.ok((await (await app.request('/api/session')).json()).retailers.includes('HitApple'));
+  assert.equal((await app.post('/api/refresh', {})).status, 202);
+  assert.ok(runs[0].includes('HitApple'));
+  assert.equal((await app.post('/api/refresh', { retailer: 'HitApple' })).status, 202);
+  assert.deepEqual(runs[1], ['HitApple']);
 });
 
 test('new forwarded channel runs the real collector and appears in table API without configuration', async t => {

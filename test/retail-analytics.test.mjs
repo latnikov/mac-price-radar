@@ -48,6 +48,36 @@ test('ReSale participates normally when its price has no dynamic warning', () =>
   assert.equal(analytics.lowTrustRetailers.has('ReSale'), false);
 });
 
+test('HitApple contributes its lowest usable offer to Nizhny analytics and the recommendation', () => {
+  const analytics = calculateRetailAnalytics([
+    { retailer: 'Дима', price: 100000, stock: 'source_reported' },
+    { retailer: 'HitApple', price: 118000, stock: 'InStock' },
+    { retailer: 'HitApple', price: 119000, stock: 'InStock' },
+    { retailer: 'HitApple', price: 80000, stock: 'OutOfStock' },
+    { retailer: 'Technichno', price: 122000, stock: 'InStock' },
+    { retailer: 'BigGeek', price: 90000, stock: 'InStock' },
+  ]);
+  assert.equal(analytics.averageRetail, 120000);
+  assert.equal(analytics.retailCount, 2);
+  assert.equal(analytics.difference, 20000);
+  assert.equal(analytics.markupPercent, 20);
+  assert.equal(analytics.recommendedPrice, 117500);
+  assert.equal(analytics.benchmark.retailer, 'HitApple');
+});
+
+test('HitApple uses the same low-trust exclusion as other Nizhny retailers', () => {
+  const analytics = calculateRetailAnalytics([
+    { retailer: 'HitApple', price: 80000, stock: 'InStock' },
+    { retailer: 'Technichno', price: 110000, stock: 'InStock' },
+    { retailer: 'Айфория', price: 110000, stock: 'InStock' },
+  ]);
+  assert.equal(analytics.lowTrustRetailers.has('HitApple'), true);
+  assert.equal(analytics.ignoredLowTrustCount, 1);
+  assert.equal(analytics.averageRetail, 110000);
+  assert.equal(analytics.recommendedPrice, 109500);
+  assert.notEqual(analytics.benchmark.retailer, 'HitApple');
+});
+
 test('only the lowest usable offer from each retailer contributes to its average', () => {
   const analytics = calculateRetailAnalytics([
     { retailer: 'Дима', price: 101000, stock: 'source_reported' },

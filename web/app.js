@@ -48,7 +48,7 @@ const CURRENT_CHIPS = {
 const RETAILER_GROUPS = [
   { key: 'procurement', label: 'Закупка', retailers: [{ name: 'Дима', label: 'Дима' }, { name: 'BSA', label: 'BSA' }] },
   { key: 'moscow', label: 'МСК / РФ', retailers: [{ name: 'BigGeek', label: 'BigGeek' }, { name: 'RifaStore', label: 'Rifa' }] },
-  { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }, { name: 'iMobile', label: 'iMobile' }, { name: 'ReSale', label: 'ReSale' }, { name: 'Apple Store', label: 'Apple Store' }, { name: 'Rebro', label: 'Rebro' }, { name: 'Madstore', label: 'Madstore' }, { name: 'Smart Device', label: 'Smart Device' }, { name: 'AFM', label: 'AFM' }] },
+  { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }, { name: 'iMobile', label: 'iMobile' }, { name: 'ReSale', label: 'ReSale' }, { name: 'Apple Store', label: 'Apple Store' }, { name: 'Rebro', label: 'Rebro' }, { name: 'Madstore', label: 'Madstore' }, { name: 'Smart Device', label: 'Smart Device' }, { name: 'AFM', label: 'AFM' }, { name: 'HitApple', label: 'Хит Эпл' }] },
 ];
 const CONFIGURED_RETAILERS = RETAILER_GROUPS.flatMap(group => group.retailers.map(retailer => retailer.name));
 const text = (tag, value, cls) => { const node = document.createElement(tag); if (value != null) node.textContent = String(value); if (cls) node.className = cls; return node; };
@@ -269,7 +269,8 @@ function filtered() {
   );
 }
 
-const retailerLabel = offer => state.telegramSources.find(source => source.retailer === offer?.retailer)?.sourceTitle || offer?.sourceTitle || offer?.retailer;
+const retailerLabel = offer => state.telegramSources.find(source => source.retailer === offer?.retailer)?.sourceTitle || offer?.sourceTitle
+  || RETAILER_GROUPS.flatMap(group => group.retailers).find(item => item.name === offer?.retailer)?.label || offer?.retailer;
 function retailerGroups(offers) {
   if (avitoSheet) {
     const sellers = avitoSellerColumns(offers);

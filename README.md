@@ -59,6 +59,8 @@ npm run dev
 
 Telegram Business Connection даёт боту доступ только к выбранным личным чатам бизнес-аккаунта и не даёт доступ к подпискам аккаунта на каналы. Поэтому полностью автоматические `channel_post` от `@BigSaleApple` возможны только если владелец канала добавит бота в канал. Без этого официальный Bot API получает BSA-пост только после его пересылки боту. Bot API не предоставляет запрос истории чатов.
 
+HitApple («Хит Эпл») подключён к колонкам НН и ритейл-аналитике. Сбор начинается с `hitapple.ru/category/mac/`, обходит все страницы MacBook Air, Pro и Neo и сохраняет текущую цену за наличный расчёт. Варианты Neo получают собственные цены, цвет и память; диапазон родительской карточки не используется. Предложения без наличия остаются видимыми, но не входят в актуальные расчёты. Обновление запускается общей кнопкой и каждый час.
+
 Токен хранится только на сервере в закрытом файле вне репозитория:
 
 ```bash
@@ -82,6 +84,7 @@ LIVE=1 RETAILER=Rebro npm run build:data
 LIVE=1 RETAILER=Madstore npm run build:data
 LIVE=1 RETAILER="Smart Device" npm run build:data
 LIVE=1 RETAILER=AFM npm run build:data
+LIVE=1 RETAILER=HitApple npm run build:data
 LIVE=1 npm run build:data
 ```
 

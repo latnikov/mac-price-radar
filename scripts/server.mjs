@@ -14,7 +14,7 @@ import { rankAvitoOffers } from './avito-ranking.mjs';
 import { publicAvitoState } from './avito-access.mjs';
 import { FOREIGN_SOURCE, readForeignPrices } from './foreign-prices.mjs';
 
-const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'RifaStore', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
+const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'HitApple', 'RifaStore', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
 const STATIC_FILES = new Map([
   ['/web/avito.html', ['web/avito.html', 'text/html; charset=utf-8']],
   ['/web/foreign.html', ['web/foreign.html', 'text/html; charset=utf-8']],

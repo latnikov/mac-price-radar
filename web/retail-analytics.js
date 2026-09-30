@@ -1,7 +1,7 @@
 export const PROCUREMENT_RETAILERS = ['Дима', 'BSA'];
 export const isProcurementOffer = offer => PROCUREMENT_RETAILERS.includes(offer?.retailer)
   || (offer?.sourceType === 'telegram_channel' && offer?.procurementApproved === true);
-export const NIZHNY_RETAILERS = ['Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM'];
+export const NIZHNY_RETAILERS = ['Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'HitApple'];
 
 const percentFormat = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
 const belowPercent = (price, reference) => percentFormat.format((1 - price / reference) * 100);
