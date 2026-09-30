@@ -247,3 +247,5 @@ td .trust-badge { margin: 7px 0 0; }
   .pagination button { padding: 8px 10px; }
   .pagination span { font-size: 10px; }
 }
+
+.search-overview { margin: 0 0 18px; padding: 20px 24px; border: 1px solid #dce2eb; border-radius: 12px; background: #f0f5ff; line-height: 1.7; overflow-wrap: anywhere; }

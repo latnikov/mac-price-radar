@@ -1,8 +1,8 @@
 import { priceStatus } from './price-status.js';
 import { isProcurementOffer } from './retail-analytics.js';
 import { AVITO, avitoSellerColumns, priceColumnKey, groupOffersByPriceColumn } from './avito-columns.js';
-import { emptyFilters, readView, writeView, searchTerms, offerSearchText, matchesSearch } from './view-state.js';
-import { prepareTableOffers, buildPriceTable, selectTablePage, currentPrice, validMacColor, TABLE_PAGE_SIZE } from './price-table.js';
+import { emptyFilters, readView, writeView, searchTerms, offerSearchText, matchesSearch, searchScore } from './view-state.js';
+import { prepareTableOffers, buildPriceTable, selectTablePage, currentPrice, searchOverview, validMacColor, TABLE_PAGE_SIZE } from './price-table.js';
 
 const $ = id => document.getElementById(id);
 const state = {
@@ -17,7 +17,7 @@ function restoreView() {
   $('search').value = view.query;
   $('min-price').value = view.min;
   $('max-price').value = view.max;
-  $('sort').value = view.sort;
+  $('sort').value = view.query && view.sort === 'model' ? 'relevance' : view.sort;
 }
 function saveView() {
   const hash = writeView({ filters: state.filters, query: $('search').value, min: $('min-price').value, max: $('max-price').value, sort: $('sort').value });
@@ -351,13 +351,21 @@ function render({ keepPage = false } = {}) {
   $('selection-prompt').hidden = ready;
   for (const id of ['table-wrap', 'table-meta']) $(id).hidden = !ready;
   $('pagination').hidden = true;
+  $('search-overview').hidden = true;
   if (!ready) { $('rows').replaceChildren(); $('head').replaceChildren(); $('empty').hidden = true; return; }
   const queryKey = JSON.stringify([state.filters, $('search').value, $('min-price').value, $('max-price').value, Math.floor(Date.now() / 60000)]);
   if (state.tableModel?.key !== queryKey) {
     const offers = filtered();
-    state.tableModel = { key: queryKey, offers, groups: buildPriceTable(offers, { contextOffers: state.offers }) };
+    const groups = buildPriceTable(offers, { contextOffers: state.offers });
+    const terms = searchTerms($('search').value);
+    for (const group of groups) group.searchScore = Math.max(...group.offers.map(offer => searchScore(searchIndex.get(offer) || '', terms)));
+    state.tableModel = { key: queryKey, offers, groups };
   }
   const { groups, offers } = state.tableModel;
+  if ($('search').value.trim() && groups.length) {
+    $('search-overview').textContent = searchOverview(groups);
+    $('search-overview').hidden = false;
+  }
   const page = selectTablePage(groups, { sort: $('sort').value, page: state.page });
   state.page = page.page; state.pageCount = page.pages;
   const priceGroups = retailerGroups(page.allRows.flatMap(group => group.offers));
@@ -543,6 +551,7 @@ for (const [id, direction] of [['page-prev', -1], ['page-next', 1]]) $(id).addEv
 let searchTimer;
 $('search').addEventListener('input', () => {
   if (state.filters.family === null && $('search').value.trim()) { state.filters.family = '*'; state.filters.chip = '*'; renderControls(); }
+  if ($('search').value.trim()) $('sort').value = 'relevance';
   clearTimeout(searchTimer); searchTimer = setTimeout(render, 150);
 });
 $('clear-search').addEventListener('click', () => { $('search').value = ''; render(); $('search').focus(); });

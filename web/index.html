@@ -35,7 +35,7 @@
   </div>
   <div class="search-bar">
     <label for="search">Быстрый поиск</label>
-    <div class="search-input"><span aria-hidden="true">⌕</span><input id="search" type="search" maxlength="120" placeholder="Модель, артикул или параметры: Air M5 16 512" autocomplete="off"><button id="clear-search" type="button" aria-label="Очистить поиск" hidden>×</button></div>
+    <div class="search-input"><span aria-hidden="true">⌕</span><input id="search" type="search" maxlength="120" placeholder="Например: pro 14 m5 pro или про 14 м5 про" autocomplete="off"><button id="clear-search" type="button" aria-label="Очистить поиск" hidden>×</button></div>
   </div>
   <div class="filter-step">
     <div class="step-label"><strong><span class="step-number">1</span> Модель</strong><span>С чего начнём?</span></div>
@@ -83,7 +83,8 @@
 </section>
 <section class="results" aria-label="Сравнение цен">
 <div id="active-filters" class="active-filters" aria-label="Выбранные фильтры" hidden></div>
-<div class="table-meta" id="table-meta" hidden><span id="count"></span><div><button id="avito-jump" class="secondary" type="button" aria-controls="table-wrap" hidden>К продавцам Авито →</button><label>Сортировать <select id="sort"><option value="model">По модели</option><option value="price-up">Сначала дешевле</option><option value="price-down">Сначала дороже</option><option value="fresh">Сначала свежие</option><option value="coverage">Больше продавцов</option></select></label><button id="export" class="secondary">Скачать срез JSON</button></div></div>
+<p id="search-overview" class="search-overview" role="status" aria-live="polite" hidden></p>
+<div class="table-meta" id="table-meta" hidden><span id="count"></span><div><button id="avito-jump" class="secondary" type="button" aria-controls="table-wrap" hidden>К продавцам Авито →</button><label>Сортировать <select id="sort"><option value="relevance">По совпадению</option><option value="model">По модели</option><option value="price-up">Сначала дешевле</option><option value="price-down">Сначала дороже</option><option value="fresh">Сначала свежие</option><option value="coverage">Больше продавцов</option></select></label><button id="export" class="secondary">Скачать срез JSON</button></div></div>
 <div id="selection-prompt" class="selection-prompt"><span class="empty-symbol" aria-hidden="true">↗</span><strong>Ваш Mac. Все цены.</strong><p>Выберите модель выше, чтобы сравнить закупку<br>и предложения магазинов.</p></div>
 <div class="table-wrap" id="table-wrap" tabindex="0" aria-label="Таблица цен, прокручивается по горизонтали" hidden><table><caption class="sr-only">Цены магазинов по конфигурациям и цветам Mac.</caption><thead id="head"></thead><tbody id="rows"></tbody></table></div>
 <nav id="pagination" class="pagination" aria-label="Страницы таблицы" hidden><button id="page-prev" type="button">← Назад</button><span id="page-info" role="status" aria-live="polite"></span><button id="page-next" type="button">Далее →</button></nav>

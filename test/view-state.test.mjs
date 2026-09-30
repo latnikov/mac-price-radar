@@ -40,3 +40,12 @@ test('chip phrases distinguish M5 Pro from a Pro laptop with M5 Max or M5 inside
   assert.equal(matchesSearch(offerSearchText({ model: 'MacBook Pro', chip: 'M5 Max' }), terms), false);
   assert.equal(matchesSearch(offerSearchText({ model: 'MacBook Pro', chip: 'M3 Max', article: 'Z1AZ000M5' }), terms), false);
 });
+
+test('Russian aliases, compact chips and typos find the intended hardware without numeric substring matches', () => {
+  const offer = offerSearchText({ model: 'MacBook Pro 14"', chip: 'M5 Pro', ramGb: 24, storageGb: 512 });
+  for (const query of ['pro 14 m5 pro', 'про 14 м5 про', 'макбук про 14 м 5 про', 'macbok pro 14 m5pro', 'macboook 14 m5 pro']) {
+    assert.equal(matchesSearch(offer, searchTerms(query)), true, query);
+  }
+  for (const query of ['pro 16 m5 pro', 'pro 14 m4 pro', 'pro 14 m5 max', 'pro 14 12']) assert.equal(matchesSearch(offer, searchTerms(query)), false, query);
+  assert.equal(matchesSearch(offerSearchText({ model: 'MacBook Pro 16"', chip: 'M5 Pro', sku: 'ABC14XYZ' }), searchTerms('pro 14 m5 pro')), false);
+});

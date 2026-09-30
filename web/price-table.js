@@ -127,7 +127,8 @@ export function buildPriceTable(offers, { now = Date.now(), contextOffers = offe
 
 export function selectTablePage(groups, { sort = 'model', page = 1, pageSize = TABLE_PAGE_SIZE } = {}) {
   const selected = [...groups];
-  selected.sort((a, b) => (sort === 'price-up' ? a.minimumPrice - b.minimumPrice
+  selected.sort((a, b) => (sort === 'relevance' ? (b.searchScore ?? 0) - (a.searchScore ?? 0) || a.minimumPrice - b.minimumPrice
+    : sort === 'price-up' ? a.minimumPrice - b.minimumPrice
     : sort === 'price-down' ? b.minimumPrice - a.minimumPrice
       : sort === 'fresh' ? b.latestAt - a.latestAt
         : sort === 'coverage' ? b.sellerCount - a.sellerCount : 0) || collator.compare(a.key, b.key));
@@ -148,4 +149,27 @@ export function validMacColor(offer) {
   else if (/MacBook Neo/.test(model)) allowed = ['Silver', 'Blush', 'Citrus', 'Indigo'];
   else if (/Mac (mini|Studio)/.test(model)) allowed = ['Silver', ...(model.includes('mini') && !/^M/.test(chip) ? ['Space Gray'] : [])];
   return !allowed || allowed.includes(offer.color);
+}
+
+// Summarize the complete result set, never just the current page.
+export function searchOverview(groups, now = Date.now()) {
+  const candidates = groups.flatMap(group => group.offers
+    .filter(offer => NIZHNY_RETAILERS.includes(offer.retailer) && currentPrice(offer, now))
+    .map(offer => ({ offer, group })));
+  if (!candidates.length) return 'Свежих цен магазинов Нижнего Новгорода по этому запросу нет. Проверьте наличие и цену у продавцов.';
+  candidates.sort((a, b) => (b.group.searchScore ?? 0) - (a.group.searchScore ?? 0) || a.offer.price - b.offer.price);
+  const { offer, group } = candidates[0];
+  const rub = n => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(n) + ' ₽';
+  const same = candidates.filter(item => item.group.key === group.key).map(item => item.offer);
+  const shops = new Map();
+  for (const item of same) shops.set(item.retailer, Math.min(shops.get(item.retailer) ?? Infinity, item.price));
+  const prices = [...shops.values()];
+  const winners = [...shops].filter(([, price]) => price === offer.price).map(([name]) => name).join(', ');
+  const spec = [offer.model, offer.chip, offer.ramGb ? `${offer.ramGb} ГБ RAM` : null, offer.storageGb ? `${offer.storageGb} ГБ SSD` : null, offer.color !== 'unknown' ? offer.color : null,
+    ({ new: 'новый', used: 'б/у', refurbished: 'восстановленный', display: 'витринный', open_box: 'вскрытая коробка' })[offer.condition],
+    offer.cpuCores && offer.gpuCores ? `CPU ${offer.cpuCores} / GPU ${offer.gpuCores}` : null,
+    offer.keyboard && offer.keyboard !== 'unknown' ? `клавиатура ${offer.keyboard}` : null].filter(Boolean).join(' · ');
+  const stats = prices.length > 1 ? `В этой конфигурации и цвете: магазинов — ${prices.length}, средняя цена — ${rub(prices.reduce((a, b) => a + b, 0) / prices.length)}, разброс — ${rub(Math.max(...prices) - offer.price)}.` : 'Для этой конфигурации и цвета есть свежая цена только одного магазина.';
+  const trust = group.analytics.lowTrustReasons.get(offer.retailer);
+  return `${spec}: среди найденных свежих предложений магазинов Нижнего Новгорода с лучшим совпадением минимальная цена у ${winners} — ${rub(offer.price)}. ${stats} Всего в выдаче: ${groups.length} вариантов; свежие цены НН — у ${new Set(candidates.map(item => item.offer.retailer)).size} магазинов. ${trust ? `Цена требует проверки: ${trust}. ` : ''}Данные за последние 4 часа; наличие и условия оплаты уточняйте у магазина.`;
 }
