@@ -274,7 +274,7 @@ function offerDetails(cell, offer, { showVariant = false, analytics, colorTrust 
   if (isProcurementOffer(offer)) {
     const at = offer.submittedAt || offer.fetchedAt;
     cell.append(text('span', procurementAge(offer), 'tag'));
-    cell.append(text('span', `Обновляли ${date(at)}`, 'variant'));
+    cell.append(text('span', `Обновляли в ${new Date(at).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}`, 'variant'));
     cell.title = `Переслано в Telegram-бота: ${date(at)}`;
     return;
   }
