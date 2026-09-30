@@ -103,19 +103,20 @@ test('bounds concurrent requests to three and accepts successful Response object
   assert.equal(peak, 3);
 });
 
-test('flags source RAM conflicts without correcting the reported product specification', async () => {
+test('corrects the owner-confirmed Pro 14 M5 typo while preserving source evidence', async () => {
   const group = '/catalog/mac/macbook-pro/macbook-pro-14-late-2025-24gb/';
   const product = `${group}apple-macbook-pro-14-2025-m5-23gb-1tb-seryy-kosmos/`;
   const html = `<ol class="breadcrumbs"><li>
     <a class="breadcrumb-item__title" href="${group}">MacBook Pro 14 Late 2025 M5 24GB</a>
     </li></ol>${detail().replaceAll('MacBook Neo 13 Early 2026 A18 Pro 8GB / 256GB Серебристый', 'Apple MacBook Pro 14 2025 M5 23GB 1TB Серый космос')}`;
   const { offers } = await fetchTechnichnoOffers({ fetchPage: async url => url === root ? card(product) : html });
-  assert.equal(offers[0].ramGb, 23);
+  assert.equal(offers[0].ramGb, 24);
   assert.equal(offers[0].sourceReportedRam, 23);
   assert.equal(offers[0].sourceGroupRamGb, 24);
   assert.equal(offers[0].sourceGroupUrl, base + group);
   assert.equal(offers[0].sourceGroupTitle, 'MacBook Pro 14 Late 2025 M5 24GB');
-  assert.match(offers[0].qualityWarnings.join('; '), /карточка товара указывает 23 GB.*24 GB/);
+  assert.equal(offers[0].qualityWarnings.length, 0);
+  assert.match(offers[0].evidence.correction, /23 → 24/);
 });
 
 test('checks group URL RAM when breadcrumbs are absent and keeps consistent offers unflagged', async () => {
@@ -123,7 +124,8 @@ test('checks group URL RAM when breadcrumbs are absent and keeps consistent offe
   const html = detail().replaceAll('MacBook Neo 13 Early 2026 A18 Pro 8GB / 256GB Серебристый', 'MacBook Pro 14 M5 23GB 1TB Silver');
   const mismatch = await fetchTechnichnoOffers({ fetchPage: async url => url === root ? card(product) : html });
   assert.equal(mismatch.offers[0].sourceGroupRamGb, 24);
-  assert.ok(mismatch.offers[0].qualityWarnings.some(w => w.includes('Конфликт RAM')));
+  assert.equal(mismatch.offers[0].ramGb, 24);
+  assert.equal(mismatch.offers[0].qualityWarnings.length, 0);
   const consistent = await fetchTechnichnoOffers({ fetchPage: async url => url === root ? card(product) : html.replaceAll('23GB', '24GB') });
-  assert.ok(consistent.offers[0].qualityWarnings.some(w => w.includes('Конфликт ram'))); // title 24GB still conflicts with 23GB URL
+  assert.equal(consistent.offers[0].qualityWarnings.length, 0);
 });

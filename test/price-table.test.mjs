@@ -60,7 +60,7 @@ test('restored difference uses the displayed average even when the recommendatio
 
 test('missing or stale procurement leaves difference empty, and negative differences remain negative', () => {
   const retail = { ...base, retailer: 'AFM', price: 90000 };
-  for (const procurement of [[], [{ ...base, fetchedAt: '2026-09-27T12:00:00Z' }]]) {
+  for (const procurement of [[], [{ ...base, fetchedAt: '2026-09-27T11:59:59Z' }]]) {
     const [row] = build([retail, ...procurement]);
     assert.equal(row.analytics.minimumProcurement, null);
     assert.equal(row.analytics.difference, null);
@@ -73,7 +73,7 @@ test('missing or stale procurement leaves difference empty, and negative differe
 });
 
 test('stale, expired, rejected, future and unavailable observations remain visible but do not set the average', () => {
-  for (const change of [{ fetchedAt: '2026-09-27T12:00:00Z' }, { validUntil: new Date(now).toISOString() },
+  for (const change of [{ fetchedAt: '2026-09-27T11:59:59Z' }, { validUntil: new Date(now).toISOString() },
     { validationStatus: 'rejected' }, { qualityWarnings: ['Конфликт конфигурации'] }, { fetchedAt: new Date(now + 120000).toISOString() },
     { stock: 'OutOfStock' }, { priceType: 'installment' }, { minimumQuantity: 5 }, { fetchedAt: 'invalid' }]) {
     const retail = { ...base, retailer: 'Technichno', price: 120000, ...change };
@@ -108,4 +108,27 @@ test('known color, core, condition, keyboard and region conflicts always remain 
     const rows = build([{ ...base, [field]: 'one' }, { ...base, retailer: 'Technichno', price: 120000, [field]: 'two' }]);
     assert.equal(rows.length, 2, field);
   }
+});
+
+test('Telegram stays current for 24 hours from bot submission, retail keeps four hours', () => {
+  const old = new Date(now - 23 * 3600000).toISOString();
+  for (const retailer of ['BSA', 'Дима']) {
+    assert.equal(currentPrice({ ...base, retailer, submittedAt: old }, now), true);
+    assert.equal(currentPrice({ ...base, retailer, submittedAt: new Date(now - 24 * 3600000 - 1).toISOString() }, now), false);
+  }
+  assert.equal(currentPrice({ ...base, retailer: 'Technichno', fetchedAt: old }, now), false);
+});
+
+test('procurement color differences do not mark prices as low trust', () => {
+  const rows = build([base, { ...base, color: 'Midnight', price: 200000 }]);
+  assert.ok(rows.every(row => row.lowTrust.size === 0));
+  assert.ok(rows.every(row => row.analytics.minimumProcurement > 0));
+});
+
+test('MacBook color options exclude impossible finishes for family and chip', async () => {
+  const { validMacColor } = await import('../web/price-table.js');
+  assert.equal(validMacColor({ model: 'MacBook Pro 14"', chip: 'M5', color: 'Starlight' }), false);
+  assert.equal(validMacColor({ model: 'MacBook Pro 14"', chip: 'M5', color: 'Space Black' }), true);
+  assert.equal(validMacColor({ model: 'MacBook Air 13"', chip: 'M5', color: 'Starlight' }), true);
+  assert.equal(validMacColor({ model: 'MacBook Air 13"', chip: 'M1', color: 'Sky Blue' }), false);
 });

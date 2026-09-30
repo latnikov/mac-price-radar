@@ -135,7 +135,12 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
       : `@${sourceUsername}`;
     const listDate = priceListDate(text);
     if (listDate) datedMessages++;
-    if (!listDate || listDate < today) continue;
+    const submittedAt = message.submittedAt || message.receivedAt || message.date || (listDate ? `${listDate}T00:00:00+03:00` : null);
+    const submitted = Date.parse(submittedAt);
+    if (!Number.isFinite(submitted)) continue;
+    if (message.submittedAt || message.receivedAt || message.date) {
+      if (new Date(now).getTime() - submitted > 24 * 3600000 || submitted > new Date(now).getTime() + 60000) continue;
+    } else if (!listDate || listDate < today) continue;
     eligibleMessages++;
     const joined = text.replace(/(\d+)\s*-\s*\n\s*Core\b/gi, '$1-Core');
     let contextModel = null;
@@ -151,6 +156,7 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
         const sku = skuFrom(line);
         const parsed = parseProduct(imacTitle, `https://t.me/${sourceUsername}`, 'BSA', extracted.amount, new Date(now).toISOString(), {
           rawPrice: extracted.rawPrice,
+          submittedAt: new Date(submitted).toISOString(),
           sourceType: 'telegram_channel',
           stock: 'source_reported',
           condition: 'new',
@@ -189,6 +195,7 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
       const condition = /предактив|вскрыт|open.?box/i.test(line) ? 'open_box' : 'new';
       const parsed = parseProduct(title, `https://t.me/${sourceUsername}`, 'BSA', extracted.amount, new Date(now).toISOString(), {
         rawPrice: extracted.rawPrice,
+        submittedAt: new Date(submitted).toISOString(),
         sourceType: 'telegram_channel',
         stock: 'source_reported',
         condition,

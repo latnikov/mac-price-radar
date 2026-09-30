@@ -8,13 +8,13 @@ const variantFields = ['model', 'chip', 'screenIn', 'cpuCores', 'gpuCores', 'ram
 export function parseTelegramChannel(messages, source) {
   const offers = new Map(), failures = [];
   let candidates = 0;
-  const ordered = [...messages].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.id) - Number(a.id));
+  const ordered = [...messages].sort((a, b) => String(b.submittedAt || b.receivedAt || b.date || '').localeCompare(String(a.submittedAt || a.receivedAt || a.date || '')) || Number(b.id) - Number(a.id));
   for (const message of ordered) {
-    const observed = Date.parse(message.date);
+    const observed = Date.parse(message.submittedAt || message.receivedAt || message.date);
     if (!Number.isFinite(observed)) { failures.push(`Сообщение ${message.id}: нет даты исходного прайса`); continue; }
     const text = String(message.text || '');
     const dated = /\b[0-3]?\d\s*[/.]\s*[01]?\d\s*[/.]\s*20\d{2}\b/.test(text);
-    // Undated lists use the original channel post date, never the import time.
+    // Bot submission confirms an old forwarded post; legacy caches retain their saved receipt/source time.
     const parsed = parseBsaMessages([{ ...message, text: dated ? text : `${dayFormat.format(observed)}\n${text}` }], { now: observed });
     candidates += parsed.stats.candidates;
     failures.push(...parsed.failures.map(failure => failure.replace(/^BSA/, source.sourceTitle)));
@@ -26,7 +26,7 @@ export function parseTelegramChannel(messages, source) {
             : /новый|новая|новые|\bnew\b|запечат/i.test(line) ? 'new' : 'unknown';
       const qualityWarnings = [...(item.qualityWarnings || [])];
       if (/\$|€|USD|EUR|USDT|рассроч|в месяц|от\s+\d|опт\s+от/i.test(line)) qualityWarnings.push('Нужно уточнить валюту или условия цены');
-      const offer = { ...item, ...source, condition, qualityWarnings, fetchedAt: new Date(observed).toISOString(), observedAt: new Date(observed).toISOString() };
+      const offer = { ...item, ...source, condition, qualityWarnings, submittedAt: new Date(observed).toISOString(), fetchedAt: new Date(observed).toISOString(), observedAt: new Date(observed).toISOString() };
       const key = stableId('variant', variantFields.map(field => offer[field] ?? null));
       // A newer post replaces a variant's previous price, even if it rose.
       if (offers.has(key)) continue;

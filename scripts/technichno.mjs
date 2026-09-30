@@ -109,26 +109,35 @@ function productOffer(html, url, document = documentElements(html)) {
   const groupSlug = decodeURIComponent(new URL(sourceGroupUrl).pathname.split('/').filter(Boolean).at(-1)).replace(/[-_]+/g, ' ');
   const groupMemory = (sourceGroupTitle || groupSlug).match(/(?:^|\s)(\d{1,3})\s*(?:GB|ГБ)(?=\s|\/|$)/i);
   const sourceGroupRamGb = groupMemory ? Number(groupMemory[1]) : null;
-  const qualityWarnings = [...(offer.qualityWarnings || [])];
+  const sourceReportedRam = offer.ramGb;
+  // Owner-confirmed typo on the Pro 14 M5 card; never guess other RAM conflicts.
+  const correctedRam = /MacBook Pro 14/.test(offer.model) && offer.chip === 'M5'
+    && sourceGroupRamGb === 24 && (offer.ramGb === 23 || (offer.ramGb === 24 && /23gb/i.test(url)));
+  if (correctedRam) {
+    offer.ramGb = 24;
+    offer.title = offer.title.replace(/23\s*(GB|ГБ)/gi, '24$1');
+  }
+  const qualityWarnings = (offer.qualityWarnings || []).filter(warning => !correctedRam
+    || !(/Непроверенное сочетание RAM\/SSD|Конфликт ram: заголовок 24, URL 23/.test(warning)));
   if (sourceGroupRamGb && offer.ramGb !== sourceGroupRamGb) {
     qualityWarnings.push(`Конфликт RAM у источника: карточка товара указывает ${offer.ramGb} GB, группа «${sourceGroupTitle || groupSlug}» — ${sourceGroupRamGb} GB. Требуется проверка магазина.`);
   }
   return {
     ...offer,
-    title,
+    title: correctedRam ? title.replace(/23\s*(GB|ГБ)/gi, '24$1') : title,
     currency: 'RUB',
     region: 'unknown',
     sourceCity: 'Нижний Новгород',
     sourceSite: 'nn.technichno.ru',
     priceType: 'full',
     rawPrice: field('price'),
-    evidence: { ...offer.evidence, method: 'product-microdata-v1', availability },
+    evidence: { ...offer.evidence, method: 'product-microdata-v1', availability, ...(correctedRam ? { correction: 'Owner-confirmed Technichno Pro 14 M5 RAM typo: 23 → 24 GB', sourceTitle: title } : {}) },
     availability,
     stock: availability ? availability.split('/').filter(Boolean).at(-1) : 'unknown',
     sourceGroupUrl,
     sourceGroupTitle,
     sourceGroupRamGb,
-    sourceReportedRam: offer.ramGb,
+    sourceReportedRam,
     qualityWarnings,
   };
 }

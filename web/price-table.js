@@ -1,4 +1,4 @@
-import { NIZHNY_RETAILERS, calculateRetailAnalytics, colorPriceTrustKey, findColorPriceLowTrust } from './retail-analytics.js';
+import { NIZHNY_RETAILERS, isProcurementOffer, calculateRetailAnalytics, colorPriceTrustKey, findColorPriceLowTrust } from './retail-analytics.js';
 import { priceColumnKey } from './avito-columns.js';
 
 const collator = new Intl.Collator('ru', { numeric: true });
@@ -55,8 +55,8 @@ export function prepareTableOffers(input) {
 }
 
 export function currentPrice(offer, now = Date.now()) {
-  const age = now - Date.parse(offer.fetchedAt);
-  return Number.isFinite(offer.price) && offer.price > 0 && Number.isFinite(age) && age >= -60000 && age <= 4 * 3600000
+  const age = now - Date.parse(offer.submittedAt || offer.fetchedAt);
+  return Number.isFinite(offer.price) && offer.price > 0 && Number.isFinite(age) && age >= -60000 && age <= (isProcurementOffer(offer) || offer.sourceType === 'telegram_channel' ? 24 : 4) * 3600000
     && (!offer.validUntil || Date.parse(offer.validUntil) > now)
     && !['OutOfStock', 'Discontinued', 'SoldOut'].includes(offer.stock)
     && offer.validationStatus !== 'rejected' && !offer.rejected && !offer.withdrawn && offer.latestAttempt?.status !== 'withdrawn' && !offer.qualityWarnings?.length
@@ -64,7 +64,7 @@ export function currentPrice(offer, now = Date.now()) {
 }
 
 export function buildPriceTable(offers, { now = Date.now(), contextOffers = offers } = {}) {
-  const colorTrust = findColorPriceLowTrust(contextOffers.filter(offer => currentPrice(offer, now) && offer.retailer !== 'Авито НН'), tableHardwareKey);
+  const colorTrust = findColorPriceLowTrust(contextOffers.filter(offer => currentPrice(offer, now) && offer.retailer !== 'Авито НН' && !isProcurementOffer(offer)), tableHardwareKey, { minimumDifference: 0.05 });
   const baseKey = offer => JSON.stringify([tableConfigurationKey(offer), normalized(offer.color)]);
   const context = new Map();
   for (const offer of contextOffers) {
@@ -136,4 +136,16 @@ export function selectTablePage(groups, { sort = 'model', page = 1, pageSize = T
   const currentPage = Math.max(1, Math.min(pages, Math.trunc(Number(page)) || 1));
   return { rows: selected.slice((currentPage - 1) * size, currentPage * size), allRows: selected,
     offerCount: selected.reduce((sum, group) => sum + group.offers.length, 0), total: selected.length, pages, page: currentPage };
+}
+
+// Only hardware finishes sold for the selected Mac family/chip belong in filters.
+export function validMacColor(offer) {
+  const model = String(offer.model || '');
+  const chip = String(offer.chip || '');
+  let allowed;
+  if (/MacBook Pro/.test(model)) allowed = /M[12]\b|^M3$/.test(chip) ? ['Silver', 'Space Gray'] : ['Silver', 'Space Black'];
+  else if (/MacBook Air/.test(model)) allowed = /^M1$/.test(chip) ? ['Silver', 'Space Gray', 'Gold'] : ['Silver', 'Midnight', 'Starlight', /^M[23]$/.test(chip) ? 'Space Gray' : 'Sky Blue'];
+  else if (/MacBook Neo/.test(model)) allowed = ['Silver', 'Blush', 'Citrus', 'Indigo'];
+  else if (/Mac (mini|Studio)/.test(model)) allowed = ['Silver', ...(model.includes('mini') && !/^M/.test(chip) ? ['Space Gray'] : [])];
+  return !allowed || allowed.includes(offer.color);
 }

@@ -11,10 +11,10 @@ export function priceStatus(status = {}, offers = [], now = Date.now()) {
   const yesterday = dayFormat.format(new Date(now - 86400000));
   const procurement = offers.filter(offer => procurementSources.has(offer.retailer));
   const dated = procurement.map(offer => {
-    const value = offer.validFrom || offer.fetchedAt;
-    return { retailer: offer.retailer, day: validDate(value) ? dayFormat.format(new Date(value)) : null };
+    const value = offer.submittedAt || offer.fetchedAt || offer.validFrom;
+    return { retailer: offer.retailer, expired: now - Date.parse(value) > 24 * 3600000, day: validDate(value) ? dayFormat.format(new Date(value)) : null };
   });
-  const stale = dated.filter(item => item.day && item.day < today);
+  const stale = dated.filter(item => item.day && item.expired);
   const failed = (status.sources || []).filter(source => source.status && source.status !== 'success' && source.status !== 'running');
   const failedProcurement = failed.filter(source => procurementSources.has(source.retailer));
   const failedRetail = failed.filter(source => !procurementSources.has(source.retailer) && source.retailer !== 'Авито НН');

@@ -2,7 +2,7 @@ import { priceStatus } from './price-status.js';
 import { isProcurementOffer } from './retail-analytics.js';
 import { AVITO, avitoSellerColumns, priceColumnKey, groupOffersByPriceColumn } from './avito-columns.js';
 import { emptyFilters, readView, writeView, searchTerms, offerSearchText, matchesSearch } from './view-state.js';
-import { prepareTableOffers, buildPriceTable, selectTablePage, currentPrice, TABLE_PAGE_SIZE } from './price-table.js';
+import { prepareTableOffers, buildPriceTable, selectTablePage, currentPrice, validMacColor, TABLE_PAGE_SIZE } from './price-table.js';
 
 const $ = id => document.getElementById(id);
 const state = {
@@ -219,7 +219,9 @@ function renderControls() {
   renderOptions('screen-options', 'screen', base.map(screen), value => `${value}″`);
   renderOptions('ram-options', 'ram', base.map(offer => offer.ramGb), value => `${value} GB`);
   renderOptions('ssd-options', 'ssd', base.map(offer => offer.storageGb), storage);
-  renderOptions('color-options', 'color', base.map(offer => offer.color), value => value, 'Любой');
+  const availableColors = base.filter(validMacColor).map(offer => offer.color);
+  if (state.filters.color && !availableColors.includes(state.filters.color)) state.filters.color = '';
+  renderOptions('color-options', 'color', availableColors, value => value, 'Любой');
   for (const button of $('stock-options').querySelectorAll('[data-filter="stock"]')) {
     const active = state.filters.stock === button.dataset.value;
     button.classList.toggle('active', active); button.setAttribute('aria-pressed', active ? 'true' : 'false');
@@ -261,15 +263,21 @@ function retailerGroups(offers) {
   return groups.map(group => ({ ...group, retailers: group.retailers.filter(retailer => group.key === 'nizhny' || present.has(retailer.name)).map(retailer => ({ ...retailer, key: retailer.key || priceColumnKey({ retailer: retailer.name }) })) })).filter(group => group.retailers.length);
 }
 
-const colorNames = { Silver: 'Серебристый', 'Space Gray': 'Серый космос', 'Space Black': 'Чёрный космос', Midnight: 'Тёмная ночь', Starlight: 'Сияющая звезда', 'Sky Blue': 'Небесно-голубой', Gold: 'Золотой', Blush: 'Розовый', Citrus: 'Цитрусовый', Indigo: 'Индиго', Blue: 'Синий', Green: 'Зелёный', Orange: 'Оранжевый', Yellow: 'Жёлтый', Pink: 'Розовый', Purple: 'Фиолетовый' };
 function variantLabel(offer) {
-  const condition = { new: 'новый', used: 'б/у', refurbished: 'восстановленный', display: 'витринный', open_box: 'вскрытая коробка' }[offer.condition] || 'состояние не уточнено';
-  return [colorNames[offer.color] || (offer.color === 'unknown' ? 'цвет не указан' : offer.color),
-    offer.cpuCores && offer.gpuCores ? `CPU ${offer.cpuCores} / GPU ${offer.gpuCores}` : 'ядра не уточнены',
+  const condition = { new: 'новый', used: 'б/у', refurbished: 'восстановленный', display: 'витринный', open_box: 'вскрытая коробка' }[offer.condition] || null;
+  return [offer.color === 'unknown' ? null : offer.color,
+    offer.cpuCores && offer.gpuCores ? `CPU ${offer.cpuCores} / GPU ${offer.gpuCores}` : null,
     condition, characteristics(offer), ...['displayType', 'bundle'].map(field => offer[field] && !['unknown', 'standard'].includes(offer[field]) ? offer[field] : null)].filter(Boolean).join(' · ');
 }
 
 function offerDetails(cell, offer, { showVariant = false, analytics, colorTrust } = {}) {
+  if (isProcurementOffer(offer)) {
+    const at = offer.submittedAt || offer.fetchedAt;
+    cell.append(text('span', procurementAge(offer), 'tag'));
+    cell.append(text('span', `Обновляли ${date(at)}`, 'variant'));
+    cell.title = `Переслано в Telegram-бота: ${date(at)}`;
+    return;
+  }
   if (showVariant) cell.append(text('span', variantLabel(offer), 'variant'));
   else if (characteristics(offer)) cell.append(text('span', characteristics(offer), 'variant'));
   const trust = trustForRetailer(offer.retailer, analytics, colorTrust);
@@ -328,11 +336,6 @@ function priceRow(group, priceGroups) {
       if (retailerGroup.key === 'nizhny' && currentPrice(first) && first.price === group.analytics.minimumRetail && group.analytics.retailCount > 1) {
         cell.classList.add('lowest-retail-price');
         cell.append(text('span', 'Минимум в НН', 'variant'));
-      }
-      if (['cpuCores', 'gpuCores', 'condition'].some(field => !first[field] || first[field] === 'unknown')) {
-        const note = text('span', 'Характеристики неполные', 'variant');
-        note.title = 'Магазин не указал ядра процессора или состояние. Проверьте исходную карточку.';
-        cell.append(note);
       }
     }
     row.append(cell);
@@ -411,7 +414,7 @@ function render({ keepPage = false } = {}) {
 }
 
 function procurementAge(offer) {
-  const source = offer.validFrom || offer.fetchedAt;
+  const source = offer.submittedAt || offer.fetchedAt;
   if (!source || !Number.isFinite(Date.parse(source))) return 'Дата прайса неизвестна';
   const day = value => moscowDay.format(new Date(value));
   const sourceDay = /^\d{4}-\d{2}-\d{2}$/.test(source) ? source : day(source);

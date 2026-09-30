@@ -79,15 +79,15 @@ test('every Nizhny price more than five percent below the average gets low trust
   assert.equal(analytics.benchmark.retailer, 'Айфория');
 });
 
-test('a Nizhny price exactly five percent below the average keeps normal trust', () => {
+test('a Nizhny price exactly five percent below the average gets a badge', () => {
   const analytics = calculateRetailAnalytics([
     { retailer: 'Айфория', price: 95000, stock: 'InStock' },
     { retailer: 'Technichno', price: 105000, stock: 'InStock' },
   ]);
 
   assert.equal(analytics.nizhnyReferenceAverage, 100000);
-  assert.equal(analytics.lowTrustRetailers.size, 0);
-  assert.equal(analytics.averageRetail, 100000);
+  assert.equal(analytics.lowTrustRetailers.size, 1);
+  assert.equal(analytics.averageRetail, 105000);
 });
 
 test('a cheaper color of the same retailer configuration gets low trust', () => {
@@ -113,4 +113,12 @@ test('color low trust is excluded from Nizhny analytics and recommendation', () 
   assert.equal(analytics.retailCount, 1);
   assert.equal(analytics.benchmark.retailer, 'Айфория');
   assert.equal(analytics.lowTrustReasons.get('iMobile'), 'Cheaper color');
+});
+
+test('table color badge starts at five percent, including the boundary', () => {
+  const key = () => 'same';
+  const high = { retailer: 'Technichno', price: 100000, color: 'Silver' };
+  const low = { ...high, price: 95001, color: 'Space Black' };
+  assert.equal(findColorPriceLowTrust([high, low], key, { minimumDifference: 0.05 }).size, 0);
+  assert.equal(findColorPriceLowTrust([high, { ...low, price: 95000 }], key, { minimumDifference: 0.05 }).size, 1);
 });

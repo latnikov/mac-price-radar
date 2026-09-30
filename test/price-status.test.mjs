@@ -27,9 +27,9 @@ test('distinguishes partially stale procurement from entirely stale procurement'
   assert.equal(value.title, 'Часть закупочных цен — за вчера');
   assert.doesNotMatch(value.detail, /Свежие прайсы BSA/);
 });
-test('uses Moscow day boundaries and price validity before fetch time', () => {
-  const value = priceStatus({}, [{ ...offer('BSA', '2026-09-25'), fetchedAt: '2026-09-25T22:00:00Z' }], Date.parse('2026-09-25T22:30:00Z'));
-  assert.equal(value.title, 'Закупочные цены — за вчера');
+test('uses bot submission age instead of the original calendar date', () => {
+  const value = priceStatus({}, [{ ...offer('BSA', '2026-09-25'), fetchedAt: '2026-09-25T22:00:00Z', submittedAt: '2026-09-25T18:00:00Z' }], Date.parse('2026-09-25T22:30:00Z'));
+  assert.equal(value.title, 'Цены загружены');
 });
 test('handles a procurement failure without assuming prices are yesterday', () => {
   const value = priceStatus(status, [], now);

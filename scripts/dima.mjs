@@ -48,7 +48,7 @@ export function parseDimaMessages(messages, { now = new Date(), timeZone = 'Euro
   for (const message of ordered) {
     const observed = Date.parse(submittedAt(message));
     const messageDate = Number.isFinite(observed) ? dateInTimeZone(observed, timeZone) : null;
-    if (!messageDate || messageDate !== today || observed > new Date(now).getTime() + 60_000) continue;
+    if (!messageDate || new Date(now).getTime() - observed > 24 * 3600000 || observed > new Date(now).getTime() + 60_000) continue;
     eligibleMessages++;
     const postId = String(message.id ?? message.postId ?? 'unknown');
     const source = sourceMeta(message);
@@ -89,6 +89,7 @@ export function parseDimaMessages(messages, { now = new Date(), timeZone = 'Euro
         externalId: item.sku,
         sourceVariantId: item.sku,
         validFrom: messageDate,
+        submittedAt: new Date(observed).toISOString(),
       });
     }
   }

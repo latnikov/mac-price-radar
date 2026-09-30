@@ -78,3 +78,13 @@ test('BSA collector uses injected Business API messages and requires no web fetc
   assert.equal(result.stats.protocol, 'Telegram Business Bot API');
   assert.equal(result.offers[0].price, 126500);
 });
+
+test('BSA uses bot submission time across midnight and does not extend it during collection', () => {
+  const message = { id: 1, date: '2026-01-01T10:00:00Z', submittedAt: '2026-09-28T18:00:00Z', text: '28/09/2026\nMDH74 Air 13 (M5 16/512) Silver-120.000' };
+  const first = parseBsaMessages([message], { now: '2026-09-29T12:00:00Z' });
+  const second = parseBsaMessages([message], { now: '2026-09-29T17:59:00Z' });
+  assert.equal(first.offers.length, 1);
+  assert.equal(first.offers[0].submittedAt, message.submittedAt.replace('Z', '.000Z'));
+  assert.equal(second.offers[0].submittedAt, first.offers[0].submittedAt);
+  assert.equal(parseBsaMessages([message], { now: '2026-09-29T18:00:01Z' }).offers.length, 0);
+});

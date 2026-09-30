@@ -23,11 +23,11 @@ test('Dima parser reads current MacBooks, normalizes Neo and removes delivery du
   assert.ok(result.offers.every(offer => offer.url.startsWith('https://t.me/c/3421701174/634?item=')));
 });
 
-test('Dima collector filters out messages forwarded before the current Moscow date', async () => {
+test('Dima collector filters out messages forwarded more than 24 hours ago', async () => {
   const result = await fetchDimaOffers({
     now: '2026-09-23T10:00:00+03:00',
     readMessages: async () => [
-      { id: 'old', date: '2026-09-22T10:00:00.000Z', sourceChatId: '-1003421701174', sourceTitle: 'прайс от Л', text: price },
+      { id: 'old', date: '2026-09-22T06:00:00.000Z', sourceChatId: '-1003421701174', sourceTitle: 'прайс от Л', text: price },
       { id: 'new', date: '2026-09-23T06:40:00.000Z', sourceChatId: '-1003421701174', sourceTitle: 'прайс от Л', text: price },
     ],
   });

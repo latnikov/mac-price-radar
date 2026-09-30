@@ -37,7 +37,7 @@ function lowestByRetailer(offers, retailerNames) {
 
 export const colorPriceTrustKey = (offer, configurationKey) => [offer.retailer, configurationKey(offer), offer.color].join('\u0000');
 
-export function findColorPriceLowTrust(offers, configurationKey) {
+export function findColorPriceLowTrust(offers, configurationKey, { minimumDifference = 0 } = {}) {
   if (typeof configurationKey !== 'function') throw new TypeError('configurationKey must be a function');
   const groups = new Map();
   for (const offer of offers) {
@@ -54,7 +54,7 @@ export function findColorPriceLowTrust(offers, configurationKey) {
     if (colors.size < 2) continue;
     const comparisonPrice = Math.max(...[...colors.values()].map(offer => offer.price));
     for (const offer of colors.values()) {
-      if (offer.price >= comparisonPrice) continue;
+      if (offer.price >= comparisonPrice || offer.price > comparisonPrice * (1 - minimumDifference)) continue;
       lowTrust.set(colorPriceTrustKey(offer, configurationKey), {
         level: 'low',
         label: 'низкий',
@@ -73,7 +73,7 @@ export function calculateRetailAnalytics(offers, { undercutRub = 500, additional
   const comparisonNizhny = [...nizhny.values()].filter(offer => !additionalLowTrust.has(offer.retailer));
   const nizhnyReferenceAverage = average(comparisonNizhny.map(offer => offer.price));
   const dynamicallyLowTrust = new Set(comparisonNizhny
-    .filter(offer => nizhnyReferenceAverage != null && offer.price < nizhnyReferenceAverage * 0.95)
+    .filter(offer => nizhnyReferenceAverage != null && offer.price <= nizhnyReferenceAverage * 0.95)
     .map(offer => offer.retailer));
   const trustedNizhny = comparisonNizhny.filter(offer => !dynamicallyLowTrust.has(offer.retailer));
   const procurementBenchmark = [...procurement.values()].sort((a, b) => a.price - b.price)[0] || null;
