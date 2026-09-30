@@ -1,0 +1,57 @@
+.avito-monitor { margin: 0 0 18px; padding: 24px 30px; border: 1px solid var(--line); border-radius: 20px; background: #fff; }
+.avito-monitor-heading, .avito-opportunities-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.avito-monitor-eyebrow { display: block; margin-bottom: 5px; color: var(--muted); font-size: 11px; }
+.avito-monitor h2 { margin: 0; font-size: 21px; font-weight: 650; letter-spacing: -.4px; }
+.avito-monitor-badge { flex-shrink: 0; padding: 7px 10px; border-radius: 8px; background: #edf2fa; color: #536e99; font-size: 12px; }
+.avito-monitor[data-tone="success"] .avito-monitor-badge { background: #e6f3e9; color: #326a48; }
+.avito-monitor[data-tone="warning"] .avito-monitor-badge { background: #fff3df; color: #8b632e; }
+.avito-monitor-message { margin: 14px 0; color: #526176; font-size: 13px; line-height: 1.55; }
+.avito-monitor-error { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #fff3df; color: #8b632e; font-size: 12px; line-height: 1.5; }
+.avito-monitor-counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 20px 0 18px; }
+.avito-monitor-counts > div { padding-left: 14px; border-left: 2px solid #e7edf6; }
+.avito-monitor-counts dt { margin: 0 0 6px; color: var(--muted); font-size: 11px; }
+.avito-monitor-counts dd { margin: 0; color: #26364d; font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.avito-monitor-meta { display: flex; flex-wrap: wrap; gap: 5px 24px; }
+.avito-monitor-meta p, .avito-monitor-note { margin: 5px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.avito-monitor #avito-monitor-coverage { margin-top: 10px; }
+.avito-opportunities { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); }
+.avito-opportunities-heading { justify-content: flex-start; gap: 9px; }
+.avito-opportunities h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.avito-opportunities-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 7px; border-radius: 7px; background: #edf3ff; color: #2454c6; font-size: 12px; font-variant-numeric: tabular-nums; }
+.avito-opportunities-empty { margin: 15px 0 0; padding: 14px 16px; border-radius: 10px; background: #f6f8fb; color: #637187; font-size: 13px; line-height: 1.6; }
+.avito-opportunities-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 15px; }
+.avito-opportunities-list:empty { display: none; }
+.avito-opportunity { min-width: 0; padding: 17px; border: 1px solid #dfeae4; border-radius: 12px; background: #f9fcfa; }
+.avito-opportunity h4 { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.45; overflow-wrap: anywhere; }
+.avito-opportunity h4 a { color: #26364d; }
+.avito-opportunity-seller, .avito-opportunity-date { margin: 6px 0 0; color: #708078; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.avito-opportunity-prices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+.avito-opportunity-prices dt { color: #708078; font-size: 11px; }
+.avito-opportunity-prices dd { margin: 5px 0 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.avito-opportunity-delta { display: flex; flex-direction: column; gap: 4px; margin: 0; padding-top: 12px; border-top: 1px solid #e0ebe4; color: #326a48; font-size: 11px; }
+.avito-opportunity-delta strong { font-size: 21px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.avito-opportunity-reasons { margin: 10px 0 0; padding-left: 17px; color: #637187; font-size: 11px; line-height: 1.6; }
+.avito-opportunity-review { margin: 10px 0 0; color: #8b632e; font-size: 11px; line-height: 1.5; }
+.avito-opportunity-link { display: inline-flex; min-height: 36px; align-items: center; margin-top: 9px; color: #326a48; font-size: 12px; }
+.avito-opportunities-warning { margin-top: 13px; }
+.avito-review { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+.avito-review > summary { display: flex; align-items: center; gap: 9px; width: fit-content; cursor: pointer; font-size: 14px; font-weight: 600; }
+.avito-review > summary::before { content: '›'; display: inline-block; width: 12px; font-size: 20px; line-height: 1; }
+.avito-review[open] > summary::before { transform: rotate(90deg); }
+.avito-review-list { display: grid; gap: 10px; margin-top: 14px; }
+.avito-review-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 20px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 10px; background: #fafbfd; }
+.avito-review-item h4 { margin: 0; font-size: 13px; line-height: 1.5; font-weight: 600; overflow-wrap: anywhere; }
+.avito-review-item h4 a { color: #26364d; }
+.avito-review-price { margin: 0; color: #526176; font-size: 13px; line-height: 1.5; font-weight: 600; white-space: nowrap; }
+.avito-review-detail { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.avito-review-reason { display: block; color: #8b632e; }
+@media (max-width: 1100px) { .avito-opportunities-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .avito-monitor { padding: 20px 18px; border-radius: 16px; }
+  .avito-monitor-heading { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .avito-monitor h2 { font-size: 20px; }
+  .avito-monitor-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+  .avito-monitor-meta { display: block; }
+  .avito-opportunities-list { grid-template-columns: 1fr; }
+  .avito-review-item { grid-template-columns: 1fr; gap: 5px; }
+}

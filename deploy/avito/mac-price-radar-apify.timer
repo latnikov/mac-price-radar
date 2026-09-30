@@ -1,0 +1,10 @@
+[Unit]
+Description=Hourly Apify Avito monitoring within the approved trial budget
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=mac-price-radar-apify.service
+
+[Install]
+WantedBy=timers.target

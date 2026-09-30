@@ -1,6 +1,6 @@
 export function avitoStatus(state, now=Date.now()) {
   if(!state)return '';
-  const route=state.transport==='proxy'?' через отдельный прокси':'';
+  const route=state.transport==='apify'?' через Apify':state.transport==='proxy'?' через отдельный прокси':'';
   const n=state.counts?.detailed;
   const count=Number.isFinite(n)?` Последняя порция: ${n} карточек.`:'';
   if(state.state==='blocked'){
@@ -11,6 +11,7 @@ export function avitoStatus(state, now=Date.now()) {
   if(state.state==='running')return `Сбор Авито${route} идёт небольшими порциями.${count}`;
   if(state.state==='partial')return `Сбор Авито${route}: получена часть объявлений.${count} Полный охват не подтверждён.`;
   if(state.state==='error')return `Сбор Авито${route} не завершён. Требуется проверка соединения или формата страниц.${count}`;
-  if(state.state==='ready')return `Последняя выдача Авито проверена полностью.${count}`;
+  if(state.state==='ready'&&state.transport!=='apify')return `Последняя выдача Авито проверена полностью.${count}`;
+  if(state.transport==='apify' && state.message)return `Авито через Apify: ${state.message}`;
   return 'Сборщик Авито ожидает настройки доступа.';
 }

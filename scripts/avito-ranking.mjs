@@ -9,8 +9,9 @@ const hours = (o, now) => Math.max(0, (now - Date.parse(o.fetchedAt)) / 3600000)
 const sellerKey = o => o.retailer === AVITO ? (o.matchedRetailer ? `store:${o.matchedRetailer}` : `avito:${o.marketplaceSellerId}`) : `store:${o.retailer}`;
 const known = value => value != null && value !== '' && value !== 'unknown';
 const coreCompatible = (a, b) => ['cpuCores', 'gpuCores'].every(k => !known(a[k]) || !known(b[k]) || a[k] === b[k]);
+const avitoColorConfigurationKey = o => `${catalogConfigurationKey(o)}|${o.condition === 'used' ? 'used' : 'new'}`;
 const usable = (o, now) => o.visibility !== 'private' && Number.isFinite(o.price) && o.price > 0 && !o.rejected && !o.latestAttempt?.rejected && o.validationStatus !== 'rejected'
-  && !['used', 'refurbished', 'open_box', 'display'].includes(o.condition)
+  && (o.condition !== 'used' || o.retailer === AVITO) && !['refurbished', 'open_box', 'display'].includes(o.condition)
   && !['OutOfStock', 'Discontinued', 'SoldOut'].includes(o.stock)
   && Number.isFinite(Date.parse(o.fetchedAt)) && Date.parse(o.fetchedAt) <= now + 60000 && hours(o, now) <= 4;
 
@@ -73,11 +74,11 @@ export function rankAvitoOffers(offers, { now = Date.now() } = {}) {
   const local = new Set(NIZHNY_RETAILERS), buckets = new Map();
   const websiteColorTrust = findColorPriceLowTrust(offers.filter(o => o.retailer !== AVITO && usable(o, now)), catalogConfigurationKey);
   const sellerColors = findColorPriceLowTrust(offers.filter(o => o.retailer === AVITO && visibleAvitoOffer(o) && usable(o, now))
-    .map(o => ({ ...o, retailer: sellerKey(o) })), catalogConfigurationKey);
+    .map(o => ({ ...o, retailer: sellerKey(o) })), avitoColorConfigurationKey);
   for (const o of offers) {
     if ((!local.has(o.retailer) && o.retailer !== AVITO) || !usable(o, now) || !visibleAvitoOffer(o)) continue;
     if (o.avitoRisks?.length) continue;
-    const colorKey = o.retailer === AVITO ? colorPriceTrustKey({ ...o, retailer: sellerKey(o) }, catalogConfigurationKey) : colorPriceTrustKey(o, catalogConfigurationKey);
+    const colorKey = o.retailer === AVITO ? colorPriceTrustKey({ ...o, retailer: sellerKey(o) }, avitoColorConfigurationKey) : colorPriceTrustKey(o, catalogConfigurationKey);
     if ((o.retailer === AVITO ? sellerColors : websiteColorTrust).has(colorKey)) continue;
     const key = avitoGroupKey(o), group = buckets.get(key) || [];
     group.push(o); buckets.set(key, group);
@@ -89,7 +90,7 @@ export function rankAvitoOffers(offers, { now = Date.now() } = {}) {
     if (!marketCache.has(marketKey)) marketCache.set(marketKey, marketFor(o, buckets.get(avitoGroupKey(o)) || [], now));
     const market = marketCache.get(marketKey);
     const reasons = [...(o.avitoRisks || [])], age = hours(o, now);
-    const colorTrust = sellerColors.get(colorPriceTrustKey({ ...o, retailer: sellerKey(o) }, catalogConfigurationKey));
+    const colorTrust = sellerColors.get(colorPriceTrustKey({ ...o, retailer: sellerKey(o) }, avitoColorConfigurationKey));
     if (colorTrust) reasons.push(colorTrust.reason);
     if (market?.reference != null && o.price < market.reference * 0.95) reasons.push(belowMarketReason(o.price, market.reference));
     const z = market ? (Math.log(o.price) - market.mu) / market.predictiveSigma : null;

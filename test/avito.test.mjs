@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, writeFile, cp, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, cp, mkdir, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { AVITO, avitoUrl, normalizeAvitoListing, visibleAvitoOffer } from '../scripts/avito-policy.mjs';
+import { AVITO, avitoUrl, avitoGroupKey, normalizeAvitoListing, visibleAvitoOffer } from '../scripts/avito-policy.mjs';
 import { parseAvitoSearch, parseAvitoDetail } from '../scripts/avito-parser.mjs';
 import { collectAvitoSnapshot, createAvitoHttpTransport, runAvitoWorker } from '../scripts/avito-collector.mjs';
 import { parseAvitoSnapshot, fetchAvitoOffers } from '../scripts/avito.mjs';
@@ -17,11 +17,33 @@ const offer = overrides => normalizeAvitoListing(record(overrides)).offer;
 test('Avito verifies city, condition and seller independently, including store aliases', () => {
   assert.equal(offer().retailer, AVITO);
   for (const name of ['МАКБУЧНАЯ', 'мкбчн', 'М К Б Ч Н', 'Макбучной', 'MacBookBro']) assert.equal(normalizeAvitoListing(record({ seller: { id: 'x', name } })).status, 'excluded');
-  for (const condition of ['Б/у', 'Как новое', 'refurbished']) assert.equal(normalizeAvitoListing(record({ condition })).status, 'excluded');
+  for (const condition of ['refurbished', 'Не работает', 'На запчасти']) assert.equal(normalizeAvitoListing(record({ condition })).status, 'excluded');
   for (const city of ['Нижегородская область', 'Бор', 'Великий Новгород']) assert.equal(normalizeAvitoListing(record({ city })).status, 'excluded');
   for (const missing of [{ city: '' }, { condition: '' }]) assert.equal(normalizeAvitoListing(record(missing)).status, 'review');
   assert.equal(normalizeAvitoListing(record({ seller: { name: 'Магазин' } })).status, 'review');
   assert.equal(normalizeAvitoListing(record(), { sellerMap: { 'independent-shop': 'Макбучная' } }).status, 'excluded');
+});
+test('Avito accepts explicit working used condition and separates it from new comparison groups', () => {
+  for (const condition of ['Б/у', 'Как новое', 'Отличное', 'Хорошее', 'Удовлетворительное']) {
+    const result = normalizeAvitoListing(record({ condition, title: 'MacBook Air 13 M4 16/256 Silver б/у' }));
+    assert.equal(result.status, 'accepted', condition);
+    assert.equal(result.offer.condition, 'used');
+    assert.equal(visibleAvitoOffer(result.offer), true);
+    assert.notEqual(avitoGroupKey(result.offer), avitoGroupKey(offer()));
+  }
+  assert.equal(normalizeAvitoListing(record({ condition: 'Как новое', title: 'MacBook Air 13 M4 16/256 Silver как новый' })).offer.condition, 'used');
+  assert.equal(normalizeAvitoListing(record({ condition: 'Б/у' })).status, 'review');
+  assert.equal(normalizeAvitoListing(record({ condition: 'Б/у', title: 'MacBook Air 13 M4 16/256 Silver не работает' })).status, 'excluded');
+  assert.equal(normalizeAvitoListing(record({ condition: 'Б/у', title: 'MacBook Air 13 M4 16/256 Silver', nonWorking: true })).status, 'excluded');
+  assert.equal(normalizeAvitoListing(record({ condition: 'Б/у', title: 'MacBook Air 13 Intel i5 8/256 Silver', specs: {} })).status, 'review');
+});
+test('Avito respects adapter uncertainty and preorder risks without replacing source evidence', () => {
+  const result = normalizeAvitoListing(record({ adapterReviewReasons: ['Конфликт данных Apify'] }));
+  assert.equal(result.status, 'review');
+  assert.equal(result.reason, 'Конфликт данных Apify');
+  const withRisk = normalizeAvitoListing(record({ adapterRisks: ['Товар под заказ'] }));
+  assert.equal(withRisk.status, 'accepted');
+  assert.deepEqual(withRisk.offer.avitoRisks, ['Товар под заказ']);
 });
 test('Avito rejects bait prices, mixed variants, used titles and configuration conflicts', () => {
   for (const title of ['MacBook Air 13 M4 16/256 Silver как новый', 'Чехол MacBook Air 13 M4 16/256 Silver', 'MacBook Air 13 M4 16/256 Silver б/у']) assert.equal(normalizeAvitoListing(record({ title })).status, 'excluded');
@@ -172,10 +194,10 @@ test('Avito detail schema drift preserves the last price with low trust instead 
   assert.ok(shown[0].avitoRank.reasons.some(r => r.includes('Последняя проверка')));
 });
 
-test('Avito explicitly used item is withdrawn even when other pages failed', async t => {
+test('Avito explicitly broken item is withdrawn even when other pages failed', async t => {
   const dir = await mkdtemp(`${tmpdir()}/avito-used-`); t.after(() => rm(dir, { recursive: true, force: true }));
   const prior = { ...offer(), fetchedAt: '2026-09-26T11:00:00Z', observedAt: '2026-09-26T11:00:00Z' };
-  await writeFile(`${dir}/snapshot.json`, JSON.stringify(snapshot([record({ condition: 'Б/у' })], { complete: false, discovered: 2, expectedTotal: 2 })));
+  await writeFile(`${dir}/snapshot.json`, JSON.stringify(snapshot([record({ condition: 'Не работает' })], { complete: false, discovered: 2, expectedTotal: 2 })));
   const result = await fetchAvitoOffers({ env: { AVITO_DATA_DIR: dir }, previous: [prior], now });
   assert.equal(result.offers[0].stock, 'Discontinued');
 });
@@ -183,6 +205,8 @@ test('Avito explicitly used item is withdrawn even when other pages failed', asy
 test('Avito integrates snapshot, hourly build, SQLite and catalogue without touching the network', async t => {
   const root = await mkdtemp(`${tmpdir()}/avito-build-`); t.after(() => rm(root, { recursive: true, force: true }));
   await cp(resolve('scripts'), join(root, 'scripts'), { recursive: true });
+  await cp(resolve('web'), join(root, 'web'), { recursive: true });
+  await symlink(resolve('node_modules'), join(root, 'node_modules'), 'dir');
   await mkdir(join(root, 'data/private/avito'), { recursive: true }); await mkdir(join(root, 'apps-script'));
   await writeFile(join(root, 'apps-script/reference.gs'), '');
   for (const file of ['catalog', 'offers', 'cheapest']) await writeFile(join(root, `data/${file}.json`), '[]');
@@ -197,6 +221,18 @@ test('Avito integrates snapshot, hourly build, SQLite and catalogue without touc
 });
 
 const shop = (retailer, price = 100000) => ({ ...offer(), retailer, price, listingId: retailer, marketplaceSellerId: undefined, sellerName: undefined });
+test('Avito used-price reference comes from independent used listings and never new retail prices', () => {
+  const used = (i, price) => offer({ id: String(1234567890 + i), url: url(String(1234567890 + i)),
+    condition: 'Б/у', title: 'MacBook Air 13 M4 16/256 Silver б/у', price, seller: { id: `used-seller-${i}`, name: `Б/у ${i}` } });
+  const target = used(0, 60000), peers = [used(1, 61000), used(2, 62000), used(3, 63000)];
+  const ranked = rankAvitoOffers([target, ...peers, shop('Айфория', 200000), shop('Technichno', 200000), offer()], { now });
+  const result = ranked.find(o => o.listingId === target.listingId && o.condition === 'used');
+  assert.equal(result.avitoRank.independentSellers, 3);
+  assert.ok(result.avitoRank.referencePrice > 61000 && result.avitoRank.referencePrice < 63000);
+  const alone = rankAvitoOffers([target, shop('Айфория'), shop('Technichno')], { now })[0];
+  assert.equal(alone.avitoRank.referencePrice, null);
+  assert.equal(alone.avitoRank.independentSellers, 0);
+});
 test('Avito robust log model is finite for equal prices and resistant to a large outlier', () => {
   const m = robustLogMarket([100000, 100000, 100000, 1000000].map(price => ({ price, weight: 1 })));
   assert.ok(Math.exp(m.mu) < 110000); assert.ok(Number.isFinite(m.variance));

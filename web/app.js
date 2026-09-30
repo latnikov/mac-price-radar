@@ -157,7 +157,7 @@ function avitoOfferNode(offer) {
   if (Date.now() - Date.parse(offer.fetchedAt) > 4 * 3600000) item.append(text('span', 'Старая проверка', 'tag warn'));
   const audit = text('details', null, 'avito-audit');
   audit.append(text('summary', 'Почему такая оценка'));
-  audit.append(text('span', offer.title, 'variant'), text('span', `${offer.sellerName} · Нижний Новгород · Новое`, 'variant'));
+  audit.append(text('span', offer.title, 'variant'), text('span', `${offer.sellerName} · Нижний Новгород · ${offer.condition === 'used' ? 'Б/у' : 'Новое'}`, 'variant'));
   if (rank?.position) audit.append(text('span', `Место объявления в рейтинге: ${rank.position}`, 'variant'));
   if (rank?.referencePrice) {
     const delta = (offer.price / rank.referencePrice - 1) * 100;

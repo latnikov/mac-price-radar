@@ -21,7 +21,7 @@ export function accessError(failure) {
 export function publicAvitoState(state = {}) {
   const result = {};
   for (const key of ['state','message','startedAt','updatedAt','retryAfter']) if (typeof state[key] === 'string') result[key] = state[key].slice(0,250);
-  if (state.transport) result.transport = state.transport === 'proxy' ? 'proxy' : 'direct';
+  if (state.transport) result.transport = ['proxy', 'apify'].includes(state.transport) ? state.transport : 'direct';
   if (state.access) result.access = { reason: state.access.reason, status: state.access.status, challenge: Boolean(state.access.challenge) };
   if (state.counts) result.counts = Object.fromEntries(Object.entries(state.counts).filter(([k,v])=>['pages','discovered','detailed','inspected','remaining','expectedTotal','requests'].includes(k)&&Number.isFinite(v)));
   return result;

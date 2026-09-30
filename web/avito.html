@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Авито — цены Mac в Нижнем Новгороде</title>
-  <meta name="description" content="Объявления Авито по конфигурациям и цветам Mac. Отдельные столбцы продавцов, цены и доверие.">
+  <title>Авито — новые и б/у MacBook в Нижнем Новгороде</title>
+  <meta name="description" content="Новые и б/у MacBook на Авито в Нижнем Новгороде. Сравнение цен продавцов и объявления с интересной разницей в цене.">
   <meta name="theme-color" content="#f5f6f8">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
   <meta property="og:title" content="Авито — сравнение цен Mac">
-  <meta property="og:description" content="Сравниваем предложения продавцов Авито в Нижнем Новгороде.">
+  <meta property="og:description" content="Сравниваем новые и б/у MacBook от продавцов Авито в Нижнем Новгороде.">
   <meta property="og:url" content="https://dev.macbookbro.ru/web/avito.html">
   <meta property="og:image" content="https://dev.macbookbro.ru/web/og-image.jpg">
   <meta property="og:image:width" content="1200">
@@ -21,14 +21,48 @@
   <link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" sizes="180x180">
   <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./avito-monitor.css">
   <link rel="modulepreload" href="./retail-analytics.js">
   <link rel="modulepreload" href="./price-table.js">
   <link rel="modulepreload" href="./view-state.js">
   <script type="module" src="./app.js"></script>
+  <script type="module" src="./avito-monitor.js"></script>
 </head>
 <body data-sheet="avito">
 <main class="workspace">
 <nav class="sheet-tabs" aria-label="Листы цен"><a href="./index.html">Российские цены</a><a href="./foreign.html">Зарубежные цены ↗</a><a href="./avito.html" aria-current="page">Авито</a></nav>
+<section class="avito-monitor" id="avito-monitor" aria-labelledby="avito-monitor-title" data-tone="loading">
+  <div class="avito-monitor-heading">
+    <div><span class="avito-monitor-eyebrow">Новые и б/у MacBook · Нижний Новгород</span><h2 id="avito-monitor-title">Мониторинг Авито</h2></div>
+    <span id="avito-monitor-badge" class="avito-monitor-badge" role="status">Проверяем сбор…</span>
+  </div>
+  <p id="avito-monitor-message" class="avito-monitor-message">Загружаем состояние сбора и предложения с интересной разницей в цене.</p>
+  <p id="avito-monitor-error" class="avito-monitor-error" role="status" hidden></p>
+  <div id="avito-monitor-content" hidden>
+    <dl id="avito-monitor-counts" class="avito-monitor-counts"></dl>
+    <div class="avito-monitor-meta">
+      <p id="avito-monitor-updated"></p>
+      <p id="avito-monitor-schedule"></p>
+      <p id="avito-monitor-budget"></p>
+      <p id="avito-monitor-notifications"></p>
+    </div>
+    <p id="avito-monitor-coverage" class="avito-monitor-note"></p>
+    <section class="avito-opportunities" aria-labelledby="avito-opportunities-title">
+      <div class="avito-opportunities-heading"><h3 id="avito-opportunities-title">Стоит проверить</h3><span id="avito-opportunities-count" class="avito-opportunities-count"></span></div>
+      <p id="avito-opportunities-threshold" class="avito-monitor-note"></p>
+      <p id="avito-opportunities-empty" class="avito-opportunities-empty"></p>
+      <div id="avito-opportunities-list" class="avito-opportunities-list"></div>
+      <p id="avito-opportunities-more" class="avito-monitor-note" hidden></p>
+      <p class="avito-monitor-note avito-opportunities-warning">Потенциальная разница — оценка по сопоставимым ценам, а не гарантированная прибыль. Перед покупкой проверьте комплектацию, состояние и актуальность объявления.</p>
+    </section>
+    <details id="avito-review" class="avito-review" hidden>
+      <summary><span>Объявления на проверке</span><span id="avito-review-count" class="avito-opportunities-count"></span></summary>
+      <p class="avito-monitor-note">Эти объявления найдены в Нижнем Новгороде, но характеристик недостаточно для точного сравнения. Посмотрите исходную карточку; её цена пока не участвует в расчёте потенциальной разницы.</p>
+      <div id="avito-review-list" class="avito-review-list"></div>
+      <p id="avito-review-more" class="avito-monitor-note" hidden></p>
+    </details>
+  </div>
+</section>
 <section class="filters" id="filters">
   <div class="filter-top">
     <h1>Цены на Mac · Авито</h1>
