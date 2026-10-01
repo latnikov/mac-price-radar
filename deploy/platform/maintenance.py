@@ -4,9 +4,11 @@ Uses only Python's standard library. No AI, agent, API quota or laptop is requir
 import argparse
 from contextlib import closing
 import fcntl
+import gzip
 import hashlib
 import http.client
 import json
+import math
 import os
 import shutil
 import sqlite3
@@ -32,18 +34,87 @@ def atomic_json(path, value):
     os.chmod(temporary, 0o640)
     temporary.replace(path)
 
+def check_connection(db, label):
+    if db.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+        raise RuntimeError('Backup database verification failed: ' + label)
+    if db.execute('PRAGMA foreign_key_check').fetchone():
+        raise RuntimeError('Backup has invalid relationships: ' + label)
+    tables = db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()
+    return {name: db.execute('SELECT COUNT(*) FROM "' + name.replace('"', '""') + '"').fetchone()[0] for name, in tables}
+
 def check_db(path):
     with closing(sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True)) as db:
         db.create_function('casefold', 1, lambda v: str(v or '').lower(), deterministic=True)
-        if db.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
-            raise RuntimeError('Backup database verification failed: ' + Path(path).name)
-        if db.execute('PRAGMA foreign_key_check').fetchone():
-            raise RuntimeError('Backup has invalid relationships: ' + Path(path).name)
-        counts = {}
-        for name in ['orders', 'inbox_messages', 'inbox_dialogs', 'customers', 'observations']:
-            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)).fetchone():
-                counts[name] = db.execute('SELECT COUNT(*) FROM "' + name + '"').fetchone()[0]
-        return counts
+        return check_connection(db, Path(path).name)
+
+def sql_value(value):
+    # SQLite's built-in quote(TEXT) truncates embedded NUL. Chat/source payloads
+    # must round-trip exactly, including Unicode, multiline text and binary data.
+    if value is None:
+        return 'NULL'
+    if isinstance(value, bytes):
+        return "X'" + value.hex() + "'"
+    if isinstance(value, str):
+        if '\0' in value:
+            return "CAST(X'" + value.encode('utf-8').hex() + "' AS TEXT)"
+        return "'" + value.replace("'", "''") + "'"
+    if isinstance(value, float) and math.isinf(value):
+        return '-9e999' if value < 0 else '9e999'
+    return repr(value)
+
+def sql_identifier(value):
+    return '"' + value.replace('"', '""') + '"'
+
+def iter_sql(db):
+    yield 'BEGIN TRANSACTION;'
+    tables = db.execute("SELECT name,sql FROM sqlite_master WHERE type='table' AND sql IS NOT NULL ORDER BY name").fetchall()
+    sequences = []
+    for name, schema in tables:
+        if name == 'sqlite_sequence':
+            sequences = db.execute('SELECT name,seq FROM sqlite_sequence').fetchall()
+            continue
+        if name.startswith('sqlite_'):
+            continue
+        if schema.upper().startswith('CREATE VIRTUAL TABLE'):
+            raise RuntimeError('Virtual tables require a dedicated backup format')
+        yield schema + ';'
+        columns = [row[1] for row in db.execute('PRAGMA table_xinfo(' + sql_identifier(name) + ')') if row[6] == 0]
+        identifiers = ','.join(sql_identifier(column) for column in columns)
+        prefix = 'INSERT INTO ' + sql_identifier(name) + '(' + identifiers + ') VALUES('
+        for row in db.execute('SELECT ' + identifiers + ' FROM ' + sql_identifier(name)):
+            yield prefix + ','.join(sql_value(value) for value in row) + ');'
+    if sequences:
+        yield 'DELETE FROM sqlite_sequence;'
+        for name, seq in sequences:
+            yield 'INSERT INTO sqlite_sequence VALUES(' + sql_value(name) + ',' + sql_value(seq) + ');'
+    for schema, in db.execute("SELECT sql FROM sqlite_master WHERE type IN ('index','trigger','view') AND sql IS NOT NULL"):
+        yield schema + ';'
+    yield 'COMMIT;'
+
+def restore_sql(source, target, metadata):
+    if target.exists():
+        raise RuntimeError('Restored database destination already exists')
+    with closing(sqlite3.connect(target)) as db:
+        db.create_function('casefold', 1, lambda v: str(v or '').lower(), deterministic=True)
+        page_size = int(metadata.get('page_size', 4096))
+        if page_size not in [512, 1024, 2048, 4096, 8192, 16384, 32768, 65536]:
+            raise RuntimeError('Invalid restored database page size')
+        db.execute('PRAGMA page_size=' + str(page_size))
+        # Execute complete statements in the dump's single transaction. executescript
+        # would commit each call; reading the entire dump would exhaust server RAM.
+        statement = ''
+        with gzip.open(source, 'rt', encoding='utf-8') as stream:
+            for line in stream:
+                statement += line
+                if sqlite3.complete_statement(statement):
+                    db.execute(statement)
+                    statement = ''
+        if statement.strip():
+            raise RuntimeError('Incomplete database dump')
+        db.execute('PRAGMA user_version=' + str(int(metadata.get('user_version', 0))))
+        db.execute('PRAGMA application_id=' + str(int(metadata.get('application_id', 0))))
+        db.commit()
+    os.chmod(target, 0o600)
 
 def verify_archive(archive, directory):
     directory = Path(directory)
@@ -58,12 +129,24 @@ def verify_archive(archive, directory):
                 raise RuntimeError('Unsafe backup archive member')
         source.extractall(directory, members=members)
     manifest = json.loads((directory / 'manifest.json').read_text())
+    if manifest.get('format') not in [1, 2]:
+        raise RuntimeError('Unsupported backup format')
     for name, value in manifest['files'].items():
         path = directory / name
         if path.resolve().is_relative_to(directory.resolve()) is False or sha(path) != value['sha256']:
             raise RuntimeError('Restored backup checksum mismatch')
-        if name.endswith('.sqlite') and check_db(path) != value['counts']:
-            raise RuntimeError('Restored backup row counts mismatch')
+        if value.get('database'):
+            restored = directory / value['restore_as']
+            if not restored.resolve().is_relative_to(directory.resolve()):
+                raise RuntimeError('Unsafe restored database path')
+            restore_sql(path, restored, value)
+            if check_db(restored) != value['counts']:
+                raise RuntimeError('Restored backup row counts mismatch')
+        elif name.endswith('.sqlite'):
+            # Format 1 recorded only selected business tables. Keep old archives usable.
+            counts = check_db(path)
+            if any(counts.get(table) != count for table, count in value['counts'].items()):
+                raise RuntimeError('Restored backup row counts mismatch')
     return manifest
 
 def rotate_deploy_snapshots(config):
@@ -116,7 +199,8 @@ def backup(config):
             shutil.rmtree(abandoned)
     for abandoned in root.glob('platform-*.partial'):
         abandoned.unlink()
-    required = sum(Path(p).stat().st_size for p in config['databases'].values() if Path(p).is_file()) + 768 * 1024**2
+    previous = sorted(root.glob('platform-*.tar.gz'), reverse=True)
+    required = 768 * 1024**2 + (previous[0].stat().st_size * 2 if previous else 0)
     if shutil.disk_usage(root).free < required:
         raise RuntimeError('Insufficient free space for a consistent backup; originals retained')
     stamp = time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())
@@ -124,18 +208,29 @@ def backup(config):
     partial = root / ('platform-' + stamp + '.partial')
     with tempfile.TemporaryDirectory(prefix='.platform-work-', dir=root) as work, closing_partial(partial):
         work = Path(work)
-        manifest = {'created_at': time.time(), 'files': {}, 'format': 1}
+        manifest = {'created_at': time.time(), 'files': {}, 'format': 2}
         for name, path in config['databases'].items():
             if not Path(path).is_file():
                 raise RuntimeError('Required database is missing: ' + name)
-            target = work / (name + '.sqlite')
+            target = work / (name + '.sqlite.sql.gz')
             print('Backing up ' + name, flush=True)
-            with closing(sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True, timeout=10)) as source, closing(sqlite3.connect(target)) as destination:
-                source.backup(destination, pages=1024, sleep=0.05)
-                # Publish one complete file, with no dependency on WAL sidecars.
-                destination.execute('PRAGMA journal_mode=DELETE')
+            with closing(sqlite3.connect(Path(path).resolve().as_uri() + '?mode=ro', uri=True, timeout=10)) as source:
+                source.create_function('casefold', 1, lambda v: str(v or '').lower(), deterministic=True)
+                source.execute('BEGIN')
+                # Count, validate and stream the same WAL read snapshot. Writers keep
+                # working; no intermediate uncompressed database is created.
+                metadata = {'counts': check_connection(source, name), 'database': True,
+                            'restore_as': name + '.sqlite'}
+                for pragma in ['page_size', 'user_version', 'application_id']:
+                    metadata[pragma] = source.execute('PRAGMA ' + pragma).fetchone()[0]
+                with gzip.open(target, 'wt', encoding='utf-8', compresslevel=1) as stream:
+                    for index, statement in enumerate(iter_sql(source)):
+                        if index % 4096 == 0 and shutil.disk_usage(root).free < 256 * 1024**2:
+                            raise RuntimeError('Backup reserve exhausted; originals retained')
+                        stream.write(statement + '\n')
+                source.rollback()
             os.chmod(target, 0o600)
-            manifest['files'][target.name] = {'sha256': sha(target), 'counts': check_db(target)}
+            manifest['files'][target.name] = {**metadata, 'sha256': sha(target)}
         for group, paths in [('configuration', config.get('configuration', [])), ('media', config.get('media', []))]:
             for index, value in enumerate(paths):
                 source = Path(value)
@@ -167,7 +262,7 @@ def backup(config):
         partial.rename(archive)
         os.chmod(archive, 0o600)
         atomic_json(archive.with_suffix('.json'), {'sha256': sha(archive), 'created_at': manifest['created_at'], 'bytes': archive.stat().st_size})
-    atomic_json(STATE / 'backup.json', {'at': time.time(), 'archive': str(archive), 'bytes': archive.stat().st_size, 'verified': True})
+    atomic_json(STATE / 'backup.json', {'at': time.time(), 'archive': str(archive), 'bytes': archive.stat().st_size, 'verified': True, 'format': 2})
     # Rotate only complete verified archives created by this tool. Never touch source databases.
     generations = sorted(root.glob('platform-*.tar.gz'), key=lambda p: p.name, reverse=True)
     retained_bytes = 0

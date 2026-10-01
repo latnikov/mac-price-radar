@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import sqlite3
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -20,8 +21,14 @@ class OperationsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             directory = Path(directory)
             source = directory / 'shop.sqlite'
+            original = "original-price\nМакбук 'Silver'; DROP TABLE orders;\0still here"
             with sqlite3.connect(source) as db:
-                db.executescript('PRAGMA journal_mode=WAL; CREATE TABLE orders(id TEXT PRIMARY KEY,data TEXT); INSERT INTO orders VALUES("accepted","original-price");')
+                db.create_function('casefold', 1, lambda v: str(v or '').lower(), deterministic=True)
+                db.executescript('PRAGMA journal_mode=WAL; PRAGMA user_version=8; CREATE TABLE orders(id TEXT PRIMARY KEY,data TEXT); CREATE TABLE payloads(id INTEGER PRIMARY KEY AUTOINCREMENT,bytes BLOB,amount REAL,label TEXT,total REAL GENERATED ALWAYS AS (amount*2) STORED); CREATE INDEX by_label ON payloads(casefold(label)); CREATE TRIGGER preserve_order BEFORE DELETE ON orders BEGIN SELECT RAISE(ABORT,"keep order"); END;')
+                db.execute('INSERT INTO orders VALUES(?,?)', ('accepted', original))
+                db.execute('INSERT INTO payloads(id,bytes,amount,label) VALUES(1,?,?,?)', (bytes(range(256)), 119.95, 'Silver'))
+                db.execute('INSERT INTO payloads(id) VALUES(2)')
+                db.execute('DELETE FROM payloads WHERE id=2')
             state = directory / 'state'
             state.mkdir()
             configuration = directory / 'configuration'
@@ -36,11 +43,21 @@ class OperationsTests(unittest.TestCase):
                 backups = sorted(Path(config['backup_dir']).glob('*.tar.gz'))
                 self.assertEqual(len(backups), 2)
                 restored = directory / 'restored'
-                ops.verify_archive(backups[-1], restored)
+                manifest = ops.verify_archive(backups[-1], restored)
+                self.assertEqual(manifest['format'], 2)
+                self.assertEqual(manifest['files']['shop.sqlite.sql.gz']['counts'], {'orders': 1, 'payloads': 1})
+                with tarfile.open(backups[-1]) as archive:
+                    self.assertFalse(any(name.endswith('.sqlite') for name in archive.getnames()))
                 self.assertEqual((restored / 'configuration/0-configuration/service.conf').read_text(), 'private configuration')
                 self.assertFalse((restored / 'configuration/0-configuration/obsolete-unit').exists())
                 with sqlite3.connect(restored / 'shop.sqlite') as db:
-                    self.assertEqual(db.execute('SELECT data FROM orders').fetchone()[0], 'original-price')
+                    self.assertEqual(db.execute('SELECT data FROM orders').fetchone()[0], original)
+                    self.assertEqual(db.execute('SELECT bytes,amount FROM payloads').fetchone(), (bytes(range(256)), 119.95))
+                    self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 8)
+                    self.assertEqual(db.execute('SELECT seq FROM sqlite_sequence WHERE name="payloads"').fetchone()[0], 2)
+                    self.assertEqual(db.execute('SELECT total FROM payloads').fetchone()[0], 239.9)
+                    with self.assertRaisesRegex(sqlite3.IntegrityError, 'keep order'):
+                        db.execute('DELETE FROM orders')
                 with sqlite3.connect(source) as db:
                     self.assertEqual(db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 1)
                 metadata = json.loads((state / 'backup.json').read_text())
@@ -48,6 +65,45 @@ class OperationsTests(unittest.TestCase):
                 with patch.object(ops, 'sha', return_value='corrupted'):
                     with self.assertRaisesRegex(RuntimeError, 'checksum'):
                         ops.verify_archive(backups[-1], directory / 'corrupted')
+
+    def test_streaming_snapshot_excludes_concurrent_writes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            source = directory / 'shop.sqlite'
+            state = directory / 'state'
+            state.mkdir()
+            original_connect = sqlite3.connect
+            with original_connect(source) as db:
+                db.executescript('PRAGMA journal_mode=WAL; CREATE TABLE orders(id TEXT PRIMARY KEY); INSERT INTO orders VALUES("before");')
+            original_dump = ops.iter_sql
+            def concurrent_dump(db):
+                with original_connect(source) as writer:
+                    writer.execute('INSERT INTO orders VALUES("during")')
+                yield from original_dump(db)
+            config = {'backup_dir': str(directory / 'backups'), 'databases': {'shop': str(source)}}
+            with patch.object(ops, 'STATE', state), patch.object(ops, 'iter_sql', side_effect=concurrent_dump):
+                ops.backup(config)
+            archive = next(Path(config['backup_dir']).glob('*.tar.gz'))
+            restored = directory / 'restored'
+            ops.verify_archive(archive, restored)
+            with original_connect(source) as db:
+                self.assertEqual(db.execute('SELECT COUNT(*) FROM orders').fetchone()[0], 2)
+            with original_connect(restored / 'shop.sqlite') as db:
+                self.assertEqual(db.execute('SELECT id FROM orders').fetchall(), [('before',)])
+
+    def test_restore_keeps_binary_format_one_backups_usable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = Path(directory)
+            source = directory / 'old.sqlite'
+            with sqlite3.connect(source) as db:
+                db.executescript('CREATE TABLE orders(id INTEGER PRIMARY KEY); INSERT INTO orders VALUES(1); CREATE TABLE other(id INTEGER); INSERT INTO other VALUES(1);')
+            manifest = directory / 'manifest.json'
+            manifest.write_text(json.dumps({'format': 1, 'files': {'old.sqlite': {'sha256': ops.sha(source), 'counts': {'orders': 1}}}}))
+            archive = directory / 'format-one.tar.gz'
+            with tarfile.open(archive, 'w:gz') as target:
+                target.add(source, arcname=source.name)
+                target.add(manifest, arcname=manifest.name)
+            ops.verify_archive(archive, directory / 'restored')
 
     def test_compaction_requires_identical_typed_values(self):
         self.assertTrue(compact.redundant_raw({'price': 100, 'color': 'Silver', 'raw': {'price': 100, 'color': 'Silver'}}))
