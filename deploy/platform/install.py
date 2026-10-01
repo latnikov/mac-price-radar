@@ -8,6 +8,7 @@ import os
 import re
 import secrets
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -173,6 +174,13 @@ order.macbookbro.ru {
         update_env(Path('/etc/macbookbro-orders.env'), {'ORDER_ORIGIN': 'https://macbookbro.ru', 'ORDER_BASE_PATH': '/order'})
         # Direct Telegram was verified read-only on the audited host. No pending
         # historical customer notifications exist; the fixture is excluded by code.
+        if 'ORDER_DELIVERY_MODE=relay' in Path('/etc/macbookbro-orders.env').read_text():
+            db = sqlite3.connect('file:/var/lib/macbookbro-orders/orders.sqlite?mode=ro', uri=True)
+            try:
+                if db.execute("SELECT COUNT(*) FROM orders WHERE notified_at IS NULL AND id!='MB-RELAY-TEST'").fetchone()[0]:
+                    raise RuntimeError('Reconcile pending relay notifications before switching delivery')
+            finally:
+                db.close()
         update_env(Path('/etc/macbookbro-orders.env'), {'ORDER_DELIVERY_MODE': 'direct', 'ORDER_TELEGRAM_API_IPV4': '149.154.167.220'})
         # Release files only; never overwrite an application's private data directory.
         for p in (release / 'order-site').iterdir():
