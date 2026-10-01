@@ -2,6 +2,9 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
+import { migrateShop } from './migrations.mjs';
+import { inspectMacbook } from './macbook-catalog.mjs';
+import { normalizeDelivery, normalizeEmail } from './checkout-data.mjs';
 
 export const CHANNELS = ['telegram', 'avito', 'yandex', 'moysklad'];
 export const ORDER_STATES = ['new', 'checking', 'confirmed', 'fulfilling', 'completed', 'cancelled', 'returned'];
@@ -24,12 +27,13 @@ export function normalizeProduct(input, previous = {}) {
   const result = { title, category, description: bounded(input.description, 1800, 'Описание'), specification: bounded(input.specification, 800, 'Характеристики'),
     warranty: bounded(input.warranty, 250, 'Гарантия'), recommendationKey, mappingConfirmed: input.mappingConfirmed === true || input.mappingConfirmed === 'on',
     channels, moyskladId, moyskladType: input.moyskladType === 'variant' ? 'variant' : 'product', vendor: bounded(input.vendor || 'Apple', 50, 'Бренд'),
-    avitoCategory: bounded(input.avitoCategory || 'Ноутбуки', 80, 'Категория Авито'), photos: previous.photos || [], individual: input.individual === true || input.individual === 'on' };
+    avitoCategory: bounded(input.avitoCategory || 'Ноутбуки', 80, 'Категория Авито'), photos: previous.photos || [], individual: input.individual === true || input.individual === 'on',
+    configuration: input.configuration || previous.configuration || null };
   if (['title','description','specification','warranty'].reduce((n,k)=>n+Buffer.byteLength(result[k].replace(/[&<>"']/g,'&quot;')),0)>6000) throw fail(400,'Сократите описание и характеристики: карточка должна загружаться быстро.');
   return result;
 }
 
-export function openShopStore(path, { now = Date.now } = {}) {
+export function openShopStore(path, { now = Date.now, recoverJobs = true } = {}) {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path); chmodSync(path, 0o600);
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
@@ -44,8 +48,10 @@ export function openShopStore(path, { now = Date.now } = {}) {
     CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY AUTOINCREMENT, actor TEXT NOT NULL, event TEXT NOT NULL, reference TEXT NOT NULL, at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS limits(key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS jobs_pending ON jobs(state,next_at);`);
+  migrateShop(db, now());
+  const hooks = {};
   // An interrupted outgoing create may have succeeded remotely. Never blindly resend it.
-  db.prepare("UPDATE jobs SET state='unknown',error='Процесс прерван: проверьте результат площадки' WHERE state='working'").run();
+  if(recoverJobs)db.prepare("UPDATE jobs SET state='unknown',error='Процесс прерван: проверьте результат площадки' WHERE state='working'").run();
   let inTransaction = false;
   const tx = fn => { if (inTransaction) return fn(); db.exec('BEGIN IMMEDIATE'); inTransaction = true; try { const result = fn(); db.exec('COMMIT'); return result; } catch (e) { db.exec('ROLLBACK'); throw e; } finally { inTransaction = false; } };
   const audit = (actor, event, reference) => db.prepare('INSERT INTO audit(actor,event,reference,at) VALUES(?,?,?,?)').run(actor, event, reference, now());
@@ -56,14 +62,19 @@ export function openShopStore(path, { now = Date.now } = {}) {
   const products = () => db.prepare('SELECT id FROM products ORDER BY updated_at DESC,id').all().map(r => product(r.id));
   function priced(data) {
     const row = recommendation(data.recommendationKey);
-    const valid = row && data.mappingConfirmed && row.priceRub > 0 && row.expiresAt > now();
+    const current=inspectMacbook(row?.configuration),accepted=inspectMacbook(data.configuration||row?.configuration);
+    const same=current.ok&&accepted.ok&&JSON.stringify(current.configuration)===JSON.stringify(accepted.configuration);
+    const valid = same && row && data.mappingConfirmed && row.priceRub > 0 && row.expiresAt > now();
     return { ...data, priceRub: valid ? row.priceRub : null, priceExpiresAt: valid ? row.expiresAt : 0 };
   }
   function publicProduct(p) {
     if (!p?.published) return null;
     const d = p.published;
+    const live=priced(d);
+    const inspected = inspectMacbook(d.configuration || recommendation(d.recommendationKey)?.configuration);
+    if (!inspected.ok) return null;
     return { id: p.id, title: d.title, category: d.category, description: d.description, specification: d.specification, warranty: d.warranty,
-      vendor: d.vendor, photos: d.photos, priceRub: d.priceExpiresAt > now() ? d.priceRub : null, revision: p.revision };
+      vendor: d.vendor, photos: d.photos, priceRub: live.priceRub, revision: p.revision, configuration: inspected.configuration, family: inspected.family.id };
   }
   function queue(entity, id, channel, revision) {
     db.prepare("UPDATE jobs SET state='superseded' WHERE entity=? AND entity_id=? AND channel=? AND revision<? AND state IN ('queued','retry','blocked','ready','served')").run(entity,id,channel,revision);
@@ -79,6 +90,8 @@ export function openShopStore(path, { now = Date.now } = {}) {
       if (old && Number(expectedRevision) !== old.revision) throw fail(409, 'Карточка изменилась. Откройте её заново.');
       const draft = normalizeProduct(input, old?.draft);
       if (draft.recommendationKey && !recommendation(draft.recommendationKey)) throw fail(400, 'Обновите прайс dev и выберите конфигурацию.');
+      if (draft.recommendationKey) draft.configuration = recommendation(draft.recommendationKey).configuration;
+      if (publish) { const check = inspectMacbook(draft.configuration); if (!check.ok) throw fail(400, check.issues.join('. ')); draft.configuration = check.configuration; }
       if (publish && draft.recommendationKey && !draft.mappingConfirmed) throw fail(400, 'Подтвердите точное соответствие конфигурации dev.');
       const published = publish ? priced(draft) : old?.published || null;
       const result = { id: id || randomUUID(), draft, published, revision: (old?.revision || 0) + 1 };
@@ -92,6 +105,7 @@ export function openShopStore(path, { now = Date.now } = {}) {
   function unpublish(id, actor = 'owner') {
     return tx(() => { const old = product(id); if (!old) throw fail(404,'Товар не найден.');
       db.prepare('UPDATE products SET published=NULL,revision=revision+1,updated_at=? WHERE id=?').run(now(),id);
+      db.prepare('UPDATE catalog_imports SET managed=0 WHERE product_id=?').run(id);
       enqueueProduct(product(id),old.published); audit(actor,'product_unpublished',id); });
   }
   function refreshPrices(rows) {
@@ -135,18 +149,20 @@ export function openShopStore(path, { now = Date.now } = {}) {
     if (input.consent !== 'on') throw fail(400,'Подтвердите согласие на обработку данных.');
     if (input.website) throw fail(400,'Не удалось отправить заказ.');
     if (!['cash','invoice'].includes(input.payment || 'cash')) throw fail(400,'Выберите способ оплаты.');
-    const contact={phone:`+${normalizedPhone}`,name:bounded(input.name,100,'Имя'),comment:bounded(input.comment,600,'Комментарий'),payment:input.payment || 'cash',consentVersion:'2026-09-28'};
+    const contact={phone:`+${normalizedPhone}`,name:bounded(input.name,100,'Имя'),comment:bounded(input.comment,600,'Комментарий'),payment:input.payment || 'cash',consentVersion:'2026-09-28',email:normalizeEmail(input.email),delivery:normalizeDelivery(input)};
     const fingerprint=hash(JSON.stringify(contact));
     return tx(()=>{
       const existing=db.prepare('SELECT * FROM orders WHERE checkout_id=?').get(String(input.checkoutId));
-      if(existing) { if(existing.session_id!==s.id || existing.fingerprint!==fingerprint) throw fail(409,'Этот заказ уже отправлен с другими данными.'); return existing.id; }
+      if(existing) { const legacy={...contact};delete legacy.email;delete legacy.delivery;const legacyMatch=!parse(existing.data).delivery&&existing.fingerprint===hash(JSON.stringify(legacy));if(existing.session_id!==s.id || (existing.fingerprint!==fingerprint&&!legacyMatch)) throw fail(409,'Этот заказ уже отправлен с другими данными.'); return existing.id; }
       const quote=db.prepare('SELECT * FROM checkouts WHERE id=? AND session_id=? AND expires>?').get(String(input.checkoutId),s.id,now());
       if(!quote) throw fail(409,'Срок подтверждения истёк. Проверьте корзину ещё раз.');
       const lines=checkoutLines(s);
       if(JSON.stringify(lines)!==quote.snapshot) throw fail(409,'Цена или состав заказа изменились. Проверьте новый итог перед отправкой.');
       const id=`MB-${randomBytes(6).toString('hex').toUpperCase()}`;
-      const data={...contact,lines,totalRub:lines.every(l=>l.priceRub!=null)?lines.reduce((n,l)=>n+l.qty*l.priceRub,0):null};
+      const totalRub=lines.every(l=>l.priceRub!=null)?lines.reduce((n,l)=>n+l.qty*l.priceRub,0):null;
+      const data={...contact,lines,totalRub,grandTotalRub:contact.delivery.feeKopecks===0?totalRub:null};
       db.prepare('INSERT INTO orders(id,checkout_id,session_id,fingerprint,data,created_at) VALUES(?,?,?,?,?,?)').run(id,input.checkoutId,s.id,fingerprint,JSON.stringify(data),now());
+      hooks.orderCreated?.(id,s,contact);
       queue('order',id,'moysklad',1); audit('customer','order_created',id); setCart(s,{}); return id;
     });
   }
@@ -168,6 +184,6 @@ export function openShopStore(path, { now = Date.now } = {}) {
   }
   function limit(key,max,windowMs) { const bucket=`${key}:${Math.floor(now()/windowMs)}`; db.prepare('INSERT INTO limits VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1').run(bucket,now()+windowMs); return db.prepare('SELECT count FROM limits WHERE key=?').get(bucket).count<=max; }
   function maintenance() { db.prepare('DELETE FROM limits WHERE expires<?').run(now()); db.prepare('DELETE FROM sessions WHERE expires<?').run(now()); db.prepare('DELETE FROM checkouts WHERE expires<? AND id NOT IN (SELECT checkout_id FROM orders)').run(now()); tx(reconcilePrices); }
-  return {db,now,tx,audit,setting,setSetting,product,products,publicProduct,recommendation,priced,queue,saveProduct,unpublish,refreshPrices,reconcilePrices:()=>tx(reconcilePrices),
+  return {db,now,tx,hooks,audit,setting,setSetting,product,products,publicProduct,recommendation,priced,queue,saveProduct,unpublish,refreshPrices,reconcilePrices:()=>tx(reconcilePrices),
     session,rotateSession,setCart,cartLines,checkout,placeOrder,addPhoto,updateOrder,limit,maintenance,close:()=>db.close()};
 }

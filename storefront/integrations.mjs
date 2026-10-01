@@ -64,7 +64,7 @@ export function createDispatcher(store,{env=process.env,origin,fetchImpl=fetch}=
   async function moysklad(job,p,publication) {
     if(!env.STORE_MOYSKLAD_TOKEN) configError('Укажите доступ к МойСклад');
     if(job.entity==='product') {
-      if(!p?.published?.channels.includes('moysklad')||!store.publicProduct(p).priceRub) return {state:'closed'};
+      if(!p?.published?.channels.includes('moysklad')||!store.publicProduct(p)?.priceRub) return {state:'closed'};
       const d=p.published;
       if(!d.moyskladId||!env.STORE_MOYSKLAD_PRICE_TYPE) configError('Укажите товар и тип цены МойСклад');
       const target=`${msRoot}/entity/${d.moyskladType}/${d.moyskladId}`;
@@ -74,10 +74,11 @@ export function createDispatcher(store,{env=process.env,origin,fetchImpl=fetch}=
       await api(fetchImpl,target,{method:'PUT',headers:msHeaders(),body:{salePrices}});
       return {state:'published',remoteId:d.moyskladId};
     }
-    if(!env.STORE_MOYSKLAD_ORGANIZATION||!env.STORE_MOYSKLAD_COUNTERPARTY) configError('Укажите организацию и контрагента для заказов МойСклад');
+    if(!env.STORE_MOYSKLAD_ORGANIZATION) configError('Укажите организацию для заказов МойСклад');
     const order=store.db.prepare('SELECT * FROM orders WHERE id=?').get(job.entity_id);
     if(['cancelled','returned'].includes(order.state))return {state:'closed'};
-    const d=JSON.parse(order.data);
+    const d=store.orderData?store.orderData(order):JSON.parse(order.data);
+    if(d.delivery?.feeKopecks==null||d.delivery?.state==='pending')configError('Согласуйте доставку с покупателем');
     if(d.totalRub==null) configError('Сначала согласуйте цену заказа');
     const positions=d.lines.map(line=>{
       const product=store.product(line.id), current=product?.published||product?.draft;
@@ -85,10 +86,22 @@ export function createDispatcher(store,{env=process.env,origin,fetchImpl=fetch}=
       if(!data?.moyskladId) configError('Сопоставьте все товары заказа с МойСклад');
       return {quantity:line.qty,price:line.priceRub*100,assortment:meta(data.moyskladType,data.moyskladId)};
     });
+    if(d.delivery?.feeKopecks>0){if(!env.STORE_MOYSKLAD_DELIVERY_SERVICE)configError('Сопоставьте услугу доставки с МойСклад');positions.push({quantity:1,price:d.delivery.feeKopecks,assortment:meta('service',env.STORE_MOYSKLAD_DELIVERY_SERVICE)});}
     const found=await api(fetchImpl,`${msRoot}/entity/customerorder?filter=${encodeURIComponent(`externalCode=${order.id}`)}`,{headers:msHeaders()});
     if(found.rows?.length>1) configError('В МойСклад несколько заказов с этим кодом');
     if(found.rows?.length===1) return {state:'published',remoteId:found.rows[0].id};
-    const result=await api(fetchImpl,`${msRoot}/entity/customerorder`,{method:'POST',headers:msHeaders(),create:true,body:{name:order.id,externalCode:order.id,organization:meta('organization',env.STORE_MOYSKLAD_ORGANIZATION),agent:meta('counterparty',env.STORE_MOYSKLAD_COUNTERPARTY),positions,description:`Заказ сайта ${order.id}\n${d.name}\n${d.phone}\n${d.comment}`}});
+    const customer=store.db.prepare('SELECT c.* FROM customers c JOIN order_customers o ON o.customer_id=c.id WHERE o.order_id=?').get(order.id);
+    let agentId=customer?.moysklad_id||env.STORE_MOYSKLAD_COUNTERPARTY;
+    if(customer&&!customer.moysklad_id){
+      const externalCode=`MB-CUSTOMER-${customer.id}`;
+      const agents=await api(fetchImpl,`${msRoot}/entity/counterparty?filter=${encodeURIComponent(`externalCode=${externalCode}`)}`,{headers:msHeaders()});
+      if(agents.rows?.length>1)configError('Несколько контрагентов с кодом клиента: нужна сверка');
+      const agent=agents.rows?.[0]||await api(fetchImpl,`${msRoot}/entity/counterparty`,{method:'POST',headers:msHeaders(),create:true,body:{name:customer.name||d.phone,externalCode,phone:d.phone,email:d.email||undefined}});
+      if(!agent.id)throw new DeliveryError('Проверьте результат создания контрагента','unknown');
+      agentId=agent.id;store.db.prepare('UPDATE customers SET moysklad_id=? WHERE id=?').run(agentId,customer.id);
+    }
+    if(!agentId)configError('Сопоставьте контрагента заказа');
+    const result=await api(fetchImpl,`${msRoot}/entity/customerorder`,{method:'POST',headers:msHeaders(),create:true,body:{name:order.id,externalCode:order.id,organization:meta('organization',env.STORE_MOYSKLAD_ORGANIZATION),agent:meta('counterparty',agentId),positions,description:`Заказ сайта ${order.id}\n${d.name}\n${d.phone}\n${d.email||''}\n${d.comment}\nПолучение: ${d.delivery?.method||'pickup'}, ${d.delivery?.city||''}, ${d.delivery?.address||''}, ${d.delivery?.estimatedDate||''}`}});
     return {state:'published',remoteId:result.id};
   }
   async function dispatch() {
