@@ -235,6 +235,9 @@ def health(config):
         price = setting('price_sync')
         if not price.get('ok') or price.get('at', 0) < (at - 7200) * 1000:
             alerts.append({'kind': 'price_sync_stale'})
+        legacy = setting('legacy_orders_sync')
+        if legacy.get('ok') is False:
+            alerts.append({'kind': 'legacy_orders_import'})
         integrations = db.execute('SELECT channel,account_id,state,last_success FROM sync_state').fetchall()
         for channel, account, status, last_success in integrations:
             if status in ['blocked', 'error'] or (last_success and last_success < (at - 3600) * 1000):

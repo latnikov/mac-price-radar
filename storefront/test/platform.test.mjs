@@ -94,6 +94,23 @@ test('legacy orders import once with original ID and quoted sum, reject mutated 
   maintainShop(service.store);assert.equal(service.store.db.prepare('SELECT COUNT(*) n FROM orders').get().n,before);
 });
 
+test('early legacy configurations retain unknown prices; the historical relay fixture is not a customer order',async t=>{
+  const {dir,service}=await setup(t),path=join(dir,'early.sqlite'),db=new DatabaseSync(path);
+  db.exec('CREATE TABLE orders(id TEXT PRIMARY KEY,payload TEXT,request_key TEXT,created_at INTEGER)');
+  const configuration={model:'mini',chip:'m4',memory:16,storage:256,ethernet:1};
+  const payload={configuration,phone:'+79991234567',name:'Test',consentVersion:'old'};
+  const insert=db.prepare('INSERT INTO orders VALUES(?,?,?,?)');
+  insert.run('MB-RELAY-TEST',JSON.stringify(payload),'relay-test',1);
+  insert.run('MB-01234567',JSON.stringify(payload),'early-real',2);
+  assert.equal(syncLegacyOrders(service.store,service.retail,path),1);
+  const order=JSON.parse(service.store.db.prepare('SELECT data FROM orders').get().data);
+  assert.equal(order.totalRub,null);assert.deepEqual(order.legacyConfiguration,configuration);
+  assert.equal(order.lines[0].specification,JSON.stringify(configuration));
+  assert.equal(service.store.setting('legacy_orders_sync').skippedTests,1);
+  assert.equal(service.store.db.prepare('SELECT COUNT(*) n FROM jobs').get().n,0);
+  db.close();
+});
+
 test('mounted order application serves relative assets and rejects POSTs from the former subdomain',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'mb-mounted-'));
   const service=createOrderService({env:{ORDER_BASE_PATH:'/order',ORDER_ORIGIN:'https://macbookbro.ru'},dbPath:join(dir,'orders.sqlite'),runWorker:false});

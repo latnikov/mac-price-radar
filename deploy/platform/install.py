@@ -75,7 +75,9 @@ def main():
     caddy = '''macbookbro.ru {
     encode zstd gzip
     @internal path /internal/*
-    respond @internal 404
+    handle @internal {
+        respond 404
+    }
     @crm path /crm /crm/*
     handle @crm {
         request_body {

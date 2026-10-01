@@ -7,8 +7,10 @@ export function syncLegacyOrders(store, retail, sourcePath) {
   if (!sourcePath) return 0;
   const source = new DatabaseSync(sourcePath, { readOnly: true });
   let imported = 0;
+  let skippedTests = 0;
   try {
     for (const row of source.prepare('SELECT id,payload,request_key,created_at FROM orders ORDER BY created_at').all()) {
+      if (row.id === 'MB-RELAY-TEST') { skippedTests++; continue; }
       if (!/^MB-[A-F0-9]{8}$/.test(row.id)) throw new Error('Unexpected legacy order ID');
       const fingerprint = hash(row.payload);
       const old = store.db.prepare('SELECT source_hash FROM legacy_order_sources WHERE order_id=?').get(row.id);
@@ -17,13 +19,16 @@ export function syncLegacyOrders(store, retail, sourcePath) {
         continue;
       }
       const payload = JSON.parse(row.payload);
-      if (!payload.phone || !payload.configurationDescription) throw new Error('Incomplete legacy order');
+      if (!payload.phone || (!payload.configurationDescription && !payload.configuration)) throw new Error('Incomplete legacy order');
+      // Early versions saved configuration fields before introducing the description.
+      // Preserve that exact configuration; never recalculate its historical quote.
+      const description = payload.configurationDescription || JSON.stringify(payload.configuration);
       const priceRub = Number.isInteger(payload.priceRub) && payload.priceRub > 0 ? payload.priceRub : null;
       const data = { phone: payload.phone, name: payload.name || '', email: '', comment: '', payment: payload.paymentMethod || 'cash',
         consentVersion: payload.consentVersion, totalRub: priceRub, grandTotalRub: null,
-        legacySource: 'order', pricingAsOf: payload.pricingAsOf, priceStatus: payload.priceStatus,
+        legacySource: 'order', legacyConfiguration: payload.configuration, pricingAsOf: payload.pricingAsOf, priceStatus: payload.priceStatus,
         delivery: { method: 'pickup', city: '', address: '', feeKopecks: null, state: 'pending', carrier: '', tracking: '', estimatedDate: '' },
-        lines: [{ id: 'legacy:' + row.id, qty: 1, title: payload.configurationDescription, specification: payload.configurationDescription,
+        lines: [{ id: 'legacy:' + row.id, qty: 1, title: description, specification: description,
           priceRub, active: true, revision: null, recommendationKey: null, moyskladId: null, moyskladType: null, individual: false }] };
       store.tx(() => {
         store.db.prepare('INSERT INTO orders(id,checkout_id,session_id,fingerprint,data,created_at) VALUES(?,?,?,?,?,?)')
@@ -35,7 +40,7 @@ export function syncLegacyOrders(store, retail, sourcePath) {
       });
       imported++;
     }
-    store.setSetting('legacy_orders_sync', { at: store.now(), imported, ok: true });
+    store.setSetting('legacy_orders_sync', { at: store.now(), imported, skippedTests, ok: true });
     return imported;
   } finally { source.close(); }
 }

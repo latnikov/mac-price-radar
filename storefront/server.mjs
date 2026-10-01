@@ -72,7 +72,10 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
   const managerHash=managerPassword?scryptSync(managerPassword,loginSalt,32):null;
   const ipSalt=store.setting('ip_salt')||opaque();store.setSetting('ip_salt',ipSalt);
   const dispatcher=createDispatcher(store,{env,origin,fetchImpl});
-  const importLegacy=async()=>syncLegacyOrders(store,retail,env.STORE_LEGACY_ORDERS_DB);
+  const importLegacy=async()=>{
+    try{return syncLegacyOrders(store,retail,env.STORE_LEGACY_ORDERS_DB);}
+    catch(error){store.setSetting('legacy_orders_sync',{at:now(),ok:false,message:'Не удалось перенести прежние заказы. Требуется проверка.'});throw error;}
+  };
   let refreshing=false;
   async function syncPrices(){
     if(refreshing)return;refreshing=true;
