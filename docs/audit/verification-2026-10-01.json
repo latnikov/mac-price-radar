@@ -1,0 +1,108 @@
+{
+  "catalog": {
+    "scope": "Loopback HTTP, public HTML, 10 concurrent readers, during restoration check; short warm-cache test, excludes client network and TLS",
+    "requests": 300,
+    "concurrency": 10,
+    "statuses": {
+      "200": 300
+    },
+    "duration_ms": 596,
+    "rps": 503,
+    "p50_ms": 17,
+    "p95_ms": 37
+  },
+  "crm": {
+    "scope": "HTTPS from server, actual CRM data, no business changes",
+    "pages": [
+      {
+        "path": "/crm/desk",
+        "status": 200,
+        "ms": 124,
+        "bytes": 19214
+      },
+      {
+        "path": "/crm/contacts",
+        "status": 200,
+        "ms": 26,
+        "bytes": 21145
+      },
+      {
+        "path": "/crm/deals",
+        "status": 200,
+        "ms": 5,
+        "bytes": 8639
+      },
+      {
+        "path": "/crm/system",
+        "status": 200,
+        "ms": 4,
+        "bytes": 7677
+      }
+    ]
+  },
+  "public_https_checks": [
+    {
+      "check": "store",
+      "status": 200,
+      "bytes": 7558
+    },
+    {
+      "check": "old_order_redirect",
+      "status": 308
+    },
+    {
+      "check": "/order/",
+      "status": 200
+    },
+    {
+      "check": "/order/app.js",
+      "status": 200
+    },
+    {
+      "check": "/order/api/status",
+      "status": 200
+    },
+    {
+      "check": "named_login_parser_logout",
+      "username": "Vlad",
+      "ok": true
+    },
+    {
+      "check": "named_login_parser_logout",
+      "username": "VladJr",
+      "ok": true
+    },
+    {
+      "check": "named_login_parser_logout",
+      "username": "Max",
+      "ok": true
+    },
+    {
+      "check": "named_login_parser_logout",
+      "username": "Sasha",
+      "ok": true
+    }
+  ],
+  "production_dependencies": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "coverage": {
+    "scope": "45 shop tests, imported modules including shared order/web modules; not whole-repository coverage",
+    "lines_percent": 80.65,
+    "branches_percent": 66.57,
+    "functions_percent": 79.49
+  },
+  "tests": {
+    "parser": 361,
+    "orders": 28,
+    "shop": 45,
+    "operations": 6,
+    "total": 440,
+    "note": "Linux CI runs collector concurrency test; local macOS skips that one platform-specific test."
+  }
+}

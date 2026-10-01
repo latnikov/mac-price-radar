@@ -1,0 +1,1469 @@
+{
+  "at": "2026-10-01T04:46:05Z",
+  "cpu": 1,
+  "load": [
+    0.3310546875,
+    0.32373046875,
+    0.19970703125
+  ],
+  "disk": {
+    "total": 26338418688,
+    "free": 14447734784
+  },
+  "databases": {
+    "parser_dev": {
+      "bytes": 980697088,
+      "wal_bytes": 83713648,
+      "sqlite_version": "3.45.1",
+      "tables": {
+        "audit": {
+          "rows": 226,
+          "fields": [
+            "seq",
+            "at",
+            "actor",
+            "reason",
+            "entity_type",
+            "entity_id",
+            "json"
+          ]
+        },
+        "calculations": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "listings": {
+          "rows": 2702,
+          "fields": [
+            "id",
+            "source_id",
+            "external_id",
+            "url",
+            "json"
+          ]
+        },
+        "metadata": {
+          "rows": 1,
+          "fields": [
+            "key",
+            "value"
+          ]
+        },
+        "observations": {
+          "rows": 346669,
+          "fields": [
+            "seq",
+            "id",
+            "run_id",
+            "listing_id",
+            "observed_at",
+            "received_at",
+            "rejected",
+            "json"
+          ],
+          "latest_day": [
+            "2026-10-01"
+          ],
+          "sample_bytes": [
+            2403.09,
+            null
+          ],
+          "sampled_fields": {
+            "availability": {
+              "present": 38,
+              "mean_bytes": 27.0,
+              "max_bytes": 27
+            },
+            "bundle": {
+              "present": 1000,
+              "mean_bytes": 9.8,
+              "max_bytes": 10
+            },
+            "buyerType": {
+              "present": 835,
+              "mean_bytes": 8.0,
+              "max_bytes": 8
+            },
+            "chip": {
+              "present": 1000,
+              "mean_bytes": 5.6,
+              "max_bytes": 9
+            },
+            "color": {
+              "present": 1000,
+              "mean_bytes": 9.5,
+              "max_bytes": 13
+            },
+            "condition": {
+              "present": 1000,
+              "mean_bytes": 5.7,
+              "max_bytes": 10
+            },
+            "cpuCores": {
+              "present": 1000,
+              "mean_bytes": 2.5,
+              "max_bytes": 4
+            },
+            "currency": {
+              "present": 1000,
+              "mean_bytes": 5.0,
+              "max_bytes": 5
+            },
+            "dataKind": {
+              "present": 1000,
+              "mean_bytes": 6.0,
+              "max_bytes": 6
+            },
+            "displayType": {
+              "present": 1000,
+              "mean_bytes": 9.8,
+              "max_bytes": 10
+            },
+            "evidence": {
+              "present": 1000,
+              "mean_bytes": 756.1,
+              "max_bytes": 2068
+            },
+            "externalId": {
+              "present": 1000,
+              "mean_bytes": 19.6,
+              "max_bytes": 63
+            },
+            "fetchedAt": {
+              "present": 1000,
+              "mean_bytes": 26.0,
+              "max_bytes": 26
+            },
+            "gpuCores": {
+              "present": 1000,
+              "mean_bytes": 2.5,
+              "max_bytes": 4
+            },
+            "keyboard": {
+              "present": 1000,
+              "mean_bytes": 8.8,
+              "max_bytes": 9
+            },
+            "listingId": {
+              "present": 1000,
+              "mean_bytes": 34.0,
+              "max_bytes": 34
+            },
+            "minimumQuantity": {
+              "present": 835,
+              "mean_bytes": 1.0,
+              "max_bytes": 1
+            },
+            "model": {
+              "present": 1000,
+              "mean_bytes": 16.9,
+              "max_bytes": 18
+            },
+            "normalizationVersion": {
+              "present": 1000,
+              "mean_bytes": 1.0,
+              "max_bytes": 1
+            },
+            "observationId": {
+              "present": 1000,
+              "mean_bytes": 38.0,
+              "max_bytes": 38
+            },
+            "observedAt": {
+              "present": 1000,
+              "mean_bytes": 26.0,
+              "max_bytes": 26
+            },
+            "offerId": {
+              "present": 1000,
+              "mean_bytes": 34.0,
+              "max_bytes": 34
+            },
+            "paymentMethod": {
+              "present": 594,
+              "mean_bytes": 5.8,
+              "max_bytes": 6
+            },
+            "price": {
+              "present": 1000,
+              "mean_bytes": 5.9,
+              "max_bytes": 7
+            },
+            "priceMinor": {
+              "present": 1000,
+              "mean_bytes": 7.9,
+              "max_bytes": 9
+            },
+            "priceType": {
+              "present": 1000,
+              "mean_bytes": 6.4,
+              "max_bytes": 9
+            },
+            "provenance": {
+              "present": 1000,
+              "mean_bytes": 152.0,
+              "max_bytes": 152
+            },
+            "qualityWarnings": {
+              "present": 1000,
+              "mean_bytes": 3.3,
+              "max_bytes": 102
+            },
+            "ramGb": {
+              "present": 1000,
+              "mean_bytes": 1.9,
+              "max_bytes": 3
+            },
+            "rawPrice": {
+              "present": 1000,
+              "mean_bytes": 9.5,
+              "max_bytes": 13
+            },
+            "rawTitle": {
+              "present": 1000,
+              "mean_bytes": 82.6,
+              "max_bytes": 230
+            },
+            "receivedAt": {
+              "present": 1000,
+              "mean_bytes": 26.0,
+              "max_bytes": 26
+            },
+            "region": {
+              "present": 1000,
+              "mean_bytes": 8.1,
+              "max_bytes": 9
+            },
+            "rejected": {
+              "present": 1000,
+              "mean_bytes": 5.0,
+              "max_bytes": 5
+            },
+            "retailer": {
+              "present": 1000,
+              "mean_bytes": 9.2,
+              "max_bytes": 16
+            },
+            "runId": {
+              "present": 1000,
+              "mean_bytes": 38.0,
+              "max_bytes": 38
+            },
+            "screenIn": {
+              "present": 1000,
+              "mean_bytes": 2.0,
+              "max_bytes": 4
+            },
+            "sellerId": {
+              "present": 1000,
+              "mean_bytes": 33.0,
+              "max_bytes": 33
+            },
+            "sourceCity": {
+              "present": 632,
+              "mean_bytes": 31.0,
+              "max_bytes": 31
+            },
+            "sourceEditionId": {
+              "present": 72,
+              "mean_bytes": 14.0,
+              "max_bytes": 14
+            },
+            "sourceGroupRamGb": {
+              "present": 38,
+              "mean_bytes": 2.4,
+              "max_bytes": 4
+            },
+            "sourceGroupTitle": {
+              "present": 38,
+              "mean_bytes": 34.8,
+              "max_bytes": 35
+            },
+            "sourceGroupUrl": {
+              "present": 38,
+              "mean_bytes": 88.9,
+              "max_bytes": 96
+            },
+            "sourceId": {
+              "present": 1000,
+              "mean_bytes": 33.0,
+              "max_bytes": 33
+            },
+            "sourceProductCode": {
+              "present": 69,
+              "mean_bytes": 6.7,
+              "max_bytes": 7
+            },
+            "sourceProductId": {
+              "present": 525,
+              "mean_bytes": 11.2,
+              "max_bytes": 14
+            },
+            "sourceReportedRam": {
+              "present": 38,
+              "mean_bytes": 1.8,
+              "max_bytes": 2
+            },
+            "sourceSender": {
+              "present": 241,
+              "mean_bytes": 27.2,
+              "max_bytes": 28
+            },
+            "sourceSite": {
+              "present": 632,
+              "mean_bytes": 16.1,
+              "max_bytes": 21
+            },
+            "sourceTitle": {
+              "present": 241,
+              "mean_bytes": 11.9,
+              "max_bytes": 20
+            },
+            "sourceType": {
+              "present": 1000,
+              "mean_bytes": 11.2,
+              "max_bytes": 18
+            },
+            "sourceUsername": {
+              "present": 241,
+              "mean_bytes": 14.0,
+              "max_bytes": 15
+            },
+            "sourceVariantId": {
+              "present": 636,
+              "mean_bytes": 23.2,
+              "max_bytes": 60
+            },
+            "stock": {
+              "present": 1000,
+              "mean_bytes": 14.2,
+              "max_bytes": 17
+            },
+            "storageGb": {
+              "present": 1000,
+              "mean_bytes": 3.5,
+              "max_bytes": 4
+            },
+            "submittedAt": {
+              "present": 241,
+              "mean_bytes": 26.0,
+              "max_bytes": 26
+            },
+            "title": {
+              "present": 1000,
+              "mean_bytes": 70.1,
+              "max_bytes": 180
+            },
+            "url": {
+              "present": 1000,
+              "mean_bytes": 103.3,
+              "max_bytes": 152
+            },
+            "validFrom": {
+              "present": 241,
+              "mean_bytes": 12.0,
+              "max_bytes": 12
+            },
+            "validationIssues": {
+              "present": 1000,
+              "mean_bytes": 2.0,
+              "max_bytes": 2
+            },
+            "validationStatus": {
+              "present": 1000,
+              "mean_bytes": 14.0,
+              "max_bytes": 14
+            },
+            "visibility": {
+              "present": 1000,
+              "mean_bytes": 8.0,
+              "max_bytes": 8
+            }
+          }
+        },
+        "price_decisions": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "version",
+            "operation_key",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "quote_revisions": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "version",
+            "operation_key",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "runs": {
+          "rows": 226,
+          "fields": [
+            "id",
+            "started_at",
+            "finished_at",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "sellers": {
+          "rows": 17,
+          "fields": [
+            "id",
+            "name",
+            "json"
+          ]
+        },
+        "source_runs": {
+          "rows": 2355,
+          "fields": [
+            "run_id",
+            "source_id",
+            "json"
+          ]
+        },
+        "sources": {
+          "rows": 19,
+          "fields": [
+            "id",
+            "seller_id",
+            "json"
+          ]
+        }
+      }
+    },
+    "parser_legacy": {
+      "bytes": 1238204416,
+      "wal_bytes": 0,
+      "sqlite_version": "3.45.1",
+      "tables": {
+        "audit": {
+          "rows": 215,
+          "fields": [
+            "seq",
+            "at",
+            "actor",
+            "reason",
+            "entity_type",
+            "entity_id",
+            "json"
+          ]
+        },
+        "calculations": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "listings": {
+          "rows": 2242,
+          "fields": [
+            "id",
+            "source_id",
+            "external_id",
+            "url",
+            "json"
+          ]
+        },
+        "metadata": {
+          "rows": 1,
+          "fields": [
+            "key",
+            "value"
+          ]
+        },
+        "observations": {
+          "rows": 459419,
+          "fields": [
+            "seq",
+            "id",
+            "run_id",
+            "listing_id",
+            "observed_at",
+            "received_at",
+            "rejected",
+            "json"
+          ],
+          "latest_day": [
+            "2026-10-01"
+          ],
+          "sample_bytes": [
+            2381.938,
+            null
+          ],
+          "sampled_fields": {
+            "availability": {
+              "present": 38,
+              "mean_bytes": 27.0,
+              "max_bytes": 27
+            },
+            "bundle": {
+              "present": 1000,
+              "mean_bytes": 9.5,
+              "max_bytes": 10
+            },
+            "buyerType": {
+              "present": 524,
+              "mean_bytes": 8.0,
+              "max_bytes": 8
+            },
+            "chip": {
+              "present": 1000,
+              "mean_bytes": 5.8,
+              "max_bytes": 9
+            },
+            "color": {
+              "present": 1000,
+              "mean_bytes": 9.9,
+              "max_bytes": 13
+            },
+            "condition": {
+              "present": 1000,
+              "mean_bytes": 6.9,
+              "max_bytes": 9
+            },
+            "cpuCores": {
+              "present": 1000,
+              "mean_bytes": 2.2,
+              "max_bytes": 4
+            },
+            "currency": {
+              "present": 1000,
+              "mean_bytes": 5.0,
+              "max_bytes": 5
+            },
+            "dataKind": {
+              "present": 1000,
+              "mean_bytes": 6.0,
+              "max_bytes": 6
+            },
+            "displayType": {
+              "present": 1000,
+              "mean_bytes": 9.5,
+              "max_bytes": 10
+            },
+            "evidence": {
+              "present": 1000,
+              "mean_bytes": 753.9,
+              "max_bytes": 2068
+            },
+            "externalId": {
+              "present": 1000,
+              "mean_bytes": 13.7,
+              "max_bytes": 40
+            },
+            "fetchedAt": {
+              "present": 1000,
+              "mean_bytes": 26.0,
+              "max_bytes": 26
+            },
+            "gpuCores": {
+              "present": 1000,
+              "mean_bytes": 2.3,
+              "max_bytes": 4
+            },
+            "keyboard": {
+              "present": 1000,
+              "mean_bytes": 7.2,
+              "max_bytes": 9
+            },
+            "listingId": {
+              "present": 1000,
+              "mean_bytes": 34.0,
+              "max_bytes": 34
+            },
+            "minimumQuantity": {
+              "present": 524,
+              "mean_bytes": 1.0,
+              "max_bytes": 1
+            },
+            "model": {
+              "present": 1000,
+              "mean_bytes": 17.6,
+              "max_bytes": 18
+            },
+            "normalizationVersion": {
+              "present": 1000,
+              "mean_bytes": 1.0,
+              "max_bytes": 1
+            },
+            "observationId": {
+              "present": 1000,
+              "mean_bytes": 38.0,
+              "max_bytes": 38
+            },
+            "observedAt": {
+              "present": 1000,
+              "mean_bytes": 26.0,
+              "max_bytes": 26
+            },
+            "offerId": {
+              "present": 1000,
+              "mean_bytes": 34.0,
+              "max_bytes": 34
+            },
+            "paymentMethod": {
+              "present": 524,
+              "mean_bytes": 5.7,
+              "max_bytes": 6
+            },
+            "price": {
+              "present": 1000,
+              "mean_bytes": 5.9,
+              "max_bytes": 6
+            },
+            "priceMinor": {
+              "present": 1000,
+              "mean_bytes": 7.9,
+              "max_bytes": 8
+            },
+            "priceType": {
+              "present": 1000,
+              "mean_bytes": 7.3,
+              "max_bytes": 9
+            },
+            "provenance": {
+              "present": 1000,
+              "mean_bytes": 152.0,
+              "max_bytes": 152
+            },
+            "qualityWarnings": {
+              "present": 1000,
+              "mean_bytes": 3.6,
+              "max_bytes": 274
+            },
+            "ramGb": {
+              "present": 1000,
+              "mean_bytes": 1.9,
+              "max_bytes": 3
+            },
+            "rawPrice": {
+              "present": 1000,
+              "mean_bytes": 9.7,
+              "max_bytes": 13
+            },
+            "rawTitle": {
+              "present": 1000,
+              "mean_bytes": 119.6,
+              "max_bytes": 237
+            },
+            "receivedAt": {
+              "present": 1000,
+              "mean_bytes": 26.0,
+              "max_bytes": 26
+            },
+            "region": {
+              "present": 1000,
+              "mean_bytes": 9.0,
+              "max_bytes": 9
+            },
+            "rejected": {
+              "present": 1000,
+              "mean_bytes": 5.0,
+              "max_bytes": 5
+            },
+            "retailer": {
+              "present": 1000,
+              "mean_bytes": 10.6,
+              "max_bytes": 16
+            },
+            "runId": {
+              "present": 1000,
+              "mean_bytes": 38.0,
+              "max_bytes": 38
+            },
+            "screenIn": {
+              "present": 1000,
+              "mean_bytes": 2.0,
+              "max_bytes": 4
+            },
+            "sellerId": {
+              "present": 1000,
+              "mean_bytes": 33.0,
+              "max_bytes": 33
+            },
+            "sourceCity": {
+              "present": 562,
+              "mean_bytes": 31.0,
+              "max_bytes": 31
+            },
+            "sourceEditionId": {
+              "present": 72,
+              "mean_bytes": 14.0,
+              "max_bytes": 14
+            },
+            "sourceGroupRamGb": {
+              "present": 38,
+              "mean_bytes": 2.4,
+              "max_bytes": 4
+            },
+            "sourceGroupTitle": {
+              "present": 38,
+              "mean_bytes": 34.8,
+              "max_bytes": 35
+            },
+            "sourceGroupUrl": {
+              "present": 38,
+              "mean_bytes": 88.9,
+              "max_bytes": 96
+            },
+            "sourceId": {
+              "present": 1000,
+              "mean_bytes": 33.0,
+              "max_bytes": 33
+            },
+            "sourceProductCode": {
+              "present": 69,
+              "mean_bytes": 6.7,
+              "max_bytes": 7
+            },
+            "sourceProductId": {
+              "present": 455,
+              "mean_bytes": 12.0,
+              "max_bytes": 14
+            },
+            "sourceReportedRam": {
+              "present": 38,
+              "mean_bytes": 1.8,
+              "max_bytes": 2
+            },
+            "sourceSite": {
+              "present": 562,
+              "mean_bytes": 16.5,
+              "max_bytes": 21
+            },
+            "sourceType": {
+              "present": 1000,
+              "mean_bytes": 9.0,
+              "max_bytes": 9
+            },
+            "sourceVariantId": {
+              "present": 387,
+              "mean_bytes": 11.1,
+              "max_bytes": 14
+            },
+            "stock": {
+              "present": 1000,
+              "mean_bytes": 12.1,
+              "max_bytes": 17
+            },
+            "storageGb": {
+              "present": 1000,
+              "mean_bytes": 3.6,
+              "max_bytes": 4
+            },
+            "title": {
+              "present": 1000,
+              "mean_bytes": 89.0,
+              "max_bytes": 191
+            },
+            "url": {
+              "present": 1000,
+              "mean_bytes": 111.9,
+              "max_bytes": 176
+            },
+            "validationIssues": {
+              "present": 1000,
+              "mean_bytes": 2.0,
+              "max_bytes": 2
+            },
+            "validationStatus": {
+              "present": 1000,
+              "mean_bytes": 14.0,
+              "max_bytes": 14
+            },
+            "visibility": {
+              "present": 1000,
+              "mean_bytes": 8.0,
+              "max_bytes": 8
+            }
+          }
+        },
+        "price_decisions": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "version",
+            "operation_key",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "quote_revisions": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "version",
+            "operation_key",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "runs": {
+          "rows": 215,
+          "fields": [
+            "id",
+            "started_at",
+            "finished_at",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "sellers": {
+          "rows": 14,
+          "fields": [
+            "id",
+            "name",
+            "json"
+          ]
+        },
+        "source_runs": {
+          "rows": 1162,
+          "fields": [
+            "run_id",
+            "source_id",
+            "json"
+          ]
+        },
+        "sources": {
+          "rows": 14,
+          "fields": [
+            "id",
+            "seller_id",
+            "json"
+          ]
+        }
+      }
+    },
+    "shop": {
+      "bytes": 113426432,
+      "wal_bytes": 15882632,
+      "sqlite_version": "3.45.1",
+      "tables": {
+        "account_orders": {
+          "rows": 0,
+          "fields": [
+            "account_id",
+            "order_id",
+            "evidence"
+          ]
+        },
+        "account_sessions": {
+          "rows": 0,
+          "fields": [
+            "session_id",
+            "account_id"
+          ]
+        },
+        "account_tokens": {
+          "rows": 0,
+          "fields": [
+            "hash",
+            "email",
+            "kind",
+            "expires",
+            "used_at"
+          ]
+        },
+        "audit": {
+          "rows": 7989,
+          "fields": [
+            "id",
+            "actor",
+            "event",
+            "reference",
+            "at"
+          ]
+        },
+        "catalog_imports": {
+          "rows": 14,
+          "fields": [
+            "recommendation_key",
+            "product_id",
+            "managed"
+          ]
+        },
+        "checkouts": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "session_id",
+            "snapshot",
+            "expires"
+          ]
+        },
+        "costs": {
+          "rows": 4,
+          "fields": [
+            "order_id",
+            "amount_kopecks",
+            "status",
+            "source",
+            "direct_cost_kopecks",
+            "note",
+            "updated_at"
+          ]
+        },
+        "crm_imports": {
+          "rows": 1,
+          "fields": [
+            "id",
+            "channel",
+            "account_id",
+            "source_hash",
+            "started_at",
+            "completed_at",
+            "dialogs",
+            "messages",
+            "state"
+          ]
+        },
+        "crm_merges": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "source_id",
+            "target_id",
+            "actor",
+            "at",
+            "detail"
+          ]
+        },
+        "crm_profiles": {
+          "rows": 3860,
+          "fields": [
+            "customer_id",
+            "kind",
+            "suggested_segment",
+            "segment_basis",
+            "import_source",
+            "updated_at"
+          ]
+        },
+        "customer_accounts": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "email",
+            "password_hash",
+            "email_verified",
+            "created_at",
+            "phone"
+          ]
+        },
+        "customer_outbox": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "kind",
+            "destination",
+            "data",
+            "state",
+            "attempts",
+            "next_at",
+            "created_at",
+            "error"
+          ]
+        },
+        "customer_requests": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "account_id",
+            "order_id",
+            "body",
+            "state",
+            "created_at",
+            "reply",
+            "replied_at"
+          ]
+        },
+        "customers": {
+          "rows": 6951,
+          "fields": [
+            "id",
+            "name",
+            "phone",
+            "email",
+            "moysklad_id",
+            "segment",
+            "note",
+            "updated_at"
+          ]
+        },
+        "deal_documents": {
+          "rows": 0,
+          "fields": [
+            "deal_id",
+            "document_type",
+            "remote_id",
+            "linked_at"
+          ]
+        },
+        "deal_events": {
+          "rows": 4,
+          "fields": [
+            "id",
+            "deal_id",
+            "from_state",
+            "to_state",
+            "actor",
+            "at"
+          ]
+        },
+        "deals": {
+          "rows": 4,
+          "fields": [
+            "id",
+            "customer_id",
+            "order_id",
+            "title",
+            "state",
+            "responsible",
+            "next_at",
+            "lost_reason",
+            "note",
+            "revision",
+            "created_at",
+            "updated_at"
+          ]
+        },
+        "dialog_customers": {
+          "rows": 3860,
+          "fields": [
+            "dialog_id",
+            "customer_id"
+          ]
+        },
+        "fulfillment": {
+          "rows": 4,
+          "fields": [
+            "order_id",
+            "data",
+            "revision",
+            "updated_at"
+          ]
+        },
+        "inbox_accounts": {
+          "rows": 3,
+          "fields": [
+            "id",
+            "channel",
+            "remote_id",
+            "label",
+            "synced_at",
+            "state"
+          ]
+        },
+        "inbox_archives": {
+          "rows": 2628,
+          "fields": [
+            "dialog_id",
+            "import_id",
+            "through_at",
+            "message_count"
+          ]
+        },
+        "inbox_dialogs": {
+          "rows": 3860,
+          "fields": [
+            "id",
+            "account_id",
+            "remote_id",
+            "title",
+            "unread",
+            "updated_at",
+            "history_complete",
+            "history_offset",
+            "note",
+            "segment"
+          ]
+        },
+        "inbox_messages": {
+          "rows": 103829,
+          "fields": [
+            "id",
+            "dialog_id",
+            "remote_id",
+            "direction",
+            "body",
+            "kind",
+            "created_at"
+          ],
+          "text_bytes": 10189814
+        },
+        "inbox_outbox": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "dialog_id",
+            "body",
+            "state",
+            "remote_id",
+            "created_at",
+            "updated_at"
+          ]
+        },
+        "jobs": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "entity",
+            "entity_id",
+            "channel",
+            "revision",
+            "state",
+            "attempts",
+            "next_at",
+            "error"
+          ]
+        },
+        "legacy_order_sources": {
+          "rows": 4,
+          "fields": [
+            "order_id",
+            "source_hash",
+            "payload",
+            "imported_at"
+          ]
+        },
+        "limits": {
+          "rows": 1,
+          "fields": [
+            "key",
+            "count",
+            "expires"
+          ]
+        },
+        "ms_document_facts": {
+          "rows": 347,
+          "fields": [
+            "type",
+            "remote_id",
+            "counterparty_id",
+            "currency_id",
+            "amount_kopecks",
+            "applicable",
+            "moment",
+            "name"
+          ]
+        },
+        "ms_objects": {
+          "rows": 8682,
+          "fields": [
+            "type",
+            "remote_id",
+            "data",
+            "remote_updated",
+            "imported_at"
+          ],
+          "by_type": [
+            {
+              "type": "cashin",
+              "rows": 5,
+              "mean_bytes": 2916.6,
+              "max_bytes": 2919
+            },
+            {
+              "type": "counterparty",
+              "rows": 3089,
+              "mean_bytes": 2473.1,
+              "max_bytes": 3966
+            },
+            {
+              "type": "currency",
+              "rows": 7,
+              "mean_bytes": 745.6,
+              "max_bytes": 778
+            },
+            {
+              "type": "customerorder",
+              "rows": 302,
+              "mean_bytes": 4753.1,
+              "max_bytes": 6411
+            },
+            {
+              "type": "demand",
+              "rows": 345,
+              "mean_bytes": 4352.1,
+              "max_bytes": 5646
+            },
+            {
+              "type": "loss",
+              "rows": 2,
+              "mean_bytes": 3540.5,
+              "max_bytes": 3819
+            },
+            {
+              "type": "paymentin",
+              "rows": 380,
+              "mean_bytes": 3459.0,
+              "max_bytes": 3839
+            },
+            {
+              "type": "product",
+              "rows": 1674,
+              "mean_bytes": 5841.2,
+              "max_bytes": 12275
+            },
+            {
+              "type": "salesreturn",
+              "rows": 2,
+              "mean_bytes": 4090.5,
+              "max_bytes": 4386
+            },
+            {
+              "type": "stock",
+              "rows": 920,
+              "mean_bytes": 1390.3,
+              "max_bytes": 2244
+            },
+            {
+              "type": "supply",
+              "rows": 468,
+              "mean_bytes": 4322.1,
+              "max_bytes": 5850
+            },
+            {
+              "type": "variant",
+              "rows": 1488,
+              "mean_bytes": 2667.4,
+              "max_bytes": 7743
+            }
+          ]
+        },
+        "order_customers": {
+          "rows": 4,
+          "fields": [
+            "order_id",
+            "customer_id"
+          ]
+        },
+        "order_proposals": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "order_id",
+            "data",
+            "state",
+            "created_at",
+            "accepted_at"
+          ]
+        },
+        "orders": {
+          "rows": 4,
+          "fields": [
+            "id",
+            "checkout_id",
+            "session_id",
+            "fingerprint",
+            "data",
+            "state",
+            "note",
+            "created_at"
+          ]
+        },
+        "products": {
+          "rows": 14,
+          "fields": [
+            "id",
+            "draft",
+            "published",
+            "revision",
+            "updated_at"
+          ]
+        },
+        "publications": {
+          "rows": 0,
+          "fields": [
+            "entity",
+            "entity_id",
+            "channel",
+            "remote_id",
+            "revision",
+            "state",
+            "detail",
+            "updated_at"
+          ]
+        },
+        "recommendations": {
+          "rows": 673,
+          "fields": [
+            "key",
+            "data"
+          ]
+        },
+        "schema_migrations": {
+          "rows": 8,
+          "fields": [
+            "version",
+            "checksum",
+            "applied_at"
+          ]
+        },
+        "sessions": {
+          "rows": 602,
+          "fields": [
+            "id",
+            "csrf",
+            "cart",
+            "role",
+            "auth_until",
+            "expires"
+          ]
+        },
+        "settings": {
+          "rows": 13,
+          "fields": [
+            "key",
+            "value"
+          ]
+        },
+        "signed_nonces": {
+          "rows": 0,
+          "fields": [
+            "nonce",
+            "expires"
+          ]
+        },
+        "staff_sessions": {
+          "rows": 4,
+          "fields": [
+            "session_id",
+            "username"
+          ]
+        },
+        "sync_state": {
+          "rows": 19,
+          "fields": [
+            "channel",
+            "account_id",
+            "state",
+            "cursor",
+            "last_success",
+            "last_attempt",
+            "error"
+          ]
+        },
+        "tasks": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "customer_id",
+            "deal_id",
+            "title",
+            "responsible",
+            "due_at",
+            "state",
+            "created_at"
+          ]
+        },
+        "telegram_connection_versions": {
+          "rows": 1,
+          "fields": [
+            "connection_id",
+            "update_id"
+          ]
+        },
+        "telegram_connections": {
+          "rows": 1,
+          "fields": [
+            "id",
+            "account_id",
+            "user_id",
+            "enabled",
+            "can_reply",
+            "updated_at"
+          ]
+        },
+        "telegram_dialog_connections": {
+          "rows": 1,
+          "fields": [
+            "dialog_id",
+            "connection_id"
+          ]
+        },
+        "telegram_message_versions": {
+          "rows": 1,
+          "fields": [
+            "dialog_id",
+            "remote_id",
+            "update_id"
+          ]
+        },
+        "telegram_update_queue": {
+          "rows": 2,
+          "fields": [
+            "update_id",
+            "payload",
+            "state",
+            "attempts",
+            "next_at",
+            "error",
+            "received_at"
+          ]
+        },
+        "telegram_updates": {
+          "rows": 2,
+          "fields": [
+            "update_id",
+            "received_at"
+          ]
+        }
+      },
+      "quick_check": "ok",
+      "foreign_key_errors": 0
+    },
+    "orders": {
+      "bytes": 20480,
+      "wal_bytes": 0,
+      "sqlite_version": "3.45.1",
+      "tables": {
+        "orders": {
+          "rows": 5,
+          "fields": [
+            "id",
+            "request_key",
+            "fingerprint",
+            "payload",
+            "created_at",
+            "notified_at",
+            "attempts",
+            "next_attempt",
+            "last_error",
+            "lease_token",
+            "lease_until",
+            "notification_state"
+          ]
+        }
+      },
+      "quick_check": "ok",
+      "foreign_key_errors": 0
+    }
+  },
+  "dns": {
+    "macbookbro.ru": [
+      "135.106.220.39"
+    ],
+    "dev.macbookbro.ru": [
+      "135.106.220.39"
+    ],
+    "order.macbookbro.ru": [
+      "135.106.220.39"
+    ],
+    "crm.macbookbro.ru": [
+      "135.106.220.39"
+    ]
+  }
+}
