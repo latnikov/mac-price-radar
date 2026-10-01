@@ -1,0 +1,17 @@
+[Unit]
+Description=Independent MacBookBro service, worker and capacity monitor
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/macbookbro-ops/maintenance.py health
+TimeoutStartSec=90
+UMask=0077
+MemoryMax=96M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/macbookbro-ops

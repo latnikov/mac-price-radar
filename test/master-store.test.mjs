@@ -9,6 +9,15 @@ const at = '2026-09-16T10:00:00.000Z';
 const offer = (overrides = {}) => ({ retailer: 'Shop', externalId: 'p1', title: 'MacBook', url: 'https://example.com/mac', price: 99990, currency: 'RUB', fetchedAt: at, condition: 'unknown', ...overrides });
 function memory(t) { const store = openMasterStore(':memory:'); t.after(() => store.close()); return store; }
 
+test('normalized observations never synthesize a second raw copy; supplied evidence remains intact', t => {
+  const store = memory(t);
+  store.ingestRun({ runId: 'compact-input', observations: [offer()] });
+  assert.equal(Object.hasOwn(store.getOffers()[0], 'raw'), false);
+  const evidence = { document: 'supplier-original', differentPrice: 777 };
+  store.ingestRun({ runId: 'real-evidence', observations: [offer({ raw: evidence, fetchedAt: '2026-09-16T11:00:00Z' })] });
+  assert.deepEqual(store.getHistory(store.getOffers()[0].listingId)[0].raw, evidence);
+});
+
 test('summary preserves prices and failed-attempt evidence; revisions track writes from other connections', t => {
   const directory = mkdtempSync(join(tmpdir(), 'master-revision-'));
   const reader = openMasterStore(join(directory, 'master.sqlite'));

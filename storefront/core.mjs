@@ -128,10 +128,12 @@ export function openShopStore(path, { now = Date.now, recoverJobs = true } = {})
   function session(token) {
     let row = token && db.prepare('SELECT * FROM sessions WHERE id=? AND expires>?').get(hash(token),now());
     if (!row) { token = opaque(); row = { id:hash(token),csrf:opaque(),cart:'{}',role:null,auth_until:0,expires:now()+7*86400000 }; db.prepare('INSERT INTO sessions VALUES(?,?,?,?,?,?)').run(row.id,row.csrf,row.cart,null,0,row.expires); }
-    return { ...row, token, cart:parse(row.cart), role: row.auth_until > now() ? row.role : null };
+    const role = row.auth_until > now() ? row.role : null;
+    const username = role ? db.prepare('SELECT username FROM staff_sessions WHERE session_id=?').get(row.id)?.username : null;
+    return { ...row, token, cart:parse(row.cart), role, username, actor: username || role };
   }
-  function rotateSession(old, role) {
-    return tx(() => { const next = session(); db.prepare('UPDATE sessions SET role=?,auth_until=?,cart=? WHERE id=?').run(role,now()+2*3600000,JSON.stringify(old.cart),next.id); db.prepare('DELETE FROM sessions WHERE id=?').run(old.id); return { ...next,role,cart:old.cart }; });
+  function rotateSession(old, role, username = null) {
+    return tx(() => { const next = session(); db.prepare('UPDATE sessions SET role=?,auth_until=?,cart=? WHERE id=?').run(role,now()+2*3600000,JSON.stringify(old.cart),next.id); if(username)db.prepare('INSERT INTO staff_sessions VALUES(?,?)').run(next.id,username); db.prepare('DELETE FROM sessions WHERE id=?').run(old.id); return { ...next,role,username,actor:username||role,cart:old.cart }; });
   }
   function setCart(s, cart) { db.prepare('UPDATE sessions SET cart=? WHERE id=?').run(JSON.stringify(cart),s.id); s.cart=cart; }
   function cartLines(s) { return Object.entries(s.cart).map(([id,qty]) => { const p = publicProduct(product(id)); return { id,qty,title:p?.title || 'Предложение закрыто',priceRub:p?.priceRub ?? null,active:Boolean(p) }; }); }

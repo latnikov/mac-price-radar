@@ -1,0 +1,33 @@
+name: Platform checks
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm test
+      - run: npm run test:orders
+      - run: npm run test:shop
+      - run: npm run typecheck
+      - run: python3 -m unittest discover -s deploy/platform -p 'test_*.py'
+      - name: Reject secret files in the tracked release
+        run: |
+          if git ls-files | grep -E '(^|/)(\.env($|\.)|staff-users\.json$|[^/]*\.sqlite(-wal|-shm)?$)'; then
+            exit 1
+          fi

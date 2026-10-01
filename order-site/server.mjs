@@ -85,6 +85,8 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
   const deliveryReady = relayMode ? Boolean(env.ORDER_RELAY_KEY?.length >= 32 && env.ORDER_TELEGRAM_CHAT_ID) : telegramReady;
   const acceptingOrders = deliveryReady && env.ORDER_ACCEPTING === '1';
   const allowedOrigin = env.ORDER_ORIGIN || 'http://127.0.0.1:4180';
+  const basePath = env.ORDER_BASE_PATH || '';
+  if (basePath && !/^\/[a-z0-9-]+$/.test(basePath)) throw new Error('Invalid ORDER_BASE_PATH');
   const priceMaxAgeMs = env.ORDER_PRICE_MAX_AGE_MS === undefined ? 72 * 3600000 : Number(env.ORDER_PRICE_MAX_AGE_MS);
   if (!Number.isSafeInteger(priceMaxAgeMs) || priceMaxAgeMs < 0) throw new Error('ORDER_PRICE_MAX_AGE_MS must be a non-negative integer');
   const priceState = configuration => priceStatusForDate(pricingDate(configuration), now(), priceMaxAgeMs);
@@ -135,7 +137,9 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify(value)); };
     try {
       const url = new URL(req.url, 'http://localhost');
-      const path = url.pathname;
+      const relayPath = /^\/api\/relay\/(claim|ack|status)$/.test(url.pathname);
+      if(basePath && !url.pathname.startsWith(basePath + '/') && !relayPath && url.pathname!=='/healthz') throw fault(404, 'Страница не найдена.');
+      const path = basePath && url.pathname.startsWith(basePath + '/') ? url.pathname.slice(basePath.length) : url.pathname;
       if ((req.method === 'GET' || req.method === 'HEAD') && staticFiles.has(path)) {
         const asset = assets.get(path);
         sendRepresentation(req, res, asset, asset.type); return;

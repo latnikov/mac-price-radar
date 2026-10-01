@@ -10,7 +10,7 @@ export function createQuoteLoader({ fetchImpl = fetch, now = Date.now, ttlMs = 3
     const key = query.toString();
     const saved = cache.get(key);
     if (saved && saved.expiresAt > now()) return saved.data;
-    const response = await fetchImpl(`/api/quote?${query}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) });
+    const response = await fetchImpl(`api/quote?${query}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Не удалось рассчитать цену.');
     const priced = Number.isInteger(data.priceRub) && data.priceRub > 0;

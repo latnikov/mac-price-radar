@@ -22,26 +22,34 @@ import { inboxCustomerLink } from './retail-views.mjs';
 import { openCrmDesk } from './crm-desk.mjs';
 import { contactLinkView, deskView, deskSummary, contactDirectory } from './crm-desk-views.mjs';
 import { createTelegramBusinessCrm } from './telegram-business-crm.mjs';
+import { createStaffAuth } from './staff-auth.mjs';
+import { maintainShop } from './maintenance.mjs';
+import { syncLegacyOrders } from './legacy-orders.mjs';
+import { systemView } from './system-view.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const equal=(a,b)=>{const x=Buffer.from(String(a)),y=Buffer.from(String(b));return x.length===y.length&&timingSafeEqual(x,y);};
 const objectForm=form=>{const data={};for(const key of new Set(form.keys())) data[key]=key==='channels'?form.getAll(key):form.get(key);return data;};
-const tokenFrom=req=>String(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith('mb_session='))?.slice(11);
+const tokenFrom=(req,name='mb_session')=>String(req.headers.cookie||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='))?.slice(name.length+1);
 const textField=(v,n=80)=>String(v||'').slice(0,n);
 
 export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(root,'../data/private/storefront/shop.sqlite'),now=Date.now,fetchImpl=fetch,priceLoader,runWorkers=true}={}) {
   env={...env,STORE_MOYSKLAD_TOKEN:configuredSecret(env,'STORE_MOYSKLAD_TOKEN')};
   const origin=env.STORE_ORIGIN||'http://127.0.0.1:4190';
   const originUrl=new URL(origin);
+  const crmOrigin=env.STORE_CRM_ORIGIN||origin;
+  const crmUrl=new URL(crmOrigin);
+  if(!['http:','https:'].includes(crmUrl.protocol)||crmUrl.pathname!=='/')throw new Error('STORE_CRM_ORIGIN must be an origin');
   if(!['http:','https:'].includes(originUrl.protocol)||originUrl.pathname!=='/')throw new Error('STORE_ORIGIN must be an origin');
   const mediaDir=env.STORE_MEDIA_DIR||resolve(dirname(dbPath),'media');mkdirSync(mediaDir,{recursive:true,mode:0o700});
-  const store=openShopStore(dbPath,{now});
-  const inbox=openInbox(store);
+  const store=openShopStore(dbPath,{now,recoverJobs:runWorkers});
+  const inbox=openInbox(store,{recoverOutbox:runWorkers});
   const retail=openRetail(store);
   const desk=openCrmDesk(store,inbox,retail);
   desk.reconcileDialogs();
   const telegramCrm=createTelegramBusinessCrm(store,inbox,desk,{env,fetchImpl});
   const accounts=openAccounts(store,{env,fetchImpl,origin});
+  const staffAuth=createStaffAuth(env);
   const dataSync=createDataSync(store,inbox,{env,fetchImpl});
   const ingestTelegram=telegramIngest(store,dataSync,configuredSecret(env,'STORE_TELEGRAM_INGEST_TOKEN'));
   const avitoApis=new Map();
@@ -56,8 +64,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
     ?telegramCrm.send:d.channel==='avito'&&env.STORE_INBOX_SEND_ENABLED==='1'&&avitoApis.has(d.account_remote_id)
     ? async(dialog,body)=>avitoApis.get(dialog.account_remote_id).send(dialog.account_remote_id,dialog.remote_id,body) : null;
   const readPassword=(kind)=>env[`STORE_${kind}_PASSWORD_FILE`]?readFileSync(env[`STORE_${kind}_PASSWORD_FILE`],'utf8').trim():env[`STORE_${kind}_PASSWORD`]||'';
-  const ownerPassword=readPassword('ADMIN'),managerPassword=readPassword('MANAGER');
-  const proxySecret=env.STORE_PROXY_AUTH_TOKEN_FILE?readFileSync(env.STORE_PROXY_AUTH_TOKEN_FILE,'utf8').trim():env.STORE_PROXY_AUTH_TOKEN||'';
+  const ownerPassword=staffAuth.configured?'':readPassword('ADMIN'),managerPassword=staffAuth.configured?'':readPassword('MANAGER');
   if(ownerPassword&&ownerPassword.length<16)throw new Error('Administrator password must be at least 16 characters');
   if(managerPassword&&managerPassword.length<16)throw new Error('Manager password must be at least 16 characters');
   const loginSalt=store.setting('login_salt')||opaque();store.setSetting('login_salt',loginSalt);
@@ -65,6 +72,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
   const managerHash=managerPassword?scryptSync(managerPassword,loginSalt,32):null;
   const ipSalt=store.setting('ip_salt')||opaque();store.setSetting('ip_salt',ipSalt);
   const dispatcher=createDispatcher(store,{env,origin,fetchImpl});
+  const importLegacy=async()=>syncLegacyOrders(store,retail,env.STORE_LEGACY_ORDERS_DB);
   let refreshing=false;
   async function syncPrices(){
     if(refreshing)return;refreshing=true;
@@ -74,12 +82,18 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
     }catch{store.setSetting('price_sync',{ok:false,at:now(),message:'Не удалось обновить прайс dev. Сохранены исходные даты цен.'});store.reconcilePrices();}
     finally{refreshing=false;}
   }
-  function cookie(res,s){res.setHeader('Set-Cookie',`mb_session=${s.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${originUrl.protocol==='https:'?'; Secure':''}`);}
+  const staffDomain=env.STORE_STAFF_COOKIE_DOMAIN;
+  if(staffDomain&&(!/^[a-z0-9.-]+$/.test(staffDomain)||!originUrl.hostname.endsWith(staffDomain)||!crmUrl.hostname.endsWith(staffDomain)||originUrl.protocol!=='https:'))throw new Error('Invalid staff cookie domain');
+  function cookie(res,s){
+    const value=`mb_session=${s.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${originUrl.protocol==='https:'?'; Secure':''}`;
+    const employee=staffDomain&&s.username?`mb_staff_session=${s.token}; Domain=${staffDomain}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=7200`:null;
+    res.setHeader('Set-Cookie',employee?[value,employee]:value);
+  }
   function send(req,res,status,body,type='text/html; charset=utf-8'){
     let data=Buffer.from(body);
     res.setHeader('Content-Type',type);
     if(data.length>512&&/\bgzip\b/.test(req.headers['accept-encoding']||'')){data=gzipSync(data);res.setHeader('Content-Encoding','gzip');}
-    res.setHeader('Vary','Accept-Encoding');res.setHeader('Content-Length',data.length);res.writeHead(status);res.end(req.method==='HEAD'?undefined:data);
+    res.setHeader('Vary','Accept-Encoding, Cookie');res.setHeader('Content-Length',data.length);res.writeHead(status);res.end(req.method==='HEAD'?undefined:data);
   }
   const redirect=(res,path)=>{res.writeHead(303,{Location:path});res.end();};
   async function body(req,multipart=false){
@@ -90,18 +104,39 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
     if(!/^application\/x-www-form-urlencoded(?:;|$)/i.test(req.headers['content-type']||''))throw fail(415,'Нужна обычная форма сайта.');
     return objectForm(new URLSearchParams(buffer.toString()));
   }
+  const publicCatalogueCache=new Map();
+  let catalogueRevision;
+  function catalogueBody(url){
+    const q=textField(url.searchParams.get('q')),family=textField(url.searchParams.get('family'),10),category=textField(url.searchParams.get('category'),40),p=Math.max(1,Math.min(10000,Math.trunc(Number(url.searchParams.get('p')))||1));
+    const products=store.products(),all=products.map(store.publicProduct).filter(Boolean);
+    const selected=all.filter(o=>(!family||o.family===family)&&(!category||o.category===category)&&`${o.title} ${o.specification} ${o.configuration.color}`.toLowerCase().includes(q.toLowerCase()));
+    return {body:catalogue(selected.slice((p-1)*4,p*4),{q,category,family,p,total:selected.length,categories:[...new Set(all.map(p=>p.category))].slice(0,10)}),
+      expires:Math.min(now()+5000,...products.map(p=>p.published?.priceExpiresAt).filter(x=>x>now()))};
+  }
   const server=http.createServer(async(req,res)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('X-Frame-Options','DENY');
     res.setHeader('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
     let s,url;
     try{
-      if(req.headers.host!==originUrl.host)throw fail(400,'Неверный адрес сайта.');
-      url=new URL(req.url,origin);const path=url.pathname;
+      const requestOrigin=req.headers.host===crmUrl.host?crmOrigin:origin;
+      if(req.headers.host!==originUrl.host&&req.headers.host!==crmUrl.host)throw fail(400,'Неверный адрес сайта.');
+      url=new URL(req.url,requestOrigin);const path=url.pathname;
+      if(crmOrigin!==origin&&req.headers.host===crmUrl.host){
+        if(path==='/')return redirect(res,'/crm');
+        if(!path.startsWith('/crm')&&!path.startsWith('/media/')&&path!=='/healthz')throw fail(404,'Страница не найдена.');
+      }
       if(!['GET','HEAD','POST'].includes(req.method))throw fail(405,'Метод не поддерживается.');
       const peer=req.socket.remoteAddress||'';
       const trusted=env.STORE_TRUST_PROXY==='loopback'&&['127.0.0.1','::1','::ffff:127.0.0.1'].includes(peer);
       const ip=trusted?String(req.headers['x-forwarded-for']||peer).split(',').at(-1).trim():peer;
       const ipKey=createHmac('sha256',ipSalt).update(ip).digest('hex');
+      if(path==='/internal/staff-auth'){
+        if(!trusted||!staffDomain)throw fail(404,'Страница не найдена.');
+        const token=tokenFrom(req,'mb_staff_session');
+        const allowed=token&&store.db.prepare('SELECT 1 FROM sessions s JOIN staff_sessions f ON f.session_id=s.id WHERE s.id=? AND s.expires>? AND s.auth_until>? AND s.role IS NOT NULL').get(hash(token),now(),now());
+        if(allowed){res.writeHead(204);return res.end();}
+        return redirect(res,crmOrigin+'/crm/login?next=dev');
+      }
       if(path==='/internal/inbox/telegram'&&req.method==='POST')return await ingestTelegram(req,res);
       if(path==='/healthz'){store.db.prepare('SELECT 1').get();return send(req,res,200,'{"ok":true}','application/json');}
       // Separate feed access from browser budgets. Secrets are never written to access logs here.
@@ -121,16 +156,30 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
         return send(req,res,200,value,'application/xml; charset=utf-8');
       }
       if(!store.limit(`browse:${ipKey}`,Number(env.STORE_REQUESTS_PER_MINUTE)||90,60000)){res.setHeader('Retry-After','60');throw fail(429,'Слишком много запросов. Подождите минуту.');}
-      s=store.session(tokenFrom(req));s.ipKey=ipKey;cookie(res,s);
-      if(path.startsWith('/crm')&&trusted&&proxySecret.length>=32&&equal(req.headers['x-store-admin-key']||'',proxySecret)){
-        if(s.role!=='owner'){s=store.rotateSession(s,'owner');cookie(res,s);}
+      // Catalogue GETs have no form needing a secret. Anonymous visitors need no database session.
+      if((path==='/'||path==='/catalog')&&req.method!=='POST'&&!tokenFrom(req)){
+        const revision=store.db.prepare('PRAGMA data_version').get().data_version;
+        if(catalogueRevision!==revision){publicCatalogueCache.clear();catalogueRevision=revision;}
+        const key=hash(url.search);let saved=publicCatalogueCache.get(key);
+        if(!saved||saved.expires<=now()){
+          const value=catalogueBody(url),html=page('Компьютеры',value.body);
+          saved={html,expires:value.expires,etag:`W/"${hash(html)}"`};
+          if(publicCatalogueCache.size>=100)publicCatalogueCache.delete(publicCatalogueCache.keys().next().value);
+          publicCatalogueCache.set(key,saved);
+        }
+        res.setHeader('Cache-Control','public, max-age=0, must-revalidate');res.setHeader('ETag',saved.etag);res.setHeader('Vary','Accept-Encoding, Cookie');
+        if(req.headers['if-none-match']===saved.etag){res.writeHead(304);return res.end();}
+        return send(req,res,200,saved.html);
       }
+      const employeeToken=path.startsWith('/crm')?tokenFrom(req,'mb_staff_session'):null;
+      const employeeExists=employeeToken&&store.db.prepare('SELECT 1 FROM sessions WHERE id=? AND expires>?').get(hash(employeeToken),now());
+      s=store.session(employeeExists?employeeToken:tokenFrom(req));s.ipKey=ipKey;cookie(res,s);
       const cartCount=Object.values(s.cart).reduce((a,b)=>a+b,0);
       const render=(title,content,options={})=>send(req,res,options.status||200,page(title,content,{cart:cartCount,...options}));
-      const adminRender=(title,content,options={})=>render(title,content,{admin:true,role:s.role,...options});
+      const adminRender=(title,content,options={})=>render(title,content,{admin:true,role:s.role,username:s.username,shopOrigin:origin,...options});
       let form;
       if(req.method==='POST'){
-        if(req.headers.origin!==origin)throw fail(403,'Отправьте форму с сайта магазина.');
+        if(req.headers.origin!==requestOrigin)throw fail(403,'Отправьте форму с сайта магазина.');
         if(!store.limit(`write:${ipKey}`,30,60000))throw fail(429,'Подождите минуту перед повтором.');
         form=await body(req,/^multipart\/form-data/.test(req.headers['content-type']||''));
         if(!equal(form.csrf||'',s.csrf))throw fail(403,'Обновите страницу и повторите действие.');
@@ -139,18 +188,24 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
       if(path==='/crm/login'){
         if(req.method==='POST'){
           if(!store.limit(`login:${ipKey}`,8,15*60000))throw fail(429,'Слишком много попыток входа. Попробуйте через 15 минут.');
-          const supplied=scryptSync(textField(form.password,256),loginSalt,32);
-          const role=ownerHash&&timingSafeEqual(supplied,ownerHash)?'owner':managerHash&&timingSafeEqual(supplied,managerHash)?'manager':null;
-          if(!role)return render('Вход',loginForm(s),{status:401,notice:ownerHash?'Пароль не подошёл.':'Доступ CRM ещё не настроен на сервере.',error:true});
-          s=store.rotateSession(s,role);cookie(res,s);store.audit(role,'login','crm');return redirect(res,'/crm');
+          let user;
+          if(staffAuth.configured)user=await staffAuth.verify(form.username,form.password);
+          else {
+            const supplied=scryptSync(textField(form.password,256),loginSalt,32);
+            const role=ownerHash&&timingSafeEqual(supplied,ownerHash)?'owner':managerHash&&timingSafeEqual(supplied,managerHash)?'manager':null;
+            user=role?{role,username:null}:null;
+          }
+          if(!user)return render('Вход',loginForm(s,form.next),{auth:true,shopOrigin:origin,status:401,notice:staffAuth.configured||ownerHash||managerHash?'Имя пользователя или пароль не подошли.':'Доступ CRM ещё не настроен на сервере.',error:true});
+          s=store.rotateSession(s,user.role,user.username);cookie(res,s);store.audit(s.actor,'login','crm');return redirect(res,form.next==='dev'?'https://dev.macbookbro.ru/':'/crm');
         }
-        return render('Вход',loginForm(s));
+        return render('Вход',loginForm(s,url.searchParams.get('next')),{auth:true,shopOrigin:origin});
       }
       if(path.startsWith('/crm')){
         res.setHeader('X-Robots-Tag','noindex, nofollow');
         if(!s.role)return redirect(res,'/crm/login');
+        if(path==='/crm/system'&&req.method!=='POST')return adminRender('Состояние платформы',systemView(env,store));
         const deskWrite=/^\/crm\/desk\/[a-f0-9]{64}\/(customer|deal|remind|link)$/;
-        const managerWrite=/^\/crm\/(?:orders\/MB-[A-F0-9]{12}(?:\/(?:shipment|propose|accept))?|inbox\/[a-f0-9]{64}\/(?:profile|draft|send|link)|customers\/save|deals\/save|deals\/[a-f0-9-]{36}\/document|tasks\/save|tasks\/[a-f0-9-]{36}\/done|requests\/[a-f0-9-]{36}\/reply)$/;
+        const managerWrite=/^\/crm\/(?:orders\/MB-(?:[A-F0-9]{8}|[A-F0-9]{12})(?:\/(?:shipment|propose|accept))?|inbox\/[a-f0-9]{64}\/(?:profile|draft|send|link)|customers\/save|deals\/save|deals\/[a-f0-9-]{36}\/document|tasks\/save|tasks\/[a-f0-9-]{36}\/done|requests\/[a-f0-9-]{36}\/reply)$/;
         if(req.method==='POST'&&path!=='/crm/logout'&&!managerWrite.test(path)&&!deskWrite.test(path)&&s.role!=='owner')throw fail(403,'Действие доступно владельцу.');
         if(path==='/crm/desk/link'&&req.method!=='POST') return adminRender('Связь с клиентом',contactLinkView(desk,textField(url.searchParams.get('dialog'),64),{q:textField(url.searchParams.get('q'),100),offset:Math.max(0,Math.trunc(Number(url.searchParams.get('offset')))||0)},s));
         if(path==='/crm/desk'&&req.method!=='POST'){
@@ -164,14 +219,14 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
         const deskAction=path.match(deskWrite);
         if(deskAction&&req.method==='POST'){
           const id=desk.ensureCustomer(path.split('/')[3]),customer=retail.customer(id),action=deskAction[1];
-          if(action==='customer'){store.tx(()=>{retail.saveCustomer({id,segment:form.segment,note:form.note},s.role);desk.setKind(id,form.kind,s.role);});}
-          if(action==='deal')retail.saveDeal({customerId:id,title:form.title,state:'new'},s.role);
-          if(action==='remind')desk.remind(id,form,s.role);
-          if(action==='link')desk.linkContact(path.split('/')[3],form.customerId,s.role);
+          if(action==='customer'){store.tx(()=>{retail.saveCustomer({id,segment:form.segment,note:form.note},s.actor);desk.setKind(id,form.kind,s.actor);});}
+          if(action==='deal')retail.saveDeal({customerId:id,title:form.title,state:'new'},s.actor);
+          if(action==='remind')desk.remind(id,form,s.actor);
+          if(action==='link')desk.linkContact(path.split('/')[3],form.customerId,s.actor);
           return redirect(res,`/crm/desk?dialog=${path.split('/')[3]}`);
         }
         if(await retailRoutes({path,req,res,url,s,form,store,retail,desk,adminRender,redirect,sync:()=>background(dataSync.sync)}))return;
-        if(path==='/crm/logout'&&req.method==='POST'){store.db.prepare('UPDATE sessions SET role=NULL,auth_until=0 WHERE id=?').run(s.id);return redirect(res,'/');}
+        if(path==='/crm/logout'&&req.method==='POST'){store.audit(s.actor,'logout','crm');s=store.rotateSession(s,null);cookie(res,s);if(staffDomain)res.setHeader('Set-Cookie',[res.getHeader('Set-Cookie'),`mb_staff_session=; Domain=${staffDomain}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`]);return redirect(res,'/crm/login');}
         if(path==='/crm/inbox'&&req.method!=='POST')return adminRender('Переписка',inboxList(inbox,{
           q:textField(url.searchParams.get('q'),100),accountId:textField(url.searchParams.get('account'),64),
           unread:url.searchParams.get('unread')==='1',offset:Math.max(0,Number(url.searchParams.get('offset'))||0),
@@ -180,11 +235,11 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
         if(inboxPath){
           const d=inbox.dialog(inboxPath[1]);if(!d)throw fail(404,'Диалог не найден.');
           if(req.method==='POST'){
-            if(inboxPath[2]==='profile')inbox.edit(d.id,form,s.role);
-            else if(inboxPath[2]==='draft')inbox.draft(d.id,form.body,s.role);
+            if(inboxPath[2]==='profile')inbox.edit(d.id,form,s.actor);
+            else if(inboxPath[2]==='draft')inbox.draft(d.id,form.body,s.actor);
             else if(inboxPath[2]==='send'){
               if(!inbox.outgoing(d.id).some(m=>m.id===form.replyId))throw fail(404,'Ответ не найден в этом диалоге.');
-              await inbox.send(form.replyId,replyAdapter(d),s.role);
+              await inbox.send(form.replyId,replyAdapter(d),s.actor);
             }else throw fail(405,'Метод не поддерживается.');
             return redirect(res,`/crm/desk?dialog=${d.id}`);
           }
@@ -206,13 +261,13 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
         if(path==='/crm/products/save'&&req.method==='POST'){
           const escapedSize=['title','description','specification','warranty'].reduce((v,k)=>v+Buffer.byteLength(esc(form[k]||'')),0);
           if(escapedSize>6000)throw fail(400,'Сократите описание и характеристики: карточка должна загружаться быстро.');
-          const p=store.saveProduct(form,{id:form.id||undefined,actor:s.role,publish:form.action==='publish',expectedRevision:form.revision});
+          const p=store.saveProduct(form,{id:form.id||undefined,actor:s.actor,publish:form.action==='publish',expectedRevision:form.revision});
           return redirect(res,`/crm/products/${p.id}`);
         }
         const productPath=path.match(/^\/crm\/products\/([a-f0-9-]{36})(?:\/(photo|unpublish))?$/);
         if(productPath){
           const p=store.product(productPath[1]);if(!p)throw fail(404,'Товар не найден.');
-          if(productPath[2]==='unpublish'&&req.method==='POST'){store.unpublish(p.id,s.role);return redirect(res,`/crm/products/${p.id}`);}
+          if(productPath[2]==='unpublish'&&req.method==='POST'){store.unpublish(p.id,s.actor);return redirect(res,`/crm/products/${p.id}`);}
           if(productPath[2]==='photo'&&req.method==='POST'){
             if(p.draft.photos.length>=6)throw fail(400,'Допускается до шести фотографий.');
             if(!form.photo?.arrayBuffer)throw fail(400,'Выберите фотографию.');
@@ -220,7 +275,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
             const ext=data.subarray(0,3).equals(Buffer.from([255,216,255]))?'jpg':data.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))?'png':data.toString('ascii',0,4)==='RIFF'&&data.toString('ascii',8,12)==='WEBP'?'webp':null;
             if(!ext||data.length>5*1024*1024||data.length<32)throw fail(400,'Нужна фотография JPEG, PNG или WebP до 5 МБ.');
             const filename=`${hash(data)}.${ext}`;writeFileSync(resolve(mediaDir,filename),data,{mode:0o600});
-            store.addPhoto(p.id,filename,form.revision,s.role);
+            store.addPhoto(p.id,filename,form.revision,s.actor);
             return redirect(res,`/crm/products/${p.id}`);
           }
           if(!productPath[2]&&req.method!=='POST')return adminRender(p.draft.title,editor(p,allRecommendations(),s));
@@ -251,14 +306,14 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
             store.db.prepare('INSERT INTO publications VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(entity,entity_id,channel) DO UPDATE SET remote_id=excluded.remote_id,revision=excluded.revision,state=excluded.state,updated_at=excluded.updated_at').run(job.entity,job.entity_id,job.channel,remoteId,job.revision,'published',null,now());
             store.db.prepare("UPDATE jobs SET state='published',error=NULL WHERE id=?").run(job.id);
             store.db.prepare("UPDATE jobs SET state='queued',next_at=0,error=NULL WHERE entity=? AND entity_id=? AND channel=? AND state='blocked'").run(job.entity,job.entity_id,job.channel);
-            store.audit(s.role,'delivery_reconciled',String(job.id));
+            store.audit(s.actor,'delivery_reconciled',String(job.id));
           });return redirect(res,'/crm/channels');
         }
         const retry=path.match(/^\/crm\/jobs\/(\d+)\/retry$/);
         if(retry&&req.method==='POST'){
           const job=store.db.prepare('SELECT * FROM jobs WHERE id=?').get(Number(retry[1]));if(!job)throw fail(404,'Операция не найдена.');
           if(job.state==='unknown'&&form.confirmedAbsent!=='on')throw fail(409,'Проверьте площадку: публикация могла быть создана.');
-          store.db.prepare("UPDATE jobs SET state='queued',next_at=0,error=NULL WHERE id=?").run(job.id);store.audit(s.role,'delivery_retry',String(job.id));return redirect(res,'/crm/channels');
+          store.db.prepare("UPDATE jobs SET state='queued',next_at=0,error=NULL WHERE id=?").run(job.id);store.audit(s.actor,'delivery_retry',String(job.id));return redirect(res,'/crm/channels');
         }
         if(path==='/crm/channels'&&req.method!=='POST'){
           const jobs=store.db.prepare("SELECT * FROM jobs WHERE state<>'superseded' ORDER BY id DESC LIMIT 100").all();
@@ -293,10 +348,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
         throw fail(404,'Страница не найдена.');
       }
       if(path==='/'||path==='/catalog'){
-        const q=textField(url.searchParams.get('q')),family=textField(url.searchParams.get('family'),10),category=textField(url.searchParams.get('category'),40),p=Math.max(1,Math.min(10000,Math.trunc(Number(url.searchParams.get('p')))||1));
-        const all=store.products().map(store.publicProduct).filter(Boolean);
-        const selected=all.filter(o=>(!family||o.family===family)&&(!category||o.category===category)&&`${o.title} ${o.specification} ${o.configuration.color}`.toLowerCase().includes(q.toLowerCase()));
-        return render('Компьютеры',catalogue(selected.slice((p-1)*4,p*4),{q,category,family,p,total:selected.length,categories:[...new Set(all.map(p=>p.category))].slice(0,10)}));
+        return render('Компьютеры',catalogueBody(url).body);
       }
       const detail=path.match(/^\/p\/([a-f0-9-]{36})(\/photos)?$/);
       if(detail){const p=store.publicProduct(store.product(detail[1]));if(!p)throw fail(404,'Предложение закрыто. Посмотрите другие компьютеры в каталоге.');return render(p.title,detail[2]?`<h2>${esc(p.title)}</h2><p><a href="/p/${p.id}">← Вернуться к карточке</a></p>${p.photos.map(f=>`<p><img src="/media/${f}" alt="${esc(p.title)}"></p>`).join('')}`:productView(p,s));}
@@ -315,15 +367,16 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
     }
   });
   function allRecommendations(){return store.db.prepare('SELECT data FROM recommendations ORDER BY key').all().map(r=>JSON.parse(r.data)).sort((a,b)=>a.label.localeCompare(b.label,'ru',{numeric:true}));}
-  const loginForm=s=>`<h2>Вход для сотрудников</h2><form action="/crm/login" method="post">${csrf(s)}<label>Пароль<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><button class="primary">Войти</button></form>`;
-  const timers=[],pending=new Set();
-  const background=fn=>{const task=Promise.resolve().then(fn).catch(()=>{store.setSetting('worker_error',{at:now(),message:'Фоновое обновление не завершено. Проверьте обмен.'});}).finally(()=>pending.delete(task));pending.add(task);};
-  if(runWorkers){background(syncPrices);background(dataSync.sync);background(telegramCrm.poll);timers.push(setInterval(()=>background(telegramCrm.poll),5000));timers.push(setInterval(()=>background(async()=>desk.reconcileDialogs()),60000));timers.push(setInterval(()=>background(dataSync.sync),Math.max(60000,Number(env.STORE_DATA_SYNC_INTERVAL_MS)||60000)));timers.push(setInterval(()=>background(accounts.dispatchMail),15000));timers.push(setInterval(()=>background(syncPrices),Number(env.STORE_SYNC_INTERVAL_MS)||60000));timers.push(setInterval(()=>background(dispatcher.dispatch),15000));for(const t of timers)t.unref();}
+  const loginForm=(s,next)=>`<div class="auth"><h2>Вход для сотрудников</h2><form action="/crm/login" method="post">${csrf(s)}${next==='dev'?hidden('next','dev'):''}<label>Имя пользователя<input name="username" autocomplete="username" required maxlength="32" autofocus></label><label>Пароль<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><button class="primary">Войти</button></form></div>`;
+  const timers=[],pending=new Set(),running=new Set();
+  const background=fn=>{if(running.has(fn))return;running.add(fn);const task=Promise.resolve().then(fn).catch(()=>{store.setSetting('worker_error',{at:now(),message:'Фоновое обновление не завершено. Проверьте обмен.'});}).finally(()=>{pending.delete(task);running.delete(fn);});pending.add(task);};
+  if(runWorkers){background(importLegacy);timers.push(setInterval(()=>background(importLegacy),15000));background(syncPrices);background(dataSync.sync);background(telegramCrm.poll);background(async()=>maintainShop(store));timers.push(setInterval(()=>background(async()=>maintainShop(store)),3600000));timers.push(setInterval(()=>background(telegramCrm.poll),5000));timers.push(setInterval(()=>background(async()=>desk.reconcileDialogs()),60000));timers.push(setInterval(()=>background(dataSync.sync),Math.max(60000,Number(env.STORE_DATA_SYNC_INTERVAL_MS)||60000)));timers.push(setInterval(()=>background(accounts.dispatchMail),15000));timers.push(setInterval(()=>background(syncPrices),Number(env.STORE_SYNC_INTERVAL_MS)||60000));timers.push(setInterval(()=>background(dispatcher.dispatch),15000));for(const t of timers)t.unref();}
+  server.requestTimeout=15000;server.headersTimeout=10000;server.keepAliveTimeout=5000;
   return {server,store,inbox,retail,desk,telegramCrm,accounts,dataSync,origin,syncPrices,dispatch:dispatcher.dispatch,close:async()=>{for(const t of timers)clearInterval(t);await new Promise(r=>server.listening?server.close(r):r());await Promise.allSettled([...pending]);store.close();}};
 }
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
-  const service=createShopService();
+  const service=createShopService({runWorkers:process.env.STORE_RUN_WORKERS!=='0'});
   const port=Number(process.env.STORE_PORT)||4190;
   service.server.listen(port,'127.0.0.1',()=>console.log(`Магазин: ${service.origin} · CRM: ${service.origin}/crm`));
   for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{void service.close().then(()=>process.exit(0));});

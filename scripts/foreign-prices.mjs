@@ -138,11 +138,11 @@ export async function refreshForeignPrices({ fetchPage, root = '.', now = () => 
     }));
     if (failures.length) throw new Error(failures.join('; '));
     const unique = [...new Map(rows.map(row => [row.id, row])).values()].sort((a, b) => a.id.localeCompare(b.id));
-    snapshot = { state: 'ready', sourceUrl: GUIDE_URL, rateUrl: RATE_URL, attemptedAt, updatedAt: now(),
+    snapshot = { state: 'ready', transport: 'server-http', sourceUrl: GUIDE_URL, rateUrl: RATE_URL, attemptedAt, updatedAt: now(),
       googleRate, surcharge: 4, effectiveRate: Math.round((googleRate + 4) * 1e6) / 1e6,
       guides: guides.length, rows: convertForeignPrices(unique, googleRate), error: null };
   } catch (error) {
-    snapshot = { ...previous, state: 'error', attemptedAt, error: error.message };
+    snapshot = { ...previous, transport: 'server-http', state: 'error', attemptedAt, error: error.message };
   }
   await saveForeignPrices(snapshot, root);
   if (snapshot.state === 'error') throw new Error(snapshot.error);

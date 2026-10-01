@@ -1,0 +1,764 @@
+{
+  "at": "2026-10-01T02:41:11Z",
+  "cpu": 1,
+  "load": [
+    0.00830078125,
+    0.14990234375,
+    0.1162109375
+  ],
+  "disk": {
+    "total": 26338418688,
+    "free": 1607401472
+  },
+  "databases": {
+    "parser_dev": {
+      "bytes": 1628753920,
+      "wal_bytes": 164523992,
+      "sqlite_version": "3.45.1",
+      "tables": {
+        "audit": {
+          "rows": 225,
+          "fields": [
+            "seq",
+            "at",
+            "actor",
+            "reason",
+            "entity_type",
+            "entity_id",
+            "json"
+          ]
+        },
+        "calculations": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "listings": {
+          "rows": 2702,
+          "fields": [
+            "id",
+            "source_id",
+            "external_id",
+            "url",
+            "json"
+          ]
+        },
+        "metadata": {
+          "rows": 1,
+          "fields": [
+            "key",
+            "value"
+          ]
+        },
+        "observations": {
+          "rows": 344478,
+          "fields": [
+            "seq",
+            "id",
+            "run_id",
+            "listing_id",
+            "observed_at",
+            "received_at",
+            "rejected",
+            "json"
+          ],
+          "latest_day": [
+            "2026-10-01"
+          ],
+          "sample_bytes": [
+            4231.015,
+            1821.377
+          ]
+        },
+        "price_decisions": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "version",
+            "operation_key",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "quote_revisions": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "version",
+            "operation_key",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "runs": {
+          "rows": 225,
+          "fields": [
+            "id",
+            "started_at",
+            "finished_at",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "sellers": {
+          "rows": 17,
+          "fields": [
+            "id",
+            "name",
+            "json"
+          ]
+        },
+        "source_runs": {
+          "rows": 2339,
+          "fields": [
+            "run_id",
+            "source_id",
+            "json"
+          ]
+        },
+        "sources": {
+          "rows": 19,
+          "fields": [
+            "id",
+            "seller_id",
+            "json"
+          ]
+        }
+      }
+    },
+    "parser_legacy": {
+      "bytes": 2078552064,
+      "wal_bytes": 106415512,
+      "sqlite_version": "3.45.1",
+      "tables": {
+        "audit": {
+          "rows": 214,
+          "fields": [
+            "seq",
+            "at",
+            "actor",
+            "reason",
+            "entity_type",
+            "entity_id",
+            "json"
+          ]
+        },
+        "calculations": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "listings": {
+          "rows": 2242,
+          "fields": [
+            "id",
+            "source_id",
+            "external_id",
+            "url",
+            "json"
+          ]
+        },
+        "metadata": {
+          "rows": 1,
+          "fields": [
+            "key",
+            "value"
+          ]
+        },
+        "observations": {
+          "rows": 457539,
+          "fields": [
+            "seq",
+            "id",
+            "run_id",
+            "listing_id",
+            "observed_at",
+            "received_at",
+            "rejected",
+            "json"
+          ],
+          "latest_day": [
+            "2026-10-01"
+          ],
+          "sample_bytes": [
+            4228.88,
+            1813.656
+          ]
+        },
+        "price_decisions": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "version",
+            "operation_key",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "quote_revisions": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "version",
+            "operation_key",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "runs": {
+          "rows": 214,
+          "fields": [
+            "id",
+            "started_at",
+            "finished_at",
+            "payload_hash",
+            "json"
+          ]
+        },
+        "sellers": {
+          "rows": 14,
+          "fields": [
+            "id",
+            "name",
+            "json"
+          ]
+        },
+        "source_runs": {
+          "rows": 1148,
+          "fields": [
+            "run_id",
+            "source_id",
+            "json"
+          ]
+        },
+        "sources": {
+          "rows": 14,
+          "fields": [
+            "id",
+            "seller_id",
+            "json"
+          ]
+        }
+      }
+    },
+    "shop": {
+      "bytes": 112254976,
+      "wal_bytes": 5961672,
+      "sqlite_version": "3.45.1",
+      "tables": {
+        "account_orders": {
+          "rows": 0,
+          "fields": [
+            "account_id",
+            "order_id",
+            "evidence"
+          ]
+        },
+        "account_sessions": {
+          "rows": 0,
+          "fields": [
+            "session_id",
+            "account_id"
+          ]
+        },
+        "account_tokens": {
+          "rows": 0,
+          "fields": [
+            "hash",
+            "email",
+            "kind",
+            "expires",
+            "used_at"
+          ]
+        },
+        "audit": {
+          "rows": 7839,
+          "fields": [
+            "id",
+            "actor",
+            "event",
+            "reference",
+            "at"
+          ]
+        },
+        "catalog_imports": {
+          "rows": 14,
+          "fields": [
+            "recommendation_key",
+            "product_id",
+            "managed"
+          ]
+        },
+        "checkouts": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "session_id",
+            "snapshot",
+            "expires"
+          ]
+        },
+        "costs": {
+          "rows": 0,
+          "fields": [
+            "order_id",
+            "amount_kopecks",
+            "status",
+            "source",
+            "direct_cost_kopecks",
+            "note",
+            "updated_at"
+          ]
+        },
+        "crm_imports": {
+          "rows": 1,
+          "fields": [
+            "id",
+            "channel",
+            "account_id",
+            "source_hash",
+            "started_at",
+            "completed_at",
+            "dialogs",
+            "messages",
+            "state"
+          ]
+        },
+        "crm_merges": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "source_id",
+            "target_id",
+            "actor",
+            "at",
+            "detail"
+          ]
+        },
+        "crm_profiles": {
+          "rows": 3860,
+          "fields": [
+            "customer_id",
+            "kind",
+            "suggested_segment",
+            "segment_basis",
+            "import_source",
+            "updated_at"
+          ]
+        },
+        "customer_accounts": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "email",
+            "password_hash",
+            "email_verified",
+            "created_at",
+            "phone"
+          ]
+        },
+        "customer_outbox": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "kind",
+            "destination",
+            "data",
+            "state",
+            "attempts",
+            "next_at",
+            "created_at",
+            "error"
+          ]
+        },
+        "customer_requests": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "account_id",
+            "order_id",
+            "body",
+            "state",
+            "created_at",
+            "reply",
+            "replied_at"
+          ]
+        },
+        "customers": {
+          "rows": 6949,
+          "fields": [
+            "id",
+            "name",
+            "phone",
+            "email",
+            "moysklad_id",
+            "segment",
+            "note",
+            "updated_at"
+          ]
+        },
+        "deal_documents": {
+          "rows": 0,
+          "fields": [
+            "deal_id",
+            "document_type",
+            "remote_id",
+            "linked_at"
+          ]
+        },
+        "deal_events": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "deal_id",
+            "from_state",
+            "to_state",
+            "actor",
+            "at"
+          ]
+        },
+        "deals": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "customer_id",
+            "order_id",
+            "title",
+            "state",
+            "responsible",
+            "next_at",
+            "lost_reason",
+            "note",
+            "revision",
+            "created_at",
+            "updated_at"
+          ]
+        },
+        "dialog_customers": {
+          "rows": 3860,
+          "fields": [
+            "dialog_id",
+            "customer_id"
+          ]
+        },
+        "fulfillment": {
+          "rows": 0,
+          "fields": [
+            "order_id",
+            "data",
+            "revision",
+            "updated_at"
+          ]
+        },
+        "inbox_accounts": {
+          "rows": 3,
+          "fields": [
+            "id",
+            "channel",
+            "remote_id",
+            "label",
+            "synced_at",
+            "state"
+          ]
+        },
+        "inbox_archives": {
+          "rows": 2628,
+          "fields": [
+            "dialog_id",
+            "import_id",
+            "through_at",
+            "message_count"
+          ]
+        },
+        "inbox_dialogs": {
+          "rows": 3860,
+          "fields": [
+            "id",
+            "account_id",
+            "remote_id",
+            "title",
+            "unread",
+            "updated_at",
+            "history_complete",
+            "history_offset",
+            "note",
+            "segment"
+          ]
+        },
+        "inbox_messages": {
+          "rows": 103548,
+          "fields": [
+            "id",
+            "dialog_id",
+            "remote_id",
+            "direction",
+            "body",
+            "kind",
+            "created_at"
+          ],
+          "text_bytes": 10156181
+        },
+        "inbox_outbox": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "dialog_id",
+            "body",
+            "state",
+            "remote_id",
+            "created_at",
+            "updated_at"
+          ]
+        },
+        "jobs": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "entity",
+            "entity_id",
+            "channel",
+            "revision",
+            "state",
+            "attempts",
+            "next_at",
+            "error"
+          ]
+        },
+        "limits": {
+          "rows": 0,
+          "fields": [
+            "key",
+            "count",
+            "expires"
+          ]
+        },
+        "ms_objects": {
+          "rows": 8682,
+          "fields": [
+            "type",
+            "remote_id",
+            "data",
+            "remote_updated",
+            "imported_at"
+          ]
+        },
+        "order_customers": {
+          "rows": 0,
+          "fields": [
+            "order_id",
+            "customer_id"
+          ]
+        },
+        "order_proposals": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "order_id",
+            "data",
+            "state",
+            "created_at",
+            "accepted_at"
+          ]
+        },
+        "orders": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "checkout_id",
+            "session_id",
+            "fingerprint",
+            "data",
+            "state",
+            "note",
+            "created_at"
+          ]
+        },
+        "products": {
+          "rows": 14,
+          "fields": [
+            "id",
+            "draft",
+            "published",
+            "revision",
+            "updated_at"
+          ]
+        },
+        "publications": {
+          "rows": 0,
+          "fields": [
+            "entity",
+            "entity_id",
+            "channel",
+            "remote_id",
+            "revision",
+            "state",
+            "detail",
+            "updated_at"
+          ]
+        },
+        "recommendations": {
+          "rows": 673,
+          "fields": [
+            "key",
+            "data"
+          ]
+        },
+        "schema_migrations": {
+          "rows": 7,
+          "fields": [
+            "version",
+            "checksum",
+            "applied_at"
+          ]
+        },
+        "sessions": {
+          "rows": 514,
+          "fields": [
+            "id",
+            "csrf",
+            "cart",
+            "role",
+            "auth_until",
+            "expires"
+          ]
+        },
+        "settings": {
+          "rows": 8,
+          "fields": [
+            "key",
+            "value"
+          ]
+        },
+        "signed_nonces": {
+          "rows": 0,
+          "fields": [
+            "nonce",
+            "expires"
+          ]
+        },
+        "sync_state": {
+          "rows": 19,
+          "fields": [
+            "channel",
+            "account_id",
+            "state",
+            "cursor",
+            "last_success",
+            "last_attempt",
+            "error"
+          ]
+        },
+        "tasks": {
+          "rows": 0,
+          "fields": [
+            "id",
+            "customer_id",
+            "deal_id",
+            "title",
+            "responsible",
+            "due_at",
+            "state",
+            "created_at"
+          ]
+        },
+        "telegram_connection_versions": {
+          "rows": 1,
+          "fields": [
+            "connection_id",
+            "update_id"
+          ]
+        },
+        "telegram_connections": {
+          "rows": 1,
+          "fields": [
+            "id",
+            "account_id",
+            "user_id",
+            "enabled",
+            "can_reply",
+            "updated_at"
+          ]
+        },
+        "telegram_dialog_connections": {
+          "rows": 1,
+          "fields": [
+            "dialog_id",
+            "connection_id"
+          ]
+        },
+        "telegram_message_versions": {
+          "rows": 1,
+          "fields": [
+            "dialog_id",
+            "remote_id",
+            "update_id"
+          ]
+        },
+        "telegram_update_queue": {
+          "rows": 2,
+          "fields": [
+            "update_id",
+            "payload",
+            "state",
+            "attempts",
+            "next_at",
+            "error",
+            "received_at"
+          ]
+        },
+        "telegram_updates": {
+          "rows": 2,
+          "fields": [
+            "update_id",
+            "received_at"
+          ]
+        }
+      },
+      "quick_check": "ok",
+      "foreign_key_errors": 0
+    },
+    "orders": {
+      "bytes": 20480,
+      "wal_bytes": 0,
+      "sqlite_version": "3.45.1",
+      "tables": {
+        "orders": {
+          "rows": 5,
+          "fields": [
+            "id",
+            "request_key",
+            "fingerprint",
+            "payload",
+            "created_at",
+            "notified_at",
+            "attempts",
+            "next_attempt",
+            "last_error",
+            "lease_token",
+            "lease_until"
+          ]
+        }
+      },
+      "quick_check": "ok",
+      "foreign_key_errors": 0
+    }
+  },
+  "dns": {
+    "macbookbro.ru": [
+      "135.106.220.39"
+    ],
+    "dev.macbookbro.ru": [
+      "135.106.220.39"
+    ],
+    "order.macbookbro.ru": [
+      "135.106.220.39"
+    ],
+    "crm.macbookbro.ru": []
+  }
+}

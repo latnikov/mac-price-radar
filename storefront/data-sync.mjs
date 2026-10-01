@@ -2,11 +2,19 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { createAvitoInboxApi, avitoMessage } from './avito-inbox.mjs';
 import { normalizeAccountPhone } from './accounts.mjs';
+import { remoteId, saleTypes } from './crm-accounting.mjs';
 
 const msRoot = 'https://api.moysklad.ru/api/remap/1.2';
 export function configuredSecret(env, name) { return env[`${name}_FILE`] ? readFileSync(env[`${name}_FILE`], 'utf8').trim() : env[name] || ''; }
 export function createDataSync(store, inbox, { env = process.env, fetchImpl = fetch } = {}) {
   const { db, now, tx } = store;
+  const saveFact=db.prepare(`INSERT INTO ms_document_facts VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(type,remote_id) DO UPDATE SET
+    counterparty_id=excluded.counterparty_id,currency_id=excluded.currency_id,amount_kopecks=excluded.amount_kopecks,applicable=excluded.applicable,moment=excluded.moment,name=excluded.name`);
+  const fact=(type,row)=>{if(saleTypes.includes(type))saveFact.run(type,String(row.id),remoteId(row.agent),remoteId(row.rate?.currency),Number.isSafeInteger(row.sum)?row.sum:null,row.applicable===true?1:0,String(row.moment||''),String(row.name||''));};
+  if(!store.setting('ms_facts_backfilled'))tx(()=>{
+    for(const row of db.prepare("SELECT type,remote_id,data FROM ms_objects WHERE type IN ('demand','retaildemand','salesreturn','retailsalesreturn')").all())fact(row.type,{...JSON.parse(row.data),id:row.remote_id});
+    store.setSetting('ms_facts_backfilled',true);
+  });
   function status(channel, accountId, state, { cursor = null, error = null, success = false } = {}) {
     db.prepare(`INSERT INTO sync_state(channel,account_id,state,cursor,last_success,last_attempt,error) VALUES(?,?,?,?,?,?,?)
       ON CONFLICT(channel,account_id) DO UPDATE SET state=excluded.state,cursor=COALESCE(excluded.cursor,sync_state.cursor),last_success=COALESCE(excluded.last_success,sync_state.last_success),last_attempt=excluded.last_attempt,error=excluded.error`)
@@ -35,6 +43,7 @@ export function createDataSync(store, inbox, { env = process.env, fetchImpl = fe
         if (!row.id) throw new Error('МойСклад не передал идентификатор записи');
         db.prepare(`INSERT INTO ms_objects VALUES(?,?,?,?,?) ON CONFLICT(type,remote_id) DO UPDATE SET data=excluded.data,remote_updated=excluded.remote_updated,imported_at=excluded.imported_at`)
           .run(type, String(row.id), JSON.stringify(row), row.updated || null, now());
+        fact(type,row);
         if (type === 'counterparty') {
           const existing = db.prepare('SELECT id FROM customers WHERE moysklad_id=?').get(row.id);
           if (!existing) {

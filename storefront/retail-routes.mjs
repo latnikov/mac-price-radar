@@ -8,12 +8,12 @@ import { customerList, customerEditor, dealEditor, dealsList, tasksView, crmOrde
 export async function retailRoutes({ path, req, res, url, s, form, store, retail, desk, adminRender, redirect, sync }) {
   if (path === '/crm/products/import' && req.method === 'POST') {
     if (s.role !== 'owner') throw fail(403, 'Импорт доступен владельцу.');
-    importPriceCatalog(store, { publish: form.publish === 'on', actor: s.role });
+    importPriceCatalog(store, { publish: form.publish === 'on', actor: s.actor });
     store.setSetting('catalog_auto_import', form.publish === 'on');
     redirect(res, '/crm/products'); return true;
   }
   if (path === '/crm/customers' && req.method !== 'POST') { redirect(res, '/crm/contacts?' + url.searchParams); return true; }
-  if (path === '/crm/customers/save' && req.method === 'POST') { const c = retail.saveCustomer(form, s.role); redirect(res, `/crm/customers/${c.id}`); return true; }
+  if (path === '/crm/customers/save' && req.method === 'POST') { const c = retail.saveCustomer(form, s.actor); redirect(res, `/crm/customers/${c.id}`); return true; }
   if (path === '/crm/customers/new' && req.method !== 'POST') { adminRender('Новый клиент', customerEditor(null, [], [], s)); return true; }
   const customerPath = path.match(/^\/crm\/customers\/([a-f0-9-]{36})$/);
   if (customerPath && req.method !== 'POST') {
@@ -22,7 +22,7 @@ export async function retailRoutes({ path, req, res, url, s, form, store, retail
     adminRender('Клиент', customerEditor(c, retail.customerOrders(c.id), dialogs, s)); return true;
   }
   const link = path.match(/^\/crm\/inbox\/([a-f0-9]{64})\/link$/);
-  if (link && req.method === 'POST') { retail.linkDialog(link[1], form.customerId, s.role); redirect(res, `/crm/inbox/${link[1]}`); return true; }
+  if (link && req.method === 'POST') { retail.linkDialog(link[1], form.customerId, s.actor); redirect(res, `/crm/inbox/${link[1]}`); return true; }
   if (path === '/crm/deals' && req.method !== 'POST') {
     const state=Object.hasOwn(dealStates,url.searchParams.get('state'))?url.searchParams.get('state'):'',offset=Math.max(0,Math.trunc(Number(url.searchParams.get('offset')))||0),rows=retail.deals({state,offset});
     adminRender('Сделки', `<nav><a href="/crm/deals">Все этапы</a>${Object.entries(dealStates).map(([k,v])=>`<a href="?state=${k}"${state===k?' aria-current="page"':''}>${v}</a>`).join('')}</nav>`+dealsList(rows)+`<nav>${offset?`<a href="?state=${state}&offset=${Math.max(0,offset-50)}">← Назад</a>`:''}${rows.length===50?`<a href="?state=${state}&offset=${offset+50}">Дальше →</a>`:''}</nav>`); return true;
@@ -31,7 +31,7 @@ export async function retailRoutes({ path, req, res, url, s, form, store, retail
     const chosen=retail.customer(url.searchParams.get('customer')||''),q=String(url.searchParams.get('q')||'').slice(0,100);
     adminRender('Новая сделка',chosen?dealEditor(null,[chosen],s,chosen.id):`<h2>Выберите клиента сделки</h2><form><label>Имя, телефон или email<input name="q" value="${esc(q)}"></label><button>Найти</button></form>${retail.customers(q).map(c=>`<p><a href="?customer=${c.id}">${esc(c.name||c.phone||'Контакт')}</a> · ${c.moysklad_id?'МойСклад':'CRM'}</p>`).join('')}<p>Показаны первые 100 совпадений. Уточните поиск или <a href="/crm/contacts">выберите из общего списка</a>.</p>`); return true;
   }
-  if (path === '/crm/deals/save' && req.method === 'POST') { const id = retail.saveDeal(form, s.role); redirect(res, `/crm/deals/${id}`); return true; }
+  if (path === '/crm/deals/save' && req.method === 'POST') { const id = retail.saveDeal(form, s.actor); redirect(res, `/crm/deals/${id}`); return true; }
   const dealPath = path.match(/^\/crm\/deals\/([a-f0-9-]{36})$/);
   if (dealPath && req.method !== 'POST') {
     const d=store.db.prepare('SELECT * FROM deals WHERE id=?').get(dealPath[1]);if(!d)throw fail(404,'Сделка не найдена.');
@@ -43,7 +43,7 @@ export async function retailRoutes({ path, req, res, url, s, form, store, retail
     const d=store.db.prepare('SELECT * FROM deals WHERE id=?').get(dealDocument[1]);if(!d)throw fail(404,'Сделка не найдена.');
     const [type,id]=String(form.document||'').split(':'),found=desk.accounting(d.customer_id).documents?.some(x=>x.type===type&&x.id===id);
     if(!found)throw fail(400,'Нужен проведённый документ этого клиента.');
-    store.tx(()=>{if(store.db.prepare('SELECT 1 FROM deal_documents WHERE document_type=? AND remote_id=? AND deal_id<>?').get(type,id,d.id))throw fail(409,'Документ уже связан с другой сделкой.');store.db.prepare('INSERT OR IGNORE INTO deal_documents VALUES(?,?,?,?)').run(d.id,type,id,store.now());store.audit(s.role,'deal_document_linked',d.id);});
+    store.tx(()=>{if(store.db.prepare('SELECT 1 FROM deal_documents WHERE document_type=? AND remote_id=? AND deal_id<>?').get(type,id,d.id))throw fail(409,'Документ уже связан с другой сделкой.');store.db.prepare('INSERT OR IGNORE INTO deal_documents VALUES(?,?,?,?)').run(d.id,type,id,store.now());store.audit(s.actor,'deal_document_linked',d.id);});
     redirect(res,`/crm/deals/${d.id}`);return true;
   }
   const customerAccounting=path.match(/^\/crm\/customers\/([a-f0-9-]{36})\/accounting$/);
@@ -55,18 +55,18 @@ export async function retailRoutes({ path, req, res, url, s, form, store, retail
     const state=url.searchParams.get('state')==='done'?'done':'open',offset=Math.max(0,Math.trunc(Number(url.searchParams.get('offset')))||0),rows=retail.tasks({state,offset});
     adminRender('Задачи',`<nav><a href="?state=open">Открытые</a><a href="?state=done">Выполненные</a></nav>`+tasksView(rows,s)+`<nav>${offset?`<a href="?state=${state}&offset=${Math.max(0,offset-50)}">← Назад</a>`:''}${rows.length===50?`<a href="?state=${state}&offset=${offset+50}">Дальше →</a>`:''}</nav>`);return true;
   }
-  if (path === '/crm/tasks/save' && req.method === 'POST') { retail.saveTask(form, s.role); redirect(res, '/crm/tasks'); return true; }
+  if (path === '/crm/tasks/save' && req.method === 'POST') { retail.saveTask(form, s.actor); redirect(res, '/crm/tasks'); return true; }
   const taskPath = path.match(/^\/crm\/tasks\/([a-f0-9-]{36})\/done$/);
-  if (taskPath && req.method === 'POST') { retail.finishTask(taskPath[1], s.role); redirect(res, '/crm/tasks'); return true; }
-  const orderPath = path.match(/^\/crm\/orders\/(MB-[A-F0-9]{12})(?:\/(shipment|propose|accept|cost))?$/);
+  if (taskPath && req.method === 'POST') { retail.finishTask(taskPath[1], s.actor); redirect(res, '/crm/tasks'); return true; }
+  const orderPath = path.match(/^\/crm\/orders\/(MB-(?:[A-F0-9]{8}|[A-F0-9]{12}))(?:\/(shipment|propose|accept|cost))?$/);
   if (orderPath) {
     const o = store.db.prepare('SELECT * FROM orders WHERE id=?').get(orderPath[1]); if (!o) throw fail(404, 'Заказ не найден.');
     if (req.method === 'POST') {
-      if (orderPath[2] === 'shipment') retail.updateShipment(o.id, form, s.role);
-      else if (orderPath[2] === 'propose') retail.propose(o.id, form, s.role);
-      else if (orderPath[2] === 'accept') { const evidence = String(form.evidence || '').trim(); if (!evidence || evidence.length > 250) throw fail(400, 'Укажите основание подтверждения покупателем.'); retail.accept(o.id, form.proposalId, s.role, evidence); }
-      else if (orderPath[2] === 'cost') { if (s.role !== 'owner') throw fail(403, 'Финансовые данные доступны владельцу.'); retail.saveCost(o.id, form, s.role); }
-      else {if(['confirmed','fulfilling','completed'].includes(form.state)&&retail.fulfillment(o.id).data.state==='pending')throw fail(409,'Сначала согласуйте доставку с покупателем.');store.updateOrder(o.id, form.state, String(form.note || ''), s.role);}
+      if (orderPath[2] === 'shipment') retail.updateShipment(o.id, form, s.actor);
+      else if (orderPath[2] === 'propose') retail.propose(o.id, form, s.actor);
+      else if (orderPath[2] === 'accept') { const evidence = String(form.evidence || '').trim(); if (!evidence || evidence.length > 250) throw fail(400, 'Укажите основание подтверждения покупателем.'); retail.accept(o.id, form.proposalId, s.actor, evidence); }
+      else if (orderPath[2] === 'cost') { if (s.role !== 'owner') throw fail(403, 'Финансовые данные доступны владельцу.'); retail.saveCost(o.id, form, s.actor); }
+      else {if(['confirmed','fulfilling','completed'].includes(form.state)&&retail.fulfillment(o.id).data.state==='pending')throw fail(409,'Сначала согласуйте доставку с покупателем.');store.updateOrder(o.id, form.state, String(form.note || ''), s.actor);}
       redirect(res, `/crm/orders/${o.id}`);
     } else if (!orderPath[2]) adminRender(o.id, crmOrderView(o, retail.orderData(o), retail, s));
     else throw fail(405, 'Метод не поддерживается.');
@@ -86,7 +86,7 @@ export async function retailRoutes({ path, req, res, url, s, form, store, retail
   if(requestPath&&req.method==='POST'){
     const reply=String(form.reply||'').trim();if(!reply||reply.length>2000)throw fail(400,'Ответ должен содержать от 1 до 2000 символов.');
     if(!store.db.prepare("UPDATE customer_requests SET reply=?,replied_at=?,state='done' WHERE id=?").run(reply,store.now(),requestPath[1]).changes)throw fail(404,'Обращение не найдено.');
-    store.audit(s.role,'customer_request_replied',requestPath[1]);redirect(res,'/crm/requests');return true;
+    store.audit(s.actor,'customer_request_replied',requestPath[1]);redirect(res,'/crm/requests');return true;
   }
   if (path === '/crm/requests' && req.method !== 'POST') {
     const rows = store.db.prepare('SELECT r.*,a.email FROM customer_requests r JOIN customer_accounts a ON a.id=r.account_id ORDER BY r.created_at DESC LIMIT 100').all();

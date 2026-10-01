@@ -25,8 +25,8 @@ GitHub хранит историю исходного кода: [latnikov/mac-pr
 | Сайт | Назначение | Папка на сервере | Служба |
 | --- | --- | --- | --- |
 | `dev.macbookbro.ru` | Парсер и таблица цен | `/srv/mac-price-radar/dev` | `mac-price-radar@dev` |
-| `macbookbro.ru` | Витрина и CRM | `/srv/macbookbro-shop` | `macbookbro-shop` |
-| `order.macbookbro.ru` | Сайт заказов | `/srv/macbookbro-orders` | `macbookbro-orders` |
+| `macbookbro.ru` | Витрина; CRM на crm.macbookbro.ru | `/srv/macbookbro-shop` | `macbookbro-shop` |
+| `macbookbro.ru/order/` | Форма заказов (старый домен перенаправляет) | `/srv/macbookbro-orders` | `macbookbro-orders` |
 
 `git push` отправляет код в GitHub. Для работающего сайта требуется ещё установить этот код на сервере и проверить результат. По твоему правилу «залей» означает весь цикл: проверка → коммит → пуш → публикация в нужном окружении → проверка сайта.
 
@@ -35,10 +35,10 @@ GitHub хранит историю исходного кода: [latnikov/mac-pr
 После подключения узнать, работают ли приложения:
 
 ```sh
-systemctl is-active mac-price-radar@dev macbookbro-shop macbookbro-orders caddy
+systemctl is-active mac-price-radar@dev macbookbro-shop macbookbro-worker macbookbro-orders caddy
 ```
 
-Четыре ответа `active` означают, что все службы запущены. Подробности по парсеру:
+Пять ответов `active` означают, что все службы запущены. Подробности по парсеру:
 
 ```sh
 systemctl status mac-price-radar@dev --no-pager
@@ -80,3 +80,5 @@ sftp macbookbro
 ```
 
 Внутри него `ls` показывает удалённые файлы, `get имя-файла` скачивает файл в текущую папку Mac, `exit` закрывает соединение. Изменения кода лучше проводить через полный цикл «залей», чтобы сервер и GitHub оставались согласованы.
+
+Полная актуальная схема служб, очистки, данных и восстановления: [инфраструктура платформы](platform-infrastructure.md).

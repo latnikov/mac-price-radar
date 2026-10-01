@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily verified MacBookBro backup
+
+[Timer]
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=5min
+Persistent=true
+Unit=macbookbro-backup.service
+
+[Install]
+WantedBy=timers.target

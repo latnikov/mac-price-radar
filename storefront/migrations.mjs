@@ -57,6 +57,19 @@ const migrations = [
     CREATE TABLE telegram_connection_versions(connection_id TEXT PRIMARY KEY,update_id INTEGER NOT NULL);
     CREATE UNIQUE INDEX deal_document_once ON deal_documents(document_type,remote_id);
   ` },
+  { version: 8, sql: `
+    CREATE TABLE staff_sessions(session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,username TEXT NOT NULL);
+    CREATE TABLE legacy_order_sources(order_id TEXT PRIMARY KEY REFERENCES orders(id),source_hash TEXT NOT NULL,payload TEXT NOT NULL,imported_at INTEGER NOT NULL);
+    CREATE TABLE ms_document_facts(type TEXT NOT NULL,remote_id TEXT NOT NULL,counterparty_id TEXT,currency_id TEXT,amount_kopecks INTEGER,applicable INTEGER NOT NULL,moment TEXT NOT NULL,name TEXT,PRIMARY KEY(type,remote_id),FOREIGN KEY(type,remote_id) REFERENCES ms_objects(type,remote_id) ON DELETE CASCADE);
+    CREATE INDEX ms_facts_customer ON ms_document_facts(counterparty_id,applicable,moment DESC);
+    CREATE INDEX ms_facts_period ON ms_document_facts(applicable,moment DESC);
+    CREATE INDEX sessions_expiry ON sessions(expires);
+    CREATE INDEX checkouts_expiry ON checkouts(expires);
+    CREATE INDEX limits_expiry ON limits(expires);
+    CREATE INDEX audit_time ON audit(at);
+    CREATE INDEX deals_customer ON deals(customer_id,state);
+    CREATE INDEX telegram_queue_received ON telegram_update_queue(state,received_at);
+  ` },
 ];
 
 export function migrateShop(db, now = Date.now()) {

@@ -93,12 +93,7 @@ try {
     networkBySource.set(retailer, metrics);
     const out = [], failures = [];
     if (retailer === FOREIGN_SOURCE) {
-      const { refreshForeignPrices, readForeignPrices } = await import('./foreign-prices.mjs');
-      const saved = await readForeignPrices();
-      if (saved.transport === 'mac-browser') {
-        await writeFile('data/private/foreign-request.json', JSON.stringify({ requestedAt: new Date().toISOString() }), { mode: 0o600 });
-        return { foreign: true, offers: [], counts: { published: saved.rows.length, guides: saved.guides, awaitingMac: true } };
-      }
+      const { refreshForeignPrices } = await import('./foreign-prices.mjs');
       const snapshot = await refreshForeignPrices({ fetchPage });
       return { foreign: true, offers: [], counts: { published: snapshot.rows.length, guides: snapshot.guides } };
     }

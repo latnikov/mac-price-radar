@@ -6,13 +6,13 @@
   <title>Макбучная — Mac, Google Pixel и другие товары на заказ</title>
   <meta name="description" content="Mac mini, Mac Studio, актуальная линейка Google Pixel и другие товары Макбучной. Выберите товар, узнайте цену и оставьте заявку. Нижний Новгород.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%237200cb'/%3E%3Ctext x='4' y='25' font-family='serif' font-weight='bold' font-size='28' fill='%23ffff00'%3EМ%3C/text%3E%3C/svg%3E">
-  <link rel="stylesheet" href="/style.css">
-  <link rel="modulepreload" href="/catalog.mjs">
-  <link rel="modulepreload" href="/quote-client.mjs">
-  <script type="module" src="/app.js"></script>
+  <link rel="stylesheet" href="./style.css">
+  <link rel="modulepreload" href="./catalog.mjs">
+  <link rel="modulepreload" href="./quote-client.mjs">
+  <script type="module" src="./app.js"></script>
 </head>
 <body>
-  <header>
+  <header><nav aria-label="Магазин"><a href="https://macbookbro.ru/">← Каталог MacBook</a></nav>
     <p class="welcome">Добро пожаловать в</p>
     <h1>Макбучную!</h1>
     <p class="city">Техника на заказ · Нижний Новгород</p>
@@ -99,7 +99,7 @@
         <label for="customer-name">Как вас зовут <span>(необязательно)</span></label>
         <input id="customer-name" name="name" autocomplete="name" maxlength="100" placeholder="Имя или ФИО">
         <div class="trap" aria-hidden="true"><label for="website">Ваш сайт</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
-        <label class="consent"><input id="consent" name="consent" type="checkbox" required> <span>Согласен на обработку имени и телефона для связи по этой заявке. <a href="/privacy.html" target="_blank">Подробнее</a></span></label>
+        <label class="consent"><input id="consent" name="consent" type="checkbox" required> <span>Согласен на обработку имени и телефона для связи по этой заявке. <a href="./privacy.html" target="_blank">Подробнее</a></span></label>
         <p id="form-error" role="alert" hidden></p>
         <p id="availability" role="status"></p>
         <button class="primary" id="submit-order" type="submit">Отправить заявку</button>
@@ -122,7 +122,7 @@
     <div class="divider" aria-hidden="true"></div>
     <p><b>Макбучная</b> · Нижний Новгород</p>
     <p class="badges"><span>MADE WITH ♥ &amp; HTML</span> <span>MAC + PIXEL</span></p>
-    <p class="small">Предварительные цены по прайсу; для товаров без цены — расчёт по заявке. Mac: 24.09.2026. Pixel: 27.09.2026. <a href="/privacy.html">Обработка данных</a></p>
+    <p class="small">Предварительные цены по прайсу; для товаров без цены — расчёт по заявке. Mac: 24.09.2026. Pixel: 27.09.2026. <a href="./privacy.html">Обработка данных</a></p>
   </footer>
 </body>
 </html>

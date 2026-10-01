@@ -256,7 +256,7 @@ $('configuration').addEventListener('submit', async e => {
   $('availability').textContent = '';
   $('submit-order').disabled = true;
   try {
-    const response = await fetch('/api/status', { signal: AbortSignal.timeout(10000) });
+    const response = await fetch('api/status', { signal: AbortSignal.timeout(10000) });
     if (!response.ok) throw new Error('Status unavailable');
     const status = await response.json();
     if (!status.acceptingOrders) $('availability').textContent = 'Форма пока в режиме просмотра: приём заявок ещё не подключён.';
@@ -283,7 +283,7 @@ $('order').addEventListener('submit', async e => {
   sending = true; $('submit-order').disabled = true; $('back').disabled = true;
   $('submit-order').textContent = 'Отправляем…'; $('form-error').hidden = true;
   try {
-    const response = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestId }, body: fingerprint, signal: AbortSignal.timeout(20000) });
+    const response = await fetch('api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': requestId }, body: fingerprint, signal: AbortSignal.timeout(20000) });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Не удалось отправить заявку. Попробуйте ещё раз.');
     $('order-number').textContent = data.orderId;

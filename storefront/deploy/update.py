@@ -118,4 +118,6 @@ except Exception:
             os.chown(candidate, owner.st_uid, owner.st_gid)
     subprocess.run(['systemctl', 'start', 'macbookbro-shop'], check=True)
     raise SystemExit('Update failed; previous code restored, order data retained')
+if os.environ.get('MACBOOKBRO_PLATFORM_UPDATE') == '1':
+    (backup / '.platform-managed').write_text('Completed platform deployment; managed rollback retention.\n')
 print('Storefront updated. Private backup: ' + str(backup))

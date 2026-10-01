@@ -15,19 +15,19 @@ export function currencyAmount(store, document) {
     rubKopecks: rub && Number.isSafeInteger(document.sum) ? document.sum : null };
 }
 export function accountingEvidence(store, counterpartyId = null) {
-  const rows = store.db.prepare(`SELECT type,remote_id,data FROM ms_objects WHERE type IN ('demand','retaildemand','salesreturn','retailsalesreturn')
-    AND json_extract(data,'$.applicable')=1 AND json_extract(data,'$.moment')>='2026-01-01 00:00:00'
-    ORDER BY json_extract(data,'$.moment') DESC,remote_id`).all();
+  const rows = store.db.prepare(`SELECT f.*,json_extract(c.data,'$.isoCode') AS currency_code FROM ms_document_facts f
+    LEFT JOIN ms_objects c ON c.type='currency' AND c.remote_id=f.currency_id
+    WHERE f.applicable=1 AND f.moment>='2026-01-01 00:00:00' ${counterpartyId?'AND f.counterparty_id=?':''}
+    ORDER BY f.moment DESC,f.remote_id`).all(...(counterpartyId?[counterpartyId]:[]));
   let sales = 0, returns = 0, knownRubKopecks = 0, unknown = 0;
   const documents = [];
   for (const row of rows) {
-    const d = JSON.parse(row.data);
-    if (counterpartyId && remoteId(d.agent) !== counterpartyId) continue;
-    const amount = currencyAmount(store, d), returned = row.type.includes('return');
+    const isRub=['RUB','643'].includes(String(row.currency_code||'').toUpperCase());
+    const amount={code:isRub?'RUB':row.currency_code||'валюта не получена',amount:row.amount_kopecks,rubKopecks:isRub?row.amount_kopecks:null}, returned = row.type.includes('return');
     returned ? returns++ : sales++;
     if (amount.rubKopecks === null) unknown++;
     else knownRubKopecks += (returned ? -1 : 1) * amount.rubKopecks;
-    documents.push({ type: row.type, id: row.remote_id, name: d.name, moment: d.moment, ...amount });
+    documents.push({ type: row.type, id: row.remote_id, name: row.name, moment: row.moment, ...amount });
   }
   const states = saleTypes.map(t => store.db.prepare('SELECT state,last_success FROM sync_state WHERE channel=?').get('МойСклад · ' + t));
   const complete = states.every(s => s?.state === 'ready');

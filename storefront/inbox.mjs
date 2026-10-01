@@ -16,6 +16,7 @@ export function openInbox(store, { recoverOutbox = true } = {}) {
       direction TEXT NOT NULL, body TEXT NOT NULL, kind TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(dialog_id,remote_id));
     CREATE INDEX IF NOT EXISTS inbox_message_history ON inbox_messages(dialog_id,created_at,id);
     CREATE INDEX IF NOT EXISTS inbox_dialog_recent ON inbox_dialogs(updated_at DESC,id);
+    CREATE INDEX IF NOT EXISTS inbox_account_recent ON inbox_dialogs(account_id,updated_at DESC,id);
     CREATE TABLE IF NOT EXISTS inbox_outbox(id TEXT PRIMARY KEY, dialog_id TEXT NOT NULL, body TEXT NOT NULL,
       state TEXT NOT NULL DEFAULT 'draft', remote_id TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
   `);
