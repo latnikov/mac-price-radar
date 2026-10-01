@@ -24,7 +24,11 @@ class OperationsTests(unittest.TestCase):
                 db.executescript('PRAGMA journal_mode=WAL; CREATE TABLE orders(id TEXT PRIMARY KEY,data TEXT); INSERT INTO orders VALUES("accepted","original-price");')
             state = directory / 'state'
             state.mkdir()
-            config = {'backup_dir': str(directory / 'backups'), 'databases': {'shop': str(source)}, 'backup_generations': 2, 'backup_max_bytes': 10000000}
+            configuration = directory / 'configuration'
+            configuration.mkdir()
+            (configuration / 'service.conf').write_text('private configuration')
+            (configuration / 'obsolete-unit').symlink_to(configuration / 'removed-unit')
+            config = {'backup_dir': str(directory / 'backups'), 'databases': {'shop': str(source)}, 'backup_generations': 2, 'backup_max_bytes': 10000000, 'configuration': [str(configuration)]}
             with patch.object(ops, 'STATE', state):
                 for stamp in ['20261001T010000Z','20261001T020000Z','20261001T030000Z']:
                     with patch.object(ops.time, 'strftime', return_value=stamp):
@@ -33,6 +37,8 @@ class OperationsTests(unittest.TestCase):
                 self.assertEqual(len(backups), 2)
                 restored = directory / 'restored'
                 ops.verify_archive(backups[-1], restored)
+                self.assertEqual((restored / 'configuration/0-configuration/service.conf').read_text(), 'private configuration')
+                self.assertFalse((restored / 'configuration/0-configuration/obsolete-unit').exists())
                 with sqlite3.connect(restored / 'shop.sqlite') as db:
                     self.assertEqual(db.execute('SELECT data FROM orders').fetchone()[0], 'original-price')
                 with sqlite3.connect(source) as db:

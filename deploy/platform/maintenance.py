@@ -144,7 +144,7 @@ def backup(config):
                 target = work / group / (str(index) + '-' + source.name)
                 target.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
                 if source.is_dir():
-                    shutil.copytree(source, target)
+                    shutil.copytree(source, target, ignore_dangling_symlinks=True)
                 else:
                     shutil.copy2(source, target)
         for path in work.rglob('*'):
