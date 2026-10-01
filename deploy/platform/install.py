@@ -245,7 +245,7 @@ order.macbookbro.ru {
         run('systemctl', 'enable', '--now', 'macbookbro-worker', 'macbookbro-backup.timer', 'macbookbro-health.timer')
         # A single price database now serves every browser and the shop worker.
         run('systemctl', 'disable', '--now', 'mac-price-radar-backup.timer', 'mac-price-radar@prod')
-        run('systemctl', 'reset-failed', 'mac-price-radar-backup')
+        subprocess.run(['systemctl', 'reset-failed', 'mac-price-radar-backup'], check=False, stderr=subprocess.DEVNULL)
         run('systemctl', 'reload', 'caddy')
         run('systemctl', 'reload', 'ssh')
         run('systemctl', 'restart', 'systemd-journald')
