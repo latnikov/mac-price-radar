@@ -74,6 +74,23 @@ class OperationsTests(unittest.TestCase):
             self.assertEqual(json.loads(db.execute('SELECT json FROM observations WHERE seq=2').fetchone()[0]), values[1])
             with self.assertRaisesRegex(sqlite3.IntegrityError, 'append only'):
                 db.execute('UPDATE observations SET json="{}" WHERE seq=1')
+            db.rollback()
+            db.execute('INSERT INTO observations VALUES(3,?)', (json.dumps(values[0]),))
+            db.commit()
+            db.close()
+            original_connect = sqlite3.connect
+            class InterruptedConnection(sqlite3.Connection):
+                def execute(self, sql, *args):
+                    result = super().execute(sql, *args)
+                    if sql.startswith('DROP TRIGGER'):
+                        raise RuntimeError('interrupted schema update')
+                    return result
+            with patch.object(compact.sqlite3, 'connect', side_effect=lambda *args, **kwargs: original_connect(*args, **kwargs, factory=InterruptedConnection)):
+                with self.assertRaisesRegex(RuntimeError, 'interrupted'):
+                    compact.compact(path)
+            db = sqlite3.connect(path)
+            self.assertIsNotNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='observations_no_update'").fetchone())
+            self.assertEqual(json.loads(db.execute('SELECT json FROM observations WHERE seq=3').fetchone()[0]), values[0])
             db.close()
 
     def test_rollback_rotation_never_touches_unmanaged_backups(self):

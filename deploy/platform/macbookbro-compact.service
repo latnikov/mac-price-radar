@@ -4,6 +4,7 @@ Description=Explicit offline compaction of redundant historical price JSON
 [Service]
 Type=oneshot
 ExecStart=/usr/bin/python3 /usr/local/lib/macbookbro-ops/compact.py --manage-services
+ExecStopPost=/usr/bin/systemctl start mac-price-radar@dev.service mac-price-radar-collect.timer mac-price-radar-apify.timer
 TimeoutStartSec=40min
 UMask=0077
 Nice=10

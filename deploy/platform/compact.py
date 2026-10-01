@@ -34,31 +34,33 @@ def compact(path):
             raise RuntimeError('Expected append-only trigger is missing')
         last = 0
         changed = 0
-        db.execute('DROP TRIGGER observations_no_update')
-        db.commit()
-        try:
-            while True:
-                rows = db.execute('SELECT seq,json FROM observations WHERE seq>? ORDER BY seq LIMIT 2000', (last,)).fetchall()
-                if not rows:
-                    break
-                updates = []
-                for seq, encoded in rows:
-                    value = json.loads(encoded)
-                    if redundant_raw(value):
-                        original = {k: v for k, v in value.items() if k != 'raw'}
-                        value.pop('raw')
-                        result = canonical(value)
-                        if json.loads(result) != original:
-                            raise RuntimeError('Compaction changed business fields')
-                        updates.append((result, seq))
+        while True:
+            rows = db.execute('SELECT seq,json FROM observations WHERE seq>? ORDER BY seq LIMIT 2000', (last,)).fetchall()
+            if not rows:
+                break
+            updates = []
+            for seq, encoded in rows:
+                value = json.loads(encoded)
+                if redundant_raw(value):
+                    original = {k: v for k, v in value.items() if k != 'raw'}
+                    value.pop('raw')
+                    result = canonical(value)
+                    if json.loads(result) != original:
+                        raise RuntimeError('Compaction changed business fields')
+                    updates.append((result, seq))
+            # DDL and representation updates commit together. A crash cannot
+            # leave the historical price table without its append-only guard.
+            try:
+                db.execute('BEGIN IMMEDIATE')
+                db.execute('DROP TRIGGER observations_no_update')
                 db.executemany('UPDATE observations SET json=? WHERE seq=?', updates)
+                db.execute(trigger[0])
                 db.commit()
-                changed += len(updates)
-                last = rows[-1][0]
-        finally:
-            db.rollback()
-            db.execute(trigger[0])
-            db.commit()
+            except BaseException:
+                db.rollback()
+                raise
+            changed += len(updates)
+            last = rows[-1][0]
         after_counts = {name: db.execute('SELECT COUNT(*) FROM ' + name).fetchone()[0] for name in original_counts}
         if original_counts != after_counts:
             raise RuntimeError('Business row counts changed')
