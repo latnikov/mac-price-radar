@@ -302,6 +302,100 @@ test('quotes both surcharges and savings relative to the current selection', () 
   assert.equal(quote.stepPricesRub.chip['m6-12-12'], 0);
 });
 
+test('live exchange rates invalidate quotes and ETags, update new orders and preserve accepted retries', async t => {
+  let usdRub = 83.5588;
+  const { service, base, post } = await setup(t, {
+    now: () => Date.parse('2026-10-01T12:00:00Z'),
+    exchangeRateFetchImpl: async () => new Response(`<ValCurs Date="01.10.2026"><Valute ID="R01235"><CharCode>USD</CharCode><Nominal>1</Nominal><Value>${usdRub}</Value></Valute></ValCurs>`),
+  });
+  const path = '/api/quote?model=mini&chip=m6-12-12&memory=16&storage=256&ethernet=2.5';
+  const old = await fetch(base + path);
+  const oldTag = old.headers.get('etag');
+  assert.equal((await old.json()).priceRub, 105319);
+  await service.exchangeRates.refresh();
+  const response = await fetch(base + path, { headers: { 'If-None-Match': oldTag } });
+  assert.equal(response.status, 200);
+  const firstTag = response.headers.get('etag');
+  assert.notEqual(firstTag, oldTag);
+  const quote = await response.json();
+  assert.deepEqual(quote, { ...quoteConfigurator(order().configuration, { ...pricingInfo, usdRub }), priceStatus: 'estimated', pricingAsOf: pricingInfo.checkedAt, currency: 'RUB' });
+  for (const model of catalog.models) for (const chip of model.chips) for (const memory of chip.memory) for (const storage of chip.storage) {
+    const configuration = { model: model.id, chip: chip.id, memory, storage, ethernet: model.ethernet[0] };
+    const actual = await (await fetch(`${base}/api/quote?${new URLSearchParams(configuration)}`)).json();
+    assert.equal(actual.priceRub, quoteCustomerPrice(configuration, { ...pricingInfo, usdRub }));
+    assert.deepEqual(actual.stepPricesRub, quoteConfigurator(configuration, { ...pricingInfo, usdRub }).stepPricesRub);
+  }
+  const first = await (await post()).json();
+  assert.equal(first.priceRub, quote.priceRub);
+  const saved = JSON.parse(service.db.prepare('SELECT payload FROM orders WHERE id=?').get(first.orderId).payload);
+  assert.deepEqual(saved.exchangeRate, { usdRub, adjustmentRub: 4, source: 'https://www.cbr.ru/scripts/XML_daily.asp', checkedAt: '2026-09-30T21:00:00.000Z' });
+  // Supplier totals and FX details stay private, including the newly added module.
+  assert.equal((await fetch(base + '/exchange-rate.mjs')).status, 404);
+  assert.equal(quote.usdRub, undefined);
+  usdRub = 86;
+  await service.exchangeRates.refresh();
+  const changed = await fetch(base + path, { headers: { 'If-None-Match': firstTag } });
+  assert.equal(changed.status, 200);
+  assert.equal((await changed.json()).priceRub, 107010);
+  assert.deepEqual(await (await post()).json(), first);
+  const newOrder = await (await post({ ...order(), priceRub: 1 }, 'test-live-rate-next-order')).json();
+  assert.equal(newOrder.priceRub, 107010);
+  assert.equal(JSON.parse(service.db.prepare('SELECT payload FROM orders WHERE id=?').get(first.orderId).payload).exchangeRate.usdRub, 83.5588);
+});
+
+test('a fresh exchange rate does not reset the supplier pricebook verification date', async t => {
+  const { service, base, post } = await setup(t, {
+    now: () => Date.parse('2026-10-01T12:00:00Z'), env: { ORDER_PRICE_MAX_AGE_MS: String(72 * 3600000) },
+    exchangeRateFetchImpl: async () => new Response('<ValCurs Date="01.10.2026"><Valute><CharCode>USD</CharCode><Nominal>1</Nominal><Value>83,5588</Value></Valute></ValCurs>'),
+  });
+  await service.exchangeRates.refresh();
+  const quote = await (await fetch(base + '/api/quote?model=mini&chip=m6-12-12&memory=16&storage=256&ethernet=2.5')).json();
+  assert.equal(quote.priceRub, 104107);
+  assert.equal(quote.priceStatus, 'stale_estimate');
+  assert.equal(quote.pricingAsOf, pricingInfo.checkedAt);
+  const result = await (await post()).json();
+  assert.equal(result.priceRub, quote.priceRub);
+  assert.equal(result.priceStatus, quote.priceStatus);
+});
+
+test('the production FX worker refreshes on startup and on due requests with a persisted fallback', async t => {
+  let clock = Date.parse('2026-10-01T12:00:00Z'), calls = 0, usdRub = '83,5588';
+  const { service, base } = await setup(t, {
+    now: () => clock, runExchangeRateWorker: true,
+    exchangeRateFetchImpl: async () => { calls++; return new Response(`<ValCurs Date="01.10.2026"><Valute><CharCode>USD</CharCode><Nominal>1</Nominal><Value>${usdRub}</Value></Valute></ValCurs>`); },
+  });
+  const path = '/api/quote?model=mini&chip=m6-12-12&memory=16&storage=256&ethernet=2.5';
+  assert.equal((await (await fetch(base + path)).json()).priceRub, 104107);
+  assert.equal(calls, 1);
+  usdRub = '86';
+  clock += 3600000;
+  assert.equal((await (await fetch(base + path)).json()).priceRub, 107010);
+  assert.equal(calls, 2);
+  assert.equal(service.exchangeRates.current().usdRub, 86);
+});
+
+test('concurrent retries waiting for a currency refresh accept exactly one order', { timeout: 5000 }, async t => {
+  let release, bothWaiting;
+  const gate = new Promise(resolve => { release = resolve; });
+  const waiting = new Promise(resolve => { bothWaiting = resolve; });
+  const { service, post } = await setup(t, {
+    now: () => Date.parse('2026-10-01T12:00:00Z'), runExchangeRateWorker: true,
+    exchangeRateFetchImpl: async () => { await gate; return new Response('<ValCurs Date="01.10.2026"><Valute><CharCode>USD</CharCode><Nominal>1</Nominal><Value>83,5588</Value></Valute></ValCurs>'); },
+  });
+  const refreshIfDue = service.exchangeRates.refreshIfDue;
+  let calls = 0;
+  service.exchangeRates.refreshIfDue = () => { if (++calls === 2) bothWaiting(); return refreshIfDue(); };
+  const first = post(), second = post();
+  await waiting;
+  release();
+  const responses = await Promise.all([first, second]);
+  assert.deepEqual(responses.map(response => response.status).sort(), [200, 201]);
+  const results = await Promise.all(responses.map(response => response.json()));
+  assert.deepEqual(results[0], results[1]);
+  assert.equal(results[0].priceRub, 104107);
+  assert.equal(service.db.prepare('SELECT COUNT(*) AS n FROM orders').get().n, 1);
+});
+
 test('assets and quotes revalidate without caching orders, status or relay responses', async t => {
   const { base, post } = await setup(t);
   for (const path of ['/', '/app.js', '/quote-client.mjs', '/selection-link.mjs', '/catalog.mjs', '/style.css', '/api/quote?model=mini&chip=m6-12-12&memory=16&storage=256&ethernet=2.5']) {

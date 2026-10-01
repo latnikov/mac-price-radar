@@ -36,6 +36,8 @@ const totalsUsd = {
   },
 };
 
+// The legacy FX value is a first-start fallback only. The order service injects
+// its latest persisted/live CBR rate; checkedAt still verifies the USD pricebook.
 export const pricingInfo = Object.freeze({
   usdRub: 84.578,
   rateAdjustmentRub: 4,
@@ -44,25 +46,28 @@ export const pricingInfo = Object.freeze({
   configurationCount: Object.values(totalsUsd).reduce((sum, prices) => sum + Object.keys(prices).length, 0),
 });
 
-export function quoteCustomerPrice(value) {
+export function quoteCustomerPrice(value, pricing = pricingInfo) {
   const configuration = validateConfiguration(value);
   if (configuration.model === 'other') return null;
-  if (configuration.model === 'pixel') return convertPixelCustomerTotal(configuration, pixelCustomerTotalsUsd, pricingInfo.usdRub, pricingInfo.rateAdjustmentRub);
+  if (configuration.model === 'pixel') return convertPixelCustomerTotal(configuration, pixelCustomerTotalsUsd, pricing.usdRub, pricing.rateAdjustmentRub);
   const totalUsd = totalsUsd[configuration.chip]?.[`${configuration.memory}-${configuration.storage}`];
   if (!Number.isInteger(totalUsd)) throw new Error('Для этой конфигурации пока нет предварительной цены.');
-  return Math.round(totalUsd * (pricingInfo.usdRub + pricingInfo.rateAdjustmentRub));
+  if (!Number.isFinite(pricing.usdRub) || pricing.usdRub <= 0 || !Number.isFinite(pricing.rateAdjustmentRub) || pricing.usdRub + pricing.rateAdjustmentRub <= 0) throw new Error('Некорректный курс для расчёта цены.');
+  const price = Math.round(totalUsd * (pricing.usdRub + pricing.rateAdjustmentRub));
+  if (!Number.isSafeInteger(price) || price <= 0) throw new Error('Некорректная цена.');
+  return price;
 }
 
 // Option price changes are derived from complete customer quotes. That keeps the
 // UI in sync with the authoritative price table without publishing source amounts.
-export function quoteConfigurator(value) {
+export function quoteConfigurator(value, pricing = pricingInfo) {
   const configuration = validateConfiguration(value);
   if (configuration.model === 'other') return { priceRub: null, priceStatus: 'on_request', stepPricesRub: {} };
   if (configuration.model === 'pixel') {
     const phone = catalog.pixelModels.find(item => item.id === configuration.phone);
-    const priceRub = quoteCustomerPrice(configuration);
+    const priceRub = quoteCustomerPrice(configuration, pricing);
     const difference = candidate => {
-      const candidatePrice = quoteCustomerPrice(candidate);
+      const candidatePrice = quoteCustomerPrice(candidate, pricing);
       return Number.isInteger(candidatePrice) && Number.isInteger(priceRub) ? candidatePrice - priceRub : null;
     };
     return {
@@ -75,8 +80,8 @@ export function quoteConfigurator(value) {
   }
   const model = catalog.models.find(item => item.id === configuration.model);
   const chip = model.chips.find(item => item.id === configuration.chip);
-  const quote = overrides => quoteCustomerPrice({ ...configuration, ...overrides });
-  const priceRub = quoteCustomerPrice(configuration);
+  const quote = overrides => quoteCustomerPrice({ ...configuration, ...overrides }, pricing);
+  const priceRub = quoteCustomerPrice(configuration, pricing);
   const chipQuote = candidate => quoteCustomerPrice({
     model: model.id,
     chip: candidate.id,
@@ -87,7 +92,7 @@ export function quoteConfigurator(value) {
       ? configuration.storage
       : (candidate.storage.includes(256) ? 256 : candidate.storage[0]),
     ethernet: model.ethernet[0],
-  });
+  }, pricing);
   return {
     priceRub,
     stepPricesRub: {

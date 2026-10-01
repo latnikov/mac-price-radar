@@ -9,10 +9,19 @@ import { formatPublicPrice, pricingInfo, quoteConfigurator, quoteCustomerPrice }
 import { representation, sendRepresentation } from './http-cache.mjs';
 import { pixelPricingCheckedAt } from './pixel-pricing.mjs';
 import { telegramTransport } from './telegram-transport.mjs';
+import { createExchangeRateProvider } from './exchange-rate.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const fault = (status, message) => Object.assign(new Error(message), { status });
-const pricingDate = configuration => configuration.model === 'pixel' ? pixelPricingCheckedAt : configuration.model === 'other' ? null : pricingInfo.checkedAt;
+const pricebookDate = (configuration, pricing) => configuration.model === 'pixel' ? pixelPricingCheckedAt : configuration.model === 'other' ? null : pricing.checkedAt;
+const pricingDate = (configuration, pricing = pricingInfo) => {
+  const bookDate = pricebookDate(configuration, pricing);
+  if (!Number.isFinite(Date.parse(bookDate))) return null;
+  const rateDate = pricing.exchangeRateCheckedAt || pricing.checkedAt;
+  if (!Number.isFinite(Date.parse(rateDate))) return null;
+  // A new FX quote does not re-verify the supplier's USD pricebook.
+  return Date.parse(rateDate) < Date.parse(bookDate) ? rateDate : bookDate;
+};
 export function priceStatusForDate(checkedAt, now, maxAgeMs) {
   if (maxAgeMs === 0) return 'estimated'; // Isolated tests only.
   const age = now - Date.parse(checkedAt);
@@ -44,7 +53,7 @@ function notificationText(row) {
   const payment = p.paymentMethod === 'invoice' ? 'Перевод на расчётный счёт от ИП/юрлица' : p.paymentMethod === 'cash' ? 'Наличные' : 'Уточнить у клиента';
   return `Новая заявка · Макбучная\n№ ${row.id}\n${new Date(row.created_at).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} (МСК)\n\n${p.configurationDescription || describeConfiguration(p.configuration)}${priceLine}\nОплата: ${payment}\n\nИмя: ${p.name || 'не указано'}\nТелефон: ${p.phone}\nГород: Нижний Новгород\n\nСвяжитесь с клиентом для подтверждения стоимости и срока.`;
 }
-export function validateOrder(body, { includeQuote = true, priceState = () => 'estimated' } = {}) {
+export function validateOrder(body, { includeQuote = true, priceState = () => 'estimated', pricing = pricingInfo } = {}) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) throw fault(400, 'Некорректная заявка.');
   let configuration;
   try { configuration = validateConfiguration(body.configuration); } catch (e) { throw fault(400, e.message); }
@@ -60,15 +69,19 @@ export function validateOrder(body, { includeQuote = true, priceState = () => 'e
   const intent = { configuration, paymentMethod: body.paymentMethod || 'cash', phone: `+${phone}`, name: (body.name || '').trim(), consentVersion: '2026-09-27' };
   if (!includeQuote) return intent;
   const state = priceState(configuration);
-  const priceRub = state === 'on_request' ? null : quoteCustomerPrice(configuration);
-  return { ...intent, configurationDescription: describeConfiguration(configuration), priceRub, priceStatus: Number.isInteger(priceRub) ? state : 'on_request', pricingAsOf: pricingDate(configuration) };
+  const priceRub = state === 'on_request' ? null : quoteCustomerPrice(configuration, pricing);
+  return {
+    ...intent, configurationDescription: describeConfiguration(configuration), priceRub,
+    priceStatus: Number.isInteger(priceRub) ? state : 'on_request', pricingAsOf: pricingDate(configuration, pricing),
+    ...(Number.isInteger(priceRub) ? { exchangeRate: { usdRub: pricing.usdRub, adjustmentRub: pricing.rateAdjustmentRub, source: pricing.exchangeRateSource || pricing.source, checkedAt: pricing.exchangeRateCheckedAt || pricing.checkedAt } } : {}),
+  };
 }
 
 const intentFingerprint = value => createHash('sha256').update(JSON.stringify(Object.fromEntries(
   ['configuration', 'paymentMethod', 'phone', 'name', 'consentVersion'].map(field => [field, value[field]]),
 ))).digest('hex');
 
-export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB || resolve(root, 'data/orders.sqlite'), fetchImpl = fetch, now = Date.now, runWorker = true } = {}) {
+export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB || resolve(root, 'data/orders.sqlite'), fetchImpl = fetch, exchangeRateFetchImpl = fetch, now = Date.now, runWorker = true, runExchangeRateWorker = runWorker } = {}) {
   mkdirSync(dirname(dbPath), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(dbPath);
   chmodSync(dbPath, 0o600);
@@ -92,7 +105,16 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
   if (basePath && !/^\/[a-z0-9-]+$/.test(basePath)) throw new Error('Invalid ORDER_BASE_PATH');
   const priceMaxAgeMs = env.ORDER_PRICE_MAX_AGE_MS === undefined ? 72 * 3600000 : Number(env.ORDER_PRICE_MAX_AGE_MS);
   if (!Number.isSafeInteger(priceMaxAgeMs) || priceMaxAgeMs < 0) throw new Error('ORDER_PRICE_MAX_AGE_MS must be a non-negative integer');
-  const priceState = configuration => priceStatusForDate(pricingDate(configuration), now(), priceMaxAgeMs);
+  const exchangeRates = createExchangeRateProvider({ db, fallback: pricingInfo, fetchImpl: exchangeRateFetchImpl, now });
+  const currentPricing = () => {
+    const rate = exchangeRates.current();
+    return { ...pricingInfo, usdRub: rate.usdRub, exchangeRateCheckedAt: rate.checkedAt, exchangeRateSource: rate.source };
+  };
+  const priceState = (configuration, pricing) => {
+    const timestamp = now();
+    const states = [pricebookDate(configuration, pricing), pricing.exchangeRateCheckedAt].map(date => priceStatusForDate(date, timestamp, priceMaxAgeMs));
+    return states.includes('on_request') ? 'on_request' : states.includes('stale_estimate') ? 'stale_estimate' : 'estimated';
+  };
   const rate = new Map();
   let working = false;
   const telegramFetch=telegramTransport({STORE_TELEGRAM_API_IPV4:env.ORDER_TELEGRAM_API_IPV4},fetchImpl);
@@ -134,6 +156,7 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
   // Deployments restart the service: load immutable assets once per process.
   const assets = new Map([...staticFiles].map(([path, [file, type]]) => [path, { ...representation(readFileSync(resolve(root, file))), type }]));
   const quotes = new Map();
+  let quotePricingKey;
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -163,12 +186,16 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
         // Custom requests are validated only when posted; free text never enters URLs/cache.
         if (normalized.model === 'other') throw fault(400, 'Стоимость другого товара уточним по заявке.');
         // Only valid catalogue keys enter this bounded cache, never raw URLs.
-        const state = priceState(normalized);
+        if (runExchangeRateWorker) await exchangeRates.refreshIfDue();
+        const pricing = currentPricing();
+        const pricingKey = JSON.stringify([pricing.usdRub, pricing.rateAdjustmentRub, pricing.exchangeRateCheckedAt]);
+        if (pricingKey !== quotePricingKey) { quotes.clear(); quotePricingKey = pricingKey; }
+        const state = priceState(normalized, pricing);
         const key = JSON.stringify([normalized, state]);
         if (!quotes.has(key)) {
           try {
-            const quote = state === 'on_request' ? { priceRub: null, stepPricesRub: {} } : quoteConfigurator(normalized);
-            quotes.set(key, representation({ ...quote, priceStatus: Number.isInteger(quote.priceRub) ? state : 'on_request', pricingAsOf: pricingDate(normalized), currency: 'RUB' }));
+            const quote = state === 'on_request' ? { priceRub: null, stepPricesRub: {} } : quoteConfigurator(normalized, pricing);
+            quotes.set(key, representation({ ...quote, priceStatus: Number.isInteger(quote.priceRub) ? state : 'on_request', pricingAsOf: pricingDate(normalized, pricing), currency: 'RUB' }));
           }
           catch (e) { throw fault(400, e.message); }
         }
@@ -215,16 +242,22 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
       const body = await readJson(req);
       const intent = validateOrder(body, { includeQuote: false });
       const fingerprint = intentFingerprint(intent);
-      const existing = db.prepare('SELECT id, fingerprint, payload FROM orders WHERE request_key = ?').get(key);
-      if (existing) {
+      const returnExisting = () => {
+        const existing = db.prepare('SELECT id, fingerprint, payload FROM orders WHERE request_key = ?').get(key);
+        if (!existing) return false;
         const saved = JSON.parse(existing.payload);
         // Older rows hashed the complete price-bearing payload. Compare the
         // normalized customer intent so retries survive pricebook changes.
         if (intentFingerprint(saved) !== fingerprint) throw fault(409, 'Заявка изменилась. Обновите страницу и отправьте её заново.');
-        json(200, { orderId: existing.id, accepted: true, ...orderPrice(saved) }); return;
-      }
+        json(200, { orderId: existing.id, accepted: true, ...orderPrice(saved) }); return true;
+      };
+      if (returnExisting()) return;
       if (!acceptingOrders) throw fault(503, 'Приём заявок пока не подключён. Попробуйте позже.');
-      const payload = validateOrder(body, { priceState });
+      if (runExchangeRateWorker) await exchangeRates.refreshIfDue();
+      // Another request with this key can finish while the FX fetch is pending.
+      if (returnExisting()) return;
+      const pricing = currentPricing();
+      const payload = validateOrder(body, { pricing, priceState: configuration => priceState(configuration, pricing) });
       const serialized = JSON.stringify(payload);
       // Caddy overwrites X-Forwarded-For; only trust it behind the loopback proxy.
       const peer = req.socket.remoteAddress;
@@ -249,7 +282,8 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
   const timer = runWorker ? setInterval(() => { void dispatch().catch(() => console.error('Notification worker unavailable')); }, 15000) : null;
   timer?.unref();
   if (runWorker) void dispatch().catch(() => console.error('Notification worker unavailable'));
-  return { server, db, dispatch, async close() { clearInterval(timer); await new Promise(r => server.close(r)); while (working) await new Promise(r => setTimeout(r, 20)); db.close(); } };
+  if (runExchangeRateWorker) exchangeRates.start();
+  return { server, db, dispatch, exchangeRates, async close() { clearInterval(timer); await exchangeRates.close(); await new Promise(r => server.close(r)); while (working) await new Promise(r => setTimeout(r, 20)); db.close(); } };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   process.umask(0o077);
