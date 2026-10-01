@@ -92,6 +92,13 @@ class OperationsTests(unittest.TestCase):
             self.assertIsNotNone(db.execute("SELECT 1 FROM sqlite_master WHERE name='observations_no_update'").fetchone())
             self.assertEqual(json.loads(db.execute('SELECT json FROM observations WHERE seq=3').fetchone()[0]), values[0])
             db.close()
+            result = compact.compact(path, representations=False, page_size=16384)
+            self.assertEqual(result['counts_preserved']['observations'], 3)
+            db = sqlite3.connect(path)
+            self.assertEqual(db.execute('PRAGMA page_size').fetchone()[0], 16384)
+            self.assertEqual(db.execute('PRAGMA journal_mode').fetchone()[0], 'wal')
+            self.assertEqual(json.loads(db.execute('SELECT json FROM observations WHERE seq=3').fetchone()[0]), values[0])
+            db.close()
 
     def test_rollback_rotation_never_touches_unmanaged_backups(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -20,7 +20,7 @@ def redundant_raw(value):
     raw = value.get('raw')
     return isinstance(raw, dict) and all(key in value and canonical(value[key]) == canonical(child) for key, child in raw.items())
 
-def compact(path):
+def compact(path, *, representations=True, page_size=None):
     path = Path(path)
     owner = path.stat()
     before_bytes = path.stat().st_size
@@ -34,7 +34,7 @@ def compact(path):
             raise RuntimeError('Expected append-only trigger is missing')
         last = 0
         changed = 0
-        while True:
+        while representations:
             rows = db.execute('SELECT seq,json FROM observations WHERE seq>? ORDER BY seq LIMIT 2000', (last,)).fetchall()
             if not rows:
                 break
@@ -65,11 +65,19 @@ def compact(path):
         if original_counts != after_counts:
             raise RuntimeError('Business row counts changed')
         db.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        if page_size is not None:
+            if page_size not in [4096, 8192, 16384]:
+                raise ValueError('Unsupported measured page size')
+            db.execute('PRAGMA journal_mode=DELETE')
+            db.execute('PRAGMA page_size=' + str(page_size))
         db.execute('VACUUM')
+        if page_size is not None and db.execute('PRAGMA page_size').fetchone()[0] != page_size:
+            raise RuntimeError('Database page size did not change')
+        db.execute('PRAGMA journal_mode=WAL')
         if db.execute('PRAGMA quick_check').fetchone()[0] != 'ok' or db.execute('PRAGMA foreign_key_check').fetchone():
             raise RuntimeError('Compacted database verification failed')
         return {'database': path.name, 'path': str(path), 'before_bytes': before_bytes, 'after_bytes': path.stat().st_size,
-                'compacted_observations': changed, 'counts_preserved': after_counts, 'quick_check': 'ok'}
+                'compacted_observations': changed, 'counts_preserved': after_counts, 'quick_check': 'ok', 'page_size': db.execute('PRAGMA page_size').fetchone()[0]}
     finally:
         db.close()
         for suffix in ['', '-wal', '-shm']:
@@ -96,10 +104,12 @@ def perform():
     config = json.loads(Path('/etc/macbookbro-platform.json').read_text())
     results = []
     for name in ['parser_dev','parser_legacy']:
-        result = compact(config['databases'][name])
+        sizes = [v for v in sys.argv if v.startswith('--page-size=')]
+        result = compact(config['databases'][name], representations='--pages-only' not in sys.argv, page_size=int(sizes[0].split('=')[1]) if sizes else None)
         results.append(result)
         print(json.dumps(result), flush=True)
-    Path('/var/lib/macbookbro-ops/compaction.json').write_text(json.dumps({'at': time.time(), 'results': results}, indent=2))
+    filename = 'page-packing.json' if '--pages-only' in sys.argv else 'compaction.json'
+    Path('/var/lib/macbookbro-ops', filename).write_text(json.dumps({'at': time.time(), 'results': results}, indent=2))
 
 def main():
     if '--manage-services' not in sys.argv:

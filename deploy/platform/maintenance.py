@@ -198,7 +198,7 @@ def health(config):
     if memory['MemAvailable'] < 200 * 1024:
         alerts.append({'kind': 'memory', 'available_mb': memory['MemAvailable'] // 1024})
     endpoints = {}
-    compaction = subprocess.run(['systemctl', 'show', 'macbookbro-compact', '-p', 'ActiveState', '--value'], capture_output=True, text=True, check=False).stdout.strip() in ['active', 'activating', 'deactivating']
+    compaction = any(subprocess.run(['systemctl', 'show', unit, '-p', 'ActiveState', '--value'], capture_output=True, text=True, check=False).stdout.strip() in ['active', 'activating', 'deactivating'] for unit in ['macbookbro-compact', 'macbookbro-page-packing'])
     for name, url in config['health'].items():
         connection = http.client.HTTPConnection('127.0.0.1', url['port'], timeout=4)
         try:
