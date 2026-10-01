@@ -198,6 +198,7 @@ def health(config):
     if memory['MemAvailable'] < 200 * 1024:
         alerts.append({'kind': 'memory', 'available_mb': memory['MemAvailable'] // 1024})
     endpoints = {}
+    compaction = subprocess.run(['systemctl', 'show', 'macbookbro-compact', '-p', 'ActiveState', '--value'], capture_output=True, text=True, check=False).stdout.strip() in ['active', 'activating', 'deactivating']
     for name, url in config['health'].items():
         connection = http.client.HTTPConnection('127.0.0.1', url['port'], timeout=4)
         try:
@@ -209,12 +210,17 @@ def health(config):
             endpoints[name] = False
         finally:
             connection.close()
+        if name == 'parser' and compaction:
+            endpoints[name] = None
+            atomic_json(STATE / (name + '-failures.json'), {'failures': 0})
+            continue
         failure_path = STATE / (name + '-failures.json')
         failures = json.loads(failure_path.read_text()).get('failures', 0) if failure_path.exists() else 0
         failures = 0 if endpoints[name] else failures + 1
         if failures >= 3:
             alerts.append({'kind': 'service', 'name': name})
-            subprocess.run(['systemctl', 'try-restart', url['service']], check=False, timeout=30, stdout=subprocess.DEVNULL)
+            subprocess.run(['systemctl', 'reset-failed', url['service']], check=False, timeout=10, stdout=subprocess.DEVNULL)
+            subprocess.run(['systemctl', 'restart', url['service']], check=False, timeout=30, stdout=subprocess.DEVNULL)
             failures = 0
         atomic_json(failure_path, {'failures': failures})
     with closing(sqlite3.connect(Path(config['databases']['shop']).resolve().as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
@@ -227,7 +233,8 @@ def health(config):
             failure_path = STATE / 'worker-failures.json'
             failures = json.loads(failure_path.read_text()).get('failures', 0) + 1 if failure_path.exists() else 1
             if failures >= 3:
-                subprocess.run(['systemctl', 'try-restart', 'macbookbro-worker'], check=False, timeout=30, stdout=subprocess.DEVNULL)
+                subprocess.run(['systemctl', 'reset-failed', 'macbookbro-worker'], check=False, timeout=10, stdout=subprocess.DEVNULL)
+                subprocess.run(['systemctl', 'restart', 'macbookbro-worker'], check=False, timeout=30, stdout=subprocess.DEVNULL)
                 failures = 0
             atomic_json(failure_path, {'failures': failures})
         else:
@@ -240,7 +247,7 @@ def health(config):
             alerts.append({'kind': 'legacy_orders_import'})
         integrations = db.execute('SELECT channel,account_id,state,last_success FROM sync_state').fetchall()
         for channel, account, status, last_success in integrations:
-            if status in ['blocked', 'error'] or (last_success and last_success < (at - 3600) * 1000):
+            if status in ['blocked', 'error', 'partial'] or (last_success and last_success < (at - 3600) * 1000):
                 alerts.append({'kind': 'integration', 'channel': channel, 'account': account, 'state': status})
     backup_state = json.loads((STATE / 'backup.json').read_text()) if (STATE / 'backup.json').exists() else {}
     with closing(sqlite3.connect(Path(config['databases']['orders']).resolve().as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
