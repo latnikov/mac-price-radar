@@ -1,4 +1,4 @@
-import { validateConfiguration } from '../catalog.mjs';
+import { validateConfiguration } from './catalog.mjs';
 
 // Only catalog choices enter a shareable URL. Contact fields, consent, payment
 // and free-form requests remain in the form and never enter browser history.

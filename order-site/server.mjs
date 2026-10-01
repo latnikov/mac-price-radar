@@ -126,7 +126,7 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
   }
   const staticFiles = new Map([
     ['/', ['public/index.html', 'text/html']], ['/style.css', ['public/style.css', 'text/css']],
-    ['/app.js', ['public/app.js', 'text/javascript']], ['/catalog.mjs', ['catalog.mjs', 'text/javascript']],
+    ['/app.js', ['public/app.js', 'text/javascript']], ['/catalog.mjs', ['public/catalog.mjs', 'text/javascript']],
     ['/quote-client.mjs', ['public/quote-client.mjs', 'text/javascript']],
     ['/selection-link.mjs', ['public/selection-link.mjs', 'text/javascript']],
     ['/privacy.html', ['public/privacy.html', 'text/html']],

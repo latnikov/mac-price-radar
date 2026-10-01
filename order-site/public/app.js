@@ -1,6 +1,6 @@
-import { catalog, capacity, describeConfiguration } from '/catalog.mjs';
-import { createQuoteLoader } from '/quote-client.mjs';
-import { readSelection, selectionHash } from '/selection-link.mjs';
+import { catalog, capacity, describeConfiguration } from './catalog.mjs';
+import { createQuoteLoader } from './quote-client.mjs';
+import { readSelection, selectionHash } from './selection-link.mjs';
 const loadQuote = createQuoteLoader();
 const $ = id => document.getElementById(id);
 let model = catalog.models[0];
