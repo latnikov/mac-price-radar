@@ -171,6 +171,9 @@ order.macbookbro.ru {
         run('caddy', 'validate', '--config', str(candidate), '--adapter', 'caddyfile', stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         run('python3', str(release / 'storefront/deploy/update.py'), str(release), env={**os.environ, 'MACBOOKBRO_PLATFORM_UPDATE': '1'})
         update_env(Path('/etc/macbookbro-orders.env'), {'ORDER_ORIGIN': 'https://macbookbro.ru', 'ORDER_BASE_PATH': '/order'})
+        # Direct Telegram was verified read-only on the audited host. No pending
+        # historical customer notifications exist; the fixture is excluded by code.
+        update_env(Path('/etc/macbookbro-orders.env'), {'ORDER_DELIVERY_MODE': 'direct', 'ORDER_TELEGRAM_API_IPV4': '149.154.167.220'})
         # Release files only; never overwrite an application's private data directory.
         for p in (release / 'order-site').iterdir():
             if p.name in ['data', 'test', 'deploy']:
@@ -180,6 +183,7 @@ order.macbookbro.ru {
                 shutil.copytree(p, target, dirs_exist_ok=True)
             else:
                 shutil.copy2(p, target)
+        shutil.copy2(release / 'storefront/telegram-transport.mjs', '/srv/macbookbro-orders/telegram-transport.mjs')
         for name in ['master-store.mjs', 'build-data.mjs', 'foreign-prices.mjs']:
             shutil.copy2(release / 'scripts' / name, Path('/srv/mac-price-radar/dev/scripts') / name)
         shutil.copy2(release / 'web/foreign.js', '/srv/mac-price-radar/dev/web/foreign.js')

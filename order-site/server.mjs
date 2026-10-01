@@ -8,6 +8,7 @@ import { validateConfiguration, describeConfiguration } from './catalog.mjs';
 import { formatPublicPrice, pricingInfo, quoteConfigurator, quoteCustomerPrice } from './pricing.mjs';
 import { representation, sendRepresentation } from './http-cache.mjs';
 import { pixelPricingCheckedAt } from './pixel-pricing.mjs';
+import { telegramTransport } from './telegram-transport.mjs';
 
 const root = dirname(fileURLToPath(import.meta.url));
 const fault = (status, message) => Object.assign(new Error(message), { status });
@@ -80,6 +81,8 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
     CREATE INDEX IF NOT EXISTS orders_pending ON orders(notified_at, next_attempt);`);
   const columns = db.prepare('PRAGMA table_info(orders)').all().map(x => x.name);
   if (!columns.includes('lease_token')) db.exec('ALTER TABLE orders ADD COLUMN lease_token TEXT; ALTER TABLE orders ADD COLUMN lease_until INTEGER NOT NULL DEFAULT 0;');
+  if (!columns.includes('notification_state')) db.exec("ALTER TABLE orders ADD COLUMN notification_state TEXT NOT NULL DEFAULT 'queued'");
+  db.exec("UPDATE orders SET notification_state='unknown',last_error='delivery_unknown' WHERE notification_state='sending'");
   const relayMode = env.ORDER_DELIVERY_MODE === 'relay';
   const telegramReady = Boolean(env.ORDER_TELEGRAM_BOT_TOKEN && env.ORDER_TELEGRAM_CHAT_ID);
   const deliveryReady = relayMode ? Boolean(env.ORDER_RELAY_KEY?.length >= 32 && env.ORDER_TELEGRAM_CHAT_ID) : telegramReady;
@@ -92,28 +95,31 @@ export function createOrderService({ env = process.env, dbPath = env.ORDERS_DB |
   const priceState = configuration => priceStatusForDate(pricingDate(configuration), now(), priceMaxAgeMs);
   const rate = new Map();
   let working = false;
+  const telegramFetch=telegramTransport({STORE_TELEGRAM_API_IPV4:env.ORDER_TELEGRAM_API_IPV4},fetchImpl);
   async function dispatch() {
     if (relayMode || !telegramReady || working) return;
     working = true;
     try {
-      const rows = db.prepare('SELECT * FROM orders WHERE notified_at IS NULL AND next_attempt <= ? ORDER BY created_at LIMIT 10').all(now());
+      const rows = db.prepare("SELECT * FROM orders WHERE notified_at IS NULL AND notification_state IN ('queued','retry') AND next_attempt <= ? AND id!='MB-RELAY-TEST' ORDER BY created_at LIMIT 10").all(now());
       for (const row of rows) {
         const text = notificationText(row);
+        db.prepare("UPDATE orders SET notification_state='sending' WHERE id=?").run(row.id);
         try {
-          const response = await fetchImpl(`https://api.telegram.org/bot${env.ORDER_TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          const response = await telegramFetch(`https://api.telegram.org/bot${env.ORDER_TELEGRAM_BOT_TOKEN}/sendMessage`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ chat_id: env.ORDER_TELEGRAM_CHAT_ID, text, link_preview_options: { is_disabled: true } }), signal: AbortSignal.timeout(12000),
           });
           const result = await response.json();
           if (!response.ok || result.ok !== true) {
             const retryAfter = Math.min(86400, Math.max(0, Number(result.parameters?.retry_after) || 0));
-            throw Object.assign(new Error('telegram_rejected'), { retryAfter });
+            throw Object.assign(new Error('telegram_rejected'), { retryAfter, rejected: result.ok === false });
           }
-          db.prepare('UPDATE orders SET notified_at = ?, last_error = NULL WHERE id = ?').run(now(), row.id);
+          db.prepare("UPDATE orders SET notified_at = ?, last_error = NULL,notification_state='sent' WHERE id = ?").run(now(), row.id);
         } catch (e) {
           const delay = Math.max(Math.min(3600, 15 * 2 ** Math.min(row.attempts, 8)), e.retryAfter || 0) * 1000;
-          db.prepare('UPDATE orders SET attempts = attempts + 1, next_attempt = ?, last_error = ? WHERE id = ?').run(now() + delay, 'delivery_failed', row.id);
-          console.warn(`Order ${row.id}: notification queued for retry`);
+          const state=e.rejected?'retry':'unknown';
+          db.prepare('UPDATE orders SET attempts = attempts + 1, next_attempt = ?, last_error = ?,notification_state=? WHERE id = ?').run(now() + delay, e.rejected?'delivery_rejected':'delivery_unknown',state,row.id);
+          console.warn('Order notification state: '+state);
         }
       }
     } finally { working = false; }

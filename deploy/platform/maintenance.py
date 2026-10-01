@@ -243,6 +243,12 @@ def health(config):
             if status in ['blocked', 'error'] or (last_success and last_success < (at - 3600) * 1000):
                 alerts.append({'kind': 'integration', 'channel': channel, 'account': account, 'state': status})
     backup_state = json.loads((STATE / 'backup.json').read_text()) if (STATE / 'backup.json').exists() else {}
+    with closing(sqlite3.connect(Path(config['databases']['orders']).resolve().as_uri() + '?mode=ro', uri=True, timeout=2)) as db:
+        if any(row[1] == 'notification_state' for row in db.execute('PRAGMA table_info(orders)')):
+            unknown = db.execute("SELECT COUNT(*) FROM orders WHERE notification_state='unknown' AND notified_at IS NULL AND id!='MB-RELAY-TEST'").fetchone()[0]
+            overdue = db.execute("SELECT COUNT(*) FROM orders WHERE notified_at IS NULL AND created_at<? AND id!='MB-RELAY-TEST'", ((at - 3600) * 1000,)).fetchone()[0]
+            if unknown or overdue:
+                alerts.append({'kind': 'order_notification', 'unknown': unknown, 'overdue': overdue})
     if backup_state.get('at', 0) < at - 26 * 3600:
         alerts.append({'kind': 'backup_stale'})
     status = {'at': at, 'disk_free': disk.free, 'disk_percent': round(usage * 100, 1), 'endpoints': endpoints,

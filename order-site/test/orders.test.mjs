@@ -188,9 +188,9 @@ test('rejects forged configurations, missing consent, cross-origin calls and pri
   assert.equal((await fetch(`${base}/data/orders.sqlite`)).status, 404);
   assert.equal(service.db.prepare('SELECT count(*) AS n FROM orders').get().n, 0);
 });
-test('delivery failure survives a database reopen and retries successfully without losing order', async t => {
+test('explicit Telegram rejection survives a database reopen and retries without losing order', async t => {
   let clock = 1000000; let fail = true; const messages = [];
-  const fetchImpl = async (url, options) => { if (fail) throw new Error('offline'); messages.push(JSON.parse(options.body)); return { ok: true, json: async () => ({ ok: true }) }; };
+  const fetchImpl = async (url, options) => { if (fail) return {ok:false,json:async()=>({ok:false,parameters:{retry_after:15}})}; messages.push(JSON.parse(options.body)); return { ok: true, json: async () => ({ ok: true }) }; };
   const { service, post, args } = await setup(t, { now: () => clock, fetchImpl });
   assert.equal((await post()).status, 201);
   await service.dispatch();
@@ -202,6 +202,17 @@ test('delivery failure survives a database reopen and retries successfully witho
     row = service.db.prepare('SELECT * FROM orders').get(); assert.equal(row.notified_at, clock);
     assert.equal(messages.length, 1); assert.match(messages[0].text, /\+79990000000/); assert.match(messages[0].text, /Mac mini/);
   } finally { await recovered.close(); }
+});
+test('uncertain notification never repeats after restart and preserves the accepted order', async t => {
+  let calls=0,clock=1000000;
+  const fetchImpl=async()=>{calls++;throw new Error('connection lost after submission');};
+  const {service,post,args}=await setup(t,{now:()=>clock,fetchImpl});
+  assert.equal((await post()).status,201);
+  await service.dispatch();
+  assert.equal(service.db.prepare('SELECT notification_state FROM orders').get().notification_state,'unknown');
+  const recovered=createOrderService(args);
+  try{clock+=86400000;await recovered.dispatch();assert.equal(calls,1);assert.equal(recovered.db.prepare('SELECT COUNT(*) n FROM orders').get().n,1);}
+  finally{await recovered.close();}
 });
 test('preview cannot accept orders and rate limit does not block an idempotent retry', async t => {
   const preview = await setup(t, { env: { ORDER_ACCEPTING: '0' } });
