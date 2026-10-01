@@ -48,6 +48,7 @@ test('failed and partial collections preserve last good prices, rate and timesta
   const original = await refreshForeignPrices({ root, fetchPage, now: () => '2026-09-30T00:00:00Z' });
   assert.equal(original.rows.length, 2);
   assert.equal(original.effectiveRate, 87.7504);
+  await writeFile(join(root, 'data/private/foreign-request.json'), JSON.stringify({ requestedAt: '2026-09-30T00:30:00Z' }));
   await assert.rejects(refreshForeignPrices({ root, now: () => '2026-09-30T01:00:00Z', fetchPage: async url => {
     if (url === RATE_URL) throw new Error('HTTP 403: Google');
     return fetchPage(url);
@@ -57,6 +58,7 @@ test('failed and partial collections preserve last good prices, rate and timesta
   assert.equal(saved.updatedAt, original.updatedAt);
   assert.deepEqual(saved.rows, original.rows);
   assert.equal(saved.attemptedAt, '2026-09-30T01:00:00Z');
+  assert.equal(saved.requestedAt, undefined);
   await assert.rejects(refreshForeignPrices({ root, fetchPage: async url => url === guideUrl ? '<h1>Challenge</h1>' : fetchPage(url) }));
   saved = await readForeignPrices(root);
   assert.deepEqual(saved.rows, original.rows);

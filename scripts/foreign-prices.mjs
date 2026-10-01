@@ -144,6 +144,7 @@ export async function refreshForeignPrices({ fetchPage, root = '.', now = () => 
   } catch (error) {
     snapshot = { ...previous, transport: 'server-http', state: 'error', attemptedAt, error: error.message };
   }
+  delete snapshot.requestedAt;
   await saveForeignPrices(snapshot, root);
   if (snapshot.state === 'error') throw new Error(snapshot.error);
   return snapshot;
