@@ -20,7 +20,7 @@ release = Path(sys.argv[1]).resolve()
 config = json.loads(Path(sys.argv[2]).read_text()) if len(sys.argv) > 2 else {}
 telegram_export = Path(sys.argv[3]).resolve() if len(sys.argv) > 3 else None
 allowed = {'STORE_MOYSKLAD_TOKEN', 'STORE_CRM_TELEGRAM_BOT_TOKEN', 'STORE_CRM_TELEGRAM_EXPECTED_BOT',
-           'STORE_TELEGRAM_ACCOUNT_ID', 'STORE_TELEGRAM_SEND_ENABLED', 'STORE_INBOX_SEND_ENABLED', 'STORE_DATA_SYNC_INTERVAL_MS'}
+           'STORE_TELEGRAM_ACCOUNT_ID', 'STORE_TELEGRAM_API_IPV4', 'STORE_TELEGRAM_SEND_ENABLED', 'STORE_INBOX_SEND_ENABLED', 'STORE_DATA_SYNC_INTERVAL_MS'}
 allowed.update(prefix + suffix for prefix in ['AVITO', 'AVITO_2'] for suffix in ['_CLIENT_ID', '_CLIENT_SECRET', '_ACCOUNT_ID', '_LABEL'])
 if not isinstance(config, dict) or any(k not in allowed or not isinstance(v, str) or '\n' in v or '\r' in v for k, v in config.items()):
     raise SystemExit('Invalid private CRM settings')
@@ -83,7 +83,8 @@ try:
             os.chmod(unpacked, 0o600)
             private_env['NODE_OPTIONS'] = '--max-old-space-size=768'
             subprocess.run(['node', str(release / 'scripts/telegram-crm-import.mjs'), str(unpacked)], env=private_env, check=True)
-    if any(order_fingerprints().get(key) != value for key, value in accepted_orders.items()):
+    after_orders = order_fingerprints()
+    if any(after_orders.get(key) != value for key, value in accepted_orders.items()):
         raise RuntimeError('Accepted order snapshot changed')
     with sqlite3.connect('file:' + str(db_path) + '?mode=ro', uri=True) as db:
         if db.execute('PRAGMA quick_check').fetchone()[0] != 'ok' or db.execute('PRAGMA foreign_key_check').fetchone():
@@ -110,6 +111,11 @@ except Exception:
     shutil.copy2(backup / 'code/package.json', base / 'package.json')
     shutil.copy2(backup / 'shop.env', env_path)
     # Retain migrated DB and any accepted orders. Extra tables are backwards compatible.
+    owner = db_path.stat()
+    for suffix in ['', '-wal', '-shm']:
+        candidate = Path(str(db_path) + suffix)
+        if candidate.exists():
+            os.chown(candidate, owner.st_uid, owner.st_gid)
     subprocess.run(['systemctl', 'start', 'macbookbro-shop'], check=True)
     raise SystemExit('Update failed; previous code restored, order data retained')
 print('Storefront updated. Private backup: ' + str(backup))

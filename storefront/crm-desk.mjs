@@ -88,7 +88,7 @@ export function openCrmDesk(store, inbox, retail) {
       reminders: db.prepare("SELECT COUNT(*) n FROM tasks WHERE state='open' AND due_at<=?").get(now()).n,
       waiting: db.prepare(`SELECT COUNT(*) n FROM inbox_dialogs d WHERE
         (SELECT direction FROM inbox_messages WHERE dialog_id=d.id AND direction IN ('in','out') ORDER BY created_at DESC,id DESC LIMIT 1)='in'`).get().n,
-      segment: db.prepare("SELECT COALESCE(NULLIF(c.segment,''),NULLIF(p.suggested_segment,''),'Не определён') name,COUNT(*) n FROM customers c LEFT JOIN crm_profiles p ON p.customer_id=c.id GROUP BY name ORDER BY n DESC").all() };
+      segment: db.prepare("SELECT COALESCE(NULLIF(c.segment,''),NULLIF(p.suggested_segment,''),'Не определён') name,COUNT(*) n FROM customers c LEFT JOIN crm_profiles p ON p.customer_id=c.id GROUP BY 1 ORDER BY n DESC").all() };
   }
   function remind(customerId, input, actor) {
     if (!input.dueAt) throw fail(400, 'Укажите срок напоминания.');

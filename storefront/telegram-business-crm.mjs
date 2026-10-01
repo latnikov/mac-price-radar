@@ -1,9 +1,11 @@
+import { telegramTransport } from './telegram-transport.mjs';
 import { fail } from './core.mjs';
 import { configuredSecret } from './data-sync.mjs';
 
 // Updates are durably queued before acknowledging their offset. A foreign or
 // malformed update cannot stall other customers, and deferred messages survive restart.
 export function createTelegramBusinessCrm(store, inbox, desk, { env = process.env, fetchImpl = fetch } = {}) {
+  fetchImpl = telegramTransport(env, fetchImpl);
   const token = configuredSecret(env, 'STORE_CRM_TELEGRAM_BOT_TOKEN');
   const expectedBot = String(env.STORE_CRM_TELEGRAM_EXPECTED_BOT || 'mbroadmin_bot').replace(/^@/, '').toLowerCase();
   const ownerId = String(env.STORE_TELEGRAM_ACCOUNT_ID || '');

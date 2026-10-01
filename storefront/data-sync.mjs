@@ -16,6 +16,7 @@ export function createDataSync(store, inbox, { env = process.env, fetchImpl = fe
   const avitoApis = ['AVITO', 'AVITO_2'].map(prefix => ({ prefix, expectedId: String(env[`${prefix}_ACCOUNT_ID`] || ''), label: env[`${prefix}_LABEL`] || (prefix === 'AVITO' ? 'Авито 1' : 'Авито 2'),
     api: env[`${prefix}_CLIENT_ID`] && env[`${prefix}_CLIENT_SECRET`] ? createAvitoInboxApi({ clientId: env[`${prefix}_CLIENT_ID`], clientSecret: env[`${prefix}_CLIENT_SECRET`], fetchImpl }) : null }));
   status('МойСклад', '', token ? 'pending' : 'blocked', { error: token ? null : 'Нужен доступ к учётному аккаунту' });
+  db.prepare("DELETE FROM sync_state WHERE channel='Авито' AND account_id NOT IN (?,?)").run(...avitoApis.map(a=>a.label));
   for (const a of avitoApis) status('Авито', a.label, a.api ? 'pending' : 'blocked', { error: a.api ? null : 'Нужны отдельные ключи этого профиля' });
   if (!configuredSecret(env, 'STORE_CRM_TELEGRAM_BOT_TOKEN')) status('Telegram', '@macbookbro', configuredSecret(env, 'STORE_TELEGRAM_INGEST_TOKEN') ? 'pending' : 'blocked', { error: configuredSecret(env, 'STORE_TELEGRAM_INGEST_TOKEN') ? null : 'Нужны авторизация рабочего аккаунта и подключение синхронизации' });
 

@@ -17,7 +17,7 @@ function botFetch(updates=[],{onCall=()=>{},conn=connection,webhook='',failConne
 
 test('Telegram archive excludes groups, checks owner, keeps unknown read state and survives repeat import without overwriting live data',t=>{
  const {store,inbox,retail,desk}=setup(t),data=archive();assert.throws(()=>importTelegramExport(store,inbox,desk,data,'x','456'),e=>e.status===400);
- const report=importTelegramExport(store,inbox,desk,data,'one',owner);assert.deepEqual(report,{dialogs:1,messages:2,excluded:1});const d=inbox.list()[0],c=desk.context(d.id).customer;
+ const report=importTelegramExport(store,inbox,desk,data,'one',owner);assert.deepEqual(report,{dialogs:1,messages:2,sourceMessages:2,duplicatesSkipped:0,excluded:1});const d=inbox.list()[0],c=desk.context(d.id).customer;
  assert.equal(d.unread,-1);assert.equal(d.history_complete,0);assert.equal(inbox.dialog(d.id).archive_messages,2);assert.equal(desk.context(d.id).profile.suggested_segment,'Mac');
  retail.saveCustomer({id:c.id,note:'Заметка менеджера',segment:'Повторный клиент'},'manager');
  inbox.saveMessages(d.id,[{id:1,direction:'in',body:'Изменено в Telegram',kind:'text',createdAt:clock}]);store.db.prepare("UPDATE inbox_accounts SET state='live'").run();
@@ -101,4 +101,9 @@ test('manager HTTP desk, contact search, stage filters and document linking rema
  assert.equal((await manager(`/crm/desk/link?dialog=${d.id}`)).status,200);assert.equal((await manager(`/crm/deals/${deal.id}/document`,{csrf,document:'demand:foreign'})).status,400);
  store.db.prepare('UPDATE customers SET moysklad_id=? WHERE id=?').run('agent',id);dataSync.ingestMoysklad('currency',[{id:'rub',isoCode:'RUB'}]);dataSync.ingestMoysklad('demand',[{id:'sale',applicable:true,moment:'2026-10-01 10:00:00',sum:100,agent:{id:'agent'},rate:{currency:{id:'rub'}}}]);
  assert.equal((await manager(`/crm/deals/${deal.id}/document`,{csrf,document:'demand:sale'})).status,303);assert.equal((await manager(`/crm/customers/${id}/accounting`)).status,200);assert.equal((await manager('/crm/integrations')).status,200);
+});
+
+test('segment metrics group by segment, and repeated source records are reported once',t=>{
+ const {store,inbox,desk,retail}=setup(t);retail.saveCustomer({name:'Один',segment:'Mac'},'manager');retail.saveCustomer({name:'Другой',segment:'Mac'},'manager');assert.deepEqual(desk.metrics().segment.map(x=>({...x})),[{name:'Mac',n:2}]);
+ const data=archive();data.chats.list[0].messages.push({...data.chats.list[0].messages[0]});const r=importTelegramExport(store,inbox,desk,data,'duplicates',owner);assert.equal(r.messages,2);assert.equal(r.sourceMessages,3);assert.equal(r.duplicatesSkipped,1);
 });
