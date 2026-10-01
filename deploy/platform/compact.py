@@ -3,10 +3,13 @@ Requires a fresh verified platform backup. Removes raw only when every value
 is already identical to its top-level value, then VACUUMs unused pages.
 """
 import datetime
+import fcntl
 import hashlib
 import json
+import os
 import sqlite3
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -19,6 +22,7 @@ def redundant_raw(value):
 
 def compact(path):
     path = Path(path)
+    owner = path.stat()
     before_bytes = path.stat().st_size
     db = sqlite3.connect(path, timeout=10)
     try:
@@ -66,8 +70,13 @@ def compact(path):
                 'compacted_observations': changed, 'counts_preserved': after_counts, 'quick_check': 'ok'}
     finally:
         db.close()
+        for suffix in ['', '-wal', '-shm']:
+            candidate = Path(str(path) + suffix)
+            if candidate.exists():
+                os.chown(candidate, owner.st_uid, owner.st_gid)
+                os.chmod(candidate, owner.st_mode & 0o777)
 
-def main():
+def perform():
     state = json.loads(Path('/var/lib/macbookbro-ops/backup.json').read_text())
     if not state.get('verified') or state.get('at', 0) < time.time() - 6 * 3600:
         raise SystemExit('A fresh verified backup is required')
@@ -89,6 +98,23 @@ def main():
         results.append(result)
         print(json.dumps(result), flush=True)
     Path('/var/lib/macbookbro-ops/compaction.json').write_text(json.dumps({'at': time.time(), 'results': results}, indent=2))
+
+def main():
+    if '--manage-services' not in sys.argv:
+        return perform()
+    with Path('/var/lib/macbookbro-ops/compaction.lock').open('w') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        units = ['mac-price-radar-collect.timer', 'mac-price-radar-apify.timer', 'mac-price-radar@dev',
+                 'mac-price-radar-collect', 'mac-price-radar-apify']
+        active = {unit: subprocess.run(['systemctl', 'is-active', '--quiet', unit]).returncode == 0 for unit in units}
+        try:
+            subprocess.run(['systemctl', 'stop', *units], check=True)
+            perform()
+        finally:
+            # systemd owns this maintenance process even if the SSH connection ends.
+            restart = [unit for unit in units[:3] if active[unit]]
+            if restart:
+                subprocess.run(['systemctl', 'start', *restart], check=True)
 
 if __name__ == '__main__':
     main()

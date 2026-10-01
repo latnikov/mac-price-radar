@@ -1,0 +1,12 @@
+[Unit]
+Description=Explicit offline compaction of redundant historical price JSON
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/macbookbro-ops/compact.py --manage-services
+TimeoutStartSec=40min
+UMask=0077
+Nice=10
+CPUQuota=50%
+MemoryMax=256M
+PrivateTmp=true
