@@ -31,6 +31,17 @@ def audit_database(path):
             if table == 'observations':
                 info['latest_day'] = db.execute('SELECT substr(received_at,1,10) FROM observations ORDER BY seq DESC LIMIT 1').fetchone()
                 info['sample_bytes'] = db.execute("SELECT AVG(length(CAST(json AS BLOB))),AVG(length(CAST(json_extract(json,'$.raw') AS BLOB))) FROM (SELECT json FROM observations ORDER BY seq DESC LIMIT 1000)").fetchone()
+                fields = {}
+                for payload, in db.execute('SELECT json FROM observations ORDER BY seq DESC LIMIT 1000'):
+                    for field, value in json.loads(payload).items():
+                        size = len(json.dumps(value, ensure_ascii=False, separators=(',', ':')).encode())
+                        sample = fields.setdefault(field, {'present': 0, 'total_bytes': 0, 'max_bytes': 0})
+                        sample['present'] += 1
+                        sample['total_bytes'] += size
+                        sample['max_bytes'] = max(sample['max_bytes'], size)
+                info['sampled_fields'] = {field: {'present': value['present'], 'mean_bytes': round(value['total_bytes'] / value['present'], 1), 'max_bytes': value['max_bytes']} for field, value in sorted(fields.items())}
+            if table == 'ms_objects':
+                info['by_type'] = [{'type': kind, 'rows': count, 'mean_bytes': round(mean, 1), 'max_bytes': maximum} for kind, count, mean, maximum in db.execute('SELECT type,COUNT(*),AVG(length(CAST(data AS BLOB))),MAX(length(CAST(data AS BLOB))) FROM ms_objects GROUP BY type')]
             if table == 'inbox_messages':
                 info['text_bytes'] = db.execute('SELECT SUM(length(CAST(body AS BLOB))) FROM inbox_messages').fetchone()[0]
             result['tables'][table] = info
