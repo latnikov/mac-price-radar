@@ -17,7 +17,7 @@ def run(*args):
 
 
 def active(unit):
-    return subprocess.run(['systemctl', 'is-active', unit], capture_output=True, text=True).stdout.strip() == 'active'
+    return subprocess.run(['systemctl', 'is-active', unit], capture_output=True, text=True).stdout.strip() in ['active', 'activating', 'reloading']
 
 
 def main():

@@ -14,6 +14,23 @@ import { avitoSellerColumns, groupOffersByPriceColumn } from '../web/avito-colum
 import { prepareTableOffers, buildPriceTable, currentPrice } from '../web/price-table.js';
 import { configurationBadges } from '../web/product-families.js';
 import { parseProduct } from '../scripts/offer-normalization.mjs';
+import { parseStore77Category } from '../scripts/store77.mjs';
+
+test('Store77 localization and warranty survive SQLite and the public table projection', async t => {
+  const app = await setup(t, { env: {} });
+  const fixture = await readFile(new URL('./fixtures/store77/air-m5.html', import.meta.url), 'utf8');
+  const observations = parseStore77Category(fixture, 'https://store77.net/apple_macbook_air_m5/').offers;
+  app.store.ingestRun({ observations });
+  const { offers } = await (await app.request('/api/table?sheet=retail')).json();
+  assert.equal(offers.length, observations.length);
+  assert.equal(offers.filter(o => o.keyboardLocalization === 'localized').length, observations.filter(o => o.keyboardLocalization === 'localized').length);
+  assert.equal(offers.filter(o => o.warrantyYears === 2).length, observations.filter(o => o.warrantyYears === 2).length);
+  assert.ok(offers.every(o => !o.raw && !o.evidence));
+  const rows = buildPriceTable(prepareTableOffers(offers.filter(o => o.model === 'MacBook Air 13"' && o.color === 'Starlight' && o.storageGb === 512)));
+  assert.equal(rows.length, 3);
+  assert.equal(rows.find(r => r.sample.keyboardLocalization === 'none').sample.keyboard, 'unknown');
+  assert.ok((await (await app.request('/api/session')).json()).retailers.includes('Store77'));
+});
 
 test('table API preserves iPhone SIM identities through SQLite and keeps retail comparisons separate', async t => {
   const app = await setup(t, { env: {} });

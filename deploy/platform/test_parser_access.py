@@ -1,5 +1,8 @@
 import unittest
+from types import SimpleNamespace
+from unittest.mock import patch
 from parser_access import public_parser_routing
+from update_parser import active
 
 
 class PublicParserTests(unittest.TestCase):
@@ -30,3 +33,10 @@ class PublicParserTests(unittest.TestCase):
         for source in ['macbookbro.ru {}', 'dev.macbookbro.ru { handle { }']:
             with self.assertRaises(ValueError):
                 public_parser_routing(source)
+
+    def test_oneshot_collector_is_running_while_systemd_reports_activating(self):
+        for state in ['active', 'activating', 'reloading']:
+            with patch('update_parser.subprocess.run', return_value=SimpleNamespace(stdout=state + '\n')):
+                self.assertTrue(active('mac-price-radar-collect.service'))
+        with patch('update_parser.subprocess.run', return_value=SimpleNamespace(stdout='inactive\n')):
+            self.assertFalse(active('mac-price-radar-collect.service'))
