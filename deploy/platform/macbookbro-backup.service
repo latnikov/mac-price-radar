@@ -20,4 +20,5 @@ ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
 ReadWritePaths=/var/backups/macbookbro-platform /var/lib/macbookbro-ops
+ReadWritePaths=/var/backups/macbookbro-shop /var/backups/macbookbro-deploy
 ReadWritePaths=/var/lib/macbookbro-shop /var/lib/macbookbro-orders /srv/mac-price-radar/dev/data/private /srv/mac-price-radar/prod/data/private
