@@ -66,7 +66,9 @@ def main():
                     if attempt == 19:
                         raise
                     time.sleep(0.5)
-            shutil.copy2(candidate, caddy)
+            # The private candidate is 0600; retain the live Caddyfile's owner
+            # and mode so the Caddy service can read the installed content.
+            shutil.copyfile(candidate, caddy)
             run('systemctl', 'reload', 'caddy')
             (target / 'parser-release.json').write_text(json.dumps({'commit': commit, 'files': FILES,
                 'deployed_at': time.time(), 'public_dev': True}))
