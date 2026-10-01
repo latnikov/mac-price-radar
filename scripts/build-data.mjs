@@ -18,6 +18,7 @@ import { fetchMadstoreOffers } from './madstore.mjs';
 import { fetchSmartDeviceOffers } from './smart-device.mjs';
 import { fetchAfmOffers } from './afmcenter.mjs';
 import { fetchHitappleOffers } from './hitapple.mjs';
+import { createStore77Fetch, fetchStore77Offers } from './store77.mjs';
 import { afmWithdrawalObservations } from './afm-withdrawals.mjs';
 import { fetchAvitoOffers } from './avito.mjs';
 import { AVITO, visibleAvitoOffer } from './avito-policy.mjs';
@@ -80,7 +81,7 @@ try {
     });
     store.ingestRun({ runId: 'legacy-migration-v1', observations, sources: [...new Set(observations.map(o => o.retailer))].map(retailer => ({ retailer, status: 'partial' })), actor: 'migration', reason: 'Сохранение исходного снимка; прежние предположения требуют проверки' });
   }
-  const retailers = ['BigGeek', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'HitApple', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
+  const retailers = ['BigGeek', 'Store77', 'Айфория', 'RifaStore', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'HitApple', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
   const telegram = new Map((await readTelegramSources()).map(source => [source.retailer, source]));
   retailers.push(...[...telegram.keys()].filter(retailer => !retailers.includes(retailer)));
   const selected = process.env.RETAILER && process.env.RETAILER !== 'all' ? [...new Set(process.env.RETAILER.split(',').map(x => x.trim() === 'Iphoriya' ? 'Айфория' : x.trim()))] : retailers;
@@ -114,7 +115,8 @@ try {
       unpriced: [...(mac?.unpriced || []), ...(phones?.unpriced || [])] };
   }
   async function collectMac(retailer) {
-    const { fetchPage, fetchResponse, metrics } = createCollectorFetch({ signal: runSignal });
+    const { fetchPage, fetchResponse, metrics } = createCollectorFetch({ signal: runSignal,
+      ...(retailer === 'Store77' ? { fetchImpl: createStore77Fetch() } : {}) });
     networkBySource.set(retailer, metrics);
     const out = [], failures = [];
     if (retailer === FOREIGN_SOURCE) {
@@ -164,6 +166,10 @@ try {
     }
     if (retailer === 'HitApple') {
       const result = await fetchHitappleOffers({ fetchPage });
+      return { offers: result.offers, failures: result.failures, counts: result.stats };
+    }
+    if (retailer === 'Store77') {
+      const result = await fetchStore77Offers({ fetchPage });
       return { offers: result.offers, failures: result.failures, counts: result.stats };
     }
     if (retailer === 'Smart Device') {

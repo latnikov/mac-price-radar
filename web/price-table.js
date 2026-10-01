@@ -29,6 +29,7 @@ export const tableConfigurationKey = offer => JSON.stringify(isPhone(offer) ? [n
 ]);
 export const tableHardwareKey = offer => JSON.stringify([tableConfigurationKey(offer),
   ...(isPhone(offer) ? phoneComparisonFields : comparisonFields).map(field => known(offer[field]) ? normalized(offer[field]) : 'unknown'),
+  ...(isPhone(offer) ? [] : [offer.keyboardLocalization || 'none']),
 ]);
 export const tableVariantKey = offer => JSON.stringify([tableHardwareKey(offer), normalized(offer.color)]);
 
@@ -67,7 +68,7 @@ export function currentPrice(offer, now = Date.now()) {
 
 export function buildPriceTable(offers, { now = Date.now(), contextOffers = offers } = {}) {
   const colorTrust = findColorPriceLowTrust(contextOffers.filter(offer => currentPrice(offer, now) && offer.retailer !== 'Авито НН' && !isProcurementOffer(offer)), tableHardwareKey, { minimumDifference: 0.05 });
-  const baseKey = offer => JSON.stringify([tableConfigurationKey(offer), normalized(offer.color)]);
+  const baseKey = offer => JSON.stringify([tableConfigurationKey(offer), normalized(offer.color), offer.keyboardLocalization || 'none']);
   const context = new Map();
   for (const offer of contextOffers) {
     const key = baseKey(offer);

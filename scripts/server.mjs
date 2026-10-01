@@ -15,7 +15,7 @@ import { publicAvitoState } from './avito-access.mjs';
 import { readAvitoMonitor, avitoMonitorCsv } from './avito-monitor.mjs';
 import { FOREIGN_SOURCE, readForeignPrices } from './foreign-prices.mjs';
 
-const RETAILERS = ['BigGeek', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'HitApple', 'RifaStore', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
+const RETAILERS = ['BigGeek', 'Store77', 'Айфория', 'Technichno', 'iMobile', 'ReSale', 'Apple Store', 'Rebro', 'Madstore', 'Smart Device', 'AFM', 'HitApple', 'RifaStore', 'BSA', 'Дима', AVITO, FOREIGN_SOURCE];
 const STATIC_FILES = new Map([
   ['/web/avito.html', ['web/avito.html', 'text/html; charset=utf-8']],
   ['/web/foreign.html', ['web/foreign.html', 'text/html; charset=utf-8']],

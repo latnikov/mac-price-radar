@@ -48,7 +48,7 @@ const CURRENT_CHIPS = {
 };
 const RETAILER_GROUPS = [
   { key: 'procurement', label: 'Закупка', retailers: [{ name: 'Дима', label: 'Дима' }, { name: 'BSA', label: 'BSA' }] },
-  { key: 'moscow', label: 'МСК / РФ', retailers: [{ name: 'BigGeek', label: 'BigGeek' }, { name: 'RifaStore', label: 'Rifa' }] },
+  { key: 'moscow', label: 'МСК / РФ', retailers: [{ name: 'BigGeek', label: 'BigGeek' }, { name: 'Store77', label: 'Store77' }, { name: 'RifaStore', label: 'Rifa' }] },
   { key: 'nizhny', label: 'НН', retailers: [{ name: 'Айфория', label: 'Айфория' }, { name: 'Technichno', label: 'Технично' }, { name: 'iMobile', label: 'iMobile' }, { name: 'ReSale', label: 'ReSale' }, { name: 'Apple Store', label: 'Apple Store' }, { name: 'Rebro', label: 'Rebro' }, { name: 'Madstore', label: 'Madstore' }, { name: 'Smart Device', label: 'Smart Device' }, { name: 'AFM', label: 'AFM' }, { name: 'HitApple', label: 'Хит Эпл' }] },
 ];
 const CONFIGURED_RETAILERS = RETAILER_GROUPS.flatMap(group => group.retailers.map(retailer => retailer.name));
@@ -310,6 +310,8 @@ function variantLabel(offer) {
 }
 
 function offerDetails(cell, offer, { showVariant = false, analytics, colorTrust } = {}) {
+  if (offer.keyboardLocalization === 'localized') cell.append(text('span', 'Русифицированный', 'tag'));
+  if (offer.warrantyYears) cell.append(text('span', `${offer.warrantyYears} года гарантии`, 'tag'));
   if (isProcurementOffer(offer)) {
     const at = offer.submittedAt || offer.fetchedAt;
     cell.append(text('span', procurementAge(offer), 'tag'));
