@@ -46,7 +46,7 @@ Telegram-канал, YML Яндекс Бизнес и XML Авито сохра�
 
 ## Обновление и откат
 
-Релиз: storefront, package.json с type=module, совместимые web/retail-analytics.js, web/price-table.js и web/avito-columns.js. На сервере выполнить python3 storefront/deploy/update.py /absolute/release/path. Сохраняются код, закрытые настройки, согласованный снимок БД и фото. При ошибке возвращается прежний код и сохраняются данные заказов. Caddy и соседние окружения не меняются.
+Релиз: storefront, package.json с type=module, совместимые web/retail-analytics.js, web/price-table.js и web/avito-columns.js. На сервере выполнить python3 storefront/deploy/update.py /absolute/release/path. Сохраняются код, закрытые настройки, согласованный снимок БД и фото. При ошибке возвращается прежний код и сохраняются данные заказов. Caddy и соседние окружения не меняются. Для первого подключения CRM можно передать два дополнительных аргумента: закрытый JSON с разрешёнными ключами окружения и gzip-архив Telegram JSON. Исходные настройки сохраняются до замены, импорт проходит при остановленном сервисе; проверяются контрольные суммы неизменяемых снимков заказов, целостность БД и внешние ключи. Закрытые файлы не входят в Git-релиз.
 
 Отдельный архив: STORE_DB=/var/lib/macbookbro-shop/shop.sqlite STORE_MEDIA_DIR=/var/lib/macbookbro-shop/media node storefront/backup.mjs /private/backup/new-directory. Копию хранить вне сервера. Восстановление БД требует остановки сервиса, сохранения новых заказов отдельно, удаления старых WAL/SHM и проверки integrity_check. Откат кода не должен удалять принятые после релиза заказы.
 
