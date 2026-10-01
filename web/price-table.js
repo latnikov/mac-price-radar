@@ -1,5 +1,6 @@
 import { NIZHNY_RETAILERS, isProcurementOffer, calculateRetailAnalytics, colorPriceTrustKey, findColorPriceLowTrust } from './retail-analytics.js';
 import { priceColumnKey } from './avito-columns.js';
+import { isPhone, phoneModelName, configurationBadges } from './product-families.js';
 
 const collator = new Intl.Collator('ru', { numeric: true });
 const normalized = value => String(value ?? '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -7,13 +8,14 @@ const known = value => value != null && value !== '' && value !== 'unknown';
 const storage = value => ({ 1024: 1000, 2048: 2000, 4096: 4000, 8192: 8000, 16384: 16000 })[Number(value)] ?? Number(value);
 const models = ['MacBook Air', 'MacBook Pro', 'MacBook Neo', 'Mac mini', 'Mac Studio', 'iMac'];
 const comparisonFields = ['cpuCores', 'gpuCores', 'condition', 'keyboard', 'region', 'displayType', 'bundle'];
+const phoneComparisonFields = ['simType', 'condition', 'region', 'bundle'];
 const colors = ['Silver', 'Space Gray', 'Space Black', 'Midnight', 'Starlight', 'Sky Blue', 'Gold', 'Blush', 'Citrus', 'Indigo', 'Blue', 'Green', 'Orange', 'Yellow', 'Pink', 'Purple'];
 export const TABLE_PAGE_SIZE = 30;
 
 export function normalizeTableOffer(offer) {
   const name = String(offer.model || offer.title || 'Не распознано').trim();
-  const base = models.find(model => normalized(name).startsWith(normalized(model))) || name;
-  const screenIn = Number(offer.screenIn) || Number(name.match(/\b(13|14|15|16|24|27)\b/)?.[1]) || null;
+  const base = phoneModelName(name) || models.find(model => normalized(name).startsWith(normalized(model))) || name;
+  const screenIn = isPhone({ model: base }) ? null : Number(offer.screenIn) || Number(name.match(/\b(13|14|15|16|24|27)\b/)?.[1]) || null;
   return { ...offer, model: models.includes(base) && screenIn ? `${base} ${screenIn}"` : base,
     screenIn, ramGb: Number(offer.ramGb) || null, storageGb: storage(offer.storageGb) || null,
     chip: String(offer.chip || 'unknown').trim().replace(/\s+/g, ' ').toUpperCase().replace(/ PRO$/, ' Pro').replace(/ MAX$/, ' Max').replace(/ ULTRA$/, ' Ultra'),
@@ -22,11 +24,11 @@ export function normalizeTableOffer(offer) {
 }
 
 // Model, memory and storage form a base; colors and incompatible specifications stay separate.
-export const tableConfigurationKey = offer => JSON.stringify([
+export const tableConfigurationKey = offer => JSON.stringify(isPhone(offer) ? [normalized(offer.model), storage(offer.storageGb)] : [
   normalized(offer.model), offer.screenIn, normalized(offer.chip), offer.ramGb, storage(offer.storageGb),
 ]);
 export const tableHardwareKey = offer => JSON.stringify([tableConfigurationKey(offer),
-  ...comparisonFields.map(field => known(offer[field]) ? normalized(offer[field]) : 'unknown'),
+  ...(isPhone(offer) ? phoneComparisonFields : comparisonFields).map(field => known(offer[field]) ? normalized(offer[field]) : 'unknown'),
 ]);
 export const tableVariantKey = offer => JSON.stringify([tableHardwareKey(offer), normalized(offer.color)]);
 
@@ -77,7 +79,7 @@ export function buildPriceTable(offers, { now = Date.now(), contextOffers = offe
     const sample = { ...offer };
     // An omitted detail can join one unambiguous value, but never two conflicting
     // CPU/GPU bins, conditions, regions or keyboard layouts.
-    for (const field of comparisonFields) {
+    for (const field of isPhone(offer) ? [] : comparisonFields) {
       const values = context.get(baseKey(offer))?.get(field);
       if (!known(sample[field]) && values?.size === 1) sample[field] = values.values().next().value;
     }
@@ -165,10 +167,10 @@ export function searchOverview(groups, now = Date.now()) {
   for (const item of same) shops.set(item.retailer, Math.min(shops.get(item.retailer) ?? Infinity, item.price));
   const prices = [...shops.values()];
   const winners = [...shops].filter(([, price]) => price === offer.price).map(([name]) => name).join(', ');
-  const spec = [offer.model, offer.chip, offer.ramGb ? `${offer.ramGb} ГБ RAM` : null, offer.storageGb ? `${offer.storageGb} ГБ SSD` : null, offer.color !== 'unknown' ? offer.color : null,
+  const spec = [offer.model, ...configurationBadges(offer), offer.color !== 'unknown' ? offer.color : null,
     ({ new: 'новый', used: 'б/у', refurbished: 'восстановленный', display: 'витринный', open_box: 'вскрытая коробка' })[offer.condition],
     offer.cpuCores && offer.gpuCores ? `CPU ${offer.cpuCores} / GPU ${offer.gpuCores}` : null,
-    offer.keyboard && offer.keyboard !== 'unknown' ? `клавиатура ${offer.keyboard}` : null].filter(Boolean).join(' · ');
+    offer.keyboard && !['unknown', 'not_applicable'].includes(offer.keyboard) ? `клавиатура ${offer.keyboard}` : null].filter(Boolean).join(' · ');
   const stats = prices.length > 1 ? `В этой конфигурации и цвете: магазинов — ${prices.length}, средняя цена — ${rub(prices.reduce((a, b) => a + b, 0) / prices.length)}, разброс — ${rub(Math.max(...prices) - offer.price)}.` : 'Для этой конфигурации и цвета есть свежая цена только одного магазина.';
   const trust = group.analytics.lowTrustReasons.get(offer.retailer);
   return `${spec}: среди найденных свежих предложений магазинов Нижнего Новгорода с лучшим совпадением минимальная цена у ${winners} — ${rub(offer.price)}. ${stats} Всего в выдаче: ${groups.length} вариантов; свежие цены НН — у ${new Set(candidates.map(item => item.offer.retailer)).size} магазинов. ${trust ? `Цена требует проверки: ${trust}. ` : ''}Данные за последние 4 часа; наличие и условия оплаты уточняйте у магазина.`;

@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
+import { isIphone } from './iphone.mjs';
 
 export const normalize = value => String(value ?? '').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]+/gi, ' ').trim();
 export const known = value => value !== undefined && value !== null && value !== '' && value !== 'unknown';
 export const identityFields = ['model', 'chip', 'cpuCores', 'gpuCores', 'ramGb', 'storageGb', 'screenIn', 'color', 'keyboard', 'region', 'displayType', 'bundle'];
+export const offerIdentityFields = offer => isIphone(offer) ? ['model', 'storageGb', 'color', 'simType', 'region', 'bundle'] : identityFields;
 export const canonicalModelName = value => /^MacBook\s+Neo(?:\s+13(?:["”]|\s*дюйм)?)?$/i.test(String(value ?? '').trim()) ? 'MacBook Neo 13"' : value;
 export const canonicalStorageGb = value => ({ 1024: 1000, 2048: 2000, 4096: 4000, 8192: 8000, 16384: 16000 })[Number(value)] ?? value;
 export const inPublicSourceScope = offer => {
@@ -51,8 +53,9 @@ export function moneyMinor(input) {
 }
 
 export function variantKey(offer) {
-  const parts = identityFields.map(field => normalize(offer[field]));
-  if (identityFields.some(field => !known(offer[field])) || offer.qualityWarnings?.length) {
+  const fields = offerIdentityFields(offer);
+  const parts = fields.map(field => normalize(offer[field]));
+  if (fields.some(field => !known(offer[field])) || offer.qualityWarnings?.length) {
     parts.push('unresolved', normalize(offer.retailer), canonicalUrl(offer.url) || offer.url || offer.id || offer.name || 'catalog');
   }
   return parts.join('|');
@@ -65,7 +68,7 @@ export function assessOffer(offer, { now = Date.now(), staleAfterMs = 2 * 3600_0
   if (offer.rejected || offer.validationStatus === 'rejected') reasons.push('Наблюдение отклонено при проверке');
   if (offer.latestAttempt?.rejected) reasons.push(`Последняя проверка отклонена: ${[...(offer.latestAttempt.qualityWarnings || []), ...(offer.latestAttempt.validationIssues || [])].join('; ')}`);
   if (offer.withdrawn || offer.latestAttempt?.status === 'withdrawn') reasons.push('Цена отозвана источником');
-  const missing = identityFields.filter(field => !known(offer[field]));
+  const missing = offerIdentityFields(offer).filter(field => !known(offer[field]));
   if (missing.length) reasons.push(`Не проверены характеристики: ${missing.join(', ')}`);
   if (offer.condition !== 'new') reasons.push(`Состояние: ${offer.condition || 'unknown'}`);
   if (moneyMinor(offer.price) === null) reasons.push('Цена отсутствует или некорректна');

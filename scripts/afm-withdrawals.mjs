@@ -5,7 +5,7 @@ export function afmWithdrawalObservations(previousOffers, unpriced, fetchedAt = 
     .map(offer => [offer.externalId, offer]));
   const withdrawals = [];
   for (const item of unpriced) {
-    const old = prior.get(`afm:${item.productId}:${item.editionId}`);
+    const old = prior.get(item.externalId || `afm:${item.productId}:${item.editionId}`);
     if (!old || old.withdrawn) continue;
     const withdrawal = { ...old, url: item.url, price: null, priceMinor: null,
       fetchedAt, observedAt: fetchedAt, status: 'withdrawn', validationStatus: 'withdrawn', rejected: true,

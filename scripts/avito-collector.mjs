@@ -7,6 +7,7 @@ import { parseAvitoSearch, parseAvitoDetail } from './avito-parser.mjs';
 import { writeAvitoJson } from './avito-storage.mjs';
 import { createAvitoDetailQueue } from './avito-queue.mjs';
 import { collectAvitoBatch } from './avito-batch.mjs';
+import { AVITO_SEARCH_TARGETS } from './avito-search-targets.mjs';
 
 export const AVITO_SEARCH = 'https://www.avito.ru/nizhniy_novgorod/noutbuki?q=macbook';
 export { createAvitoHttpTransport } from './avito-transport.mjs';
@@ -15,7 +16,7 @@ export async function collectAvitoSnapshot({ fetchPage, searchUrl = AVITO_SEARCH
   if (typeof fetchPage !== 'function') throw new TypeError('fetchPage is required');
   const startedAt = now(), items = new Map(), pages = new Set(), signatures = new Set(), listings = [], failures = [];
   let next = avitoUrl(searchUrl), expectedTotal = null, duplicates = 0;
-  const snapshot = (complete = false) => ({ schemaVersion: 1, scope: 'avito-nizhny-macbook', startedAt, completedAt: now(), complete,
+  const snapshot = (complete = false) => ({ schemaVersion: 1, scope: 'avito-nizhny-macbook', searchUrl: avitoUrl(searchUrl), startedAt, completedAt: now(), complete,
     expectedTotal, discovered: items.size, pages: pages.size, duplicates, listings: [...listings], failures: [...new Set(failures)] });
   while (next) {
     signal?.throwIfAborted();
@@ -100,6 +101,15 @@ export async function runAvitoWorker({ env = process.env, transportFactory = cre
   try {
     await handle.writeFile(JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() }));
     const prior = await readFile(statePath, 'utf8').then(JSON.parse).catch(() => ({}));
+    const automaticSearch = !env.AVITO_SEARCH_URL && !env.AVITO_CAPTURE_MANIFEST;
+    const targetIndex = automaticSearch && Number.isInteger(prior.nextSearchTarget) && prior.nextSearchTarget >= 0 ? prior.nextSearchTarget % AVITO_SEARCH_TARGETS.length : 0;
+    const searchUrl = env.AVITO_SEARCH_URL || `${AVITO_SEARCH_TARGETS[targetIndex].searchUrl}&localPriority=1`;
+    const queueSuffix = automaticSearch && targetIndex ? `-${targetIndex}` : '';
+    const queuePath = `${dir}/queue${queueSuffix}.json`, discoveryPath = `${dir}/discovery${queueSuffix}.json`;
+    // A complete single query does not prove that listings in the other four
+    // catalogue searches disappeared. Partial snapshots retain their prices.
+    const scopedSnapshot = snapshot => automaticSearch ? { ...snapshot, complete: false,
+      failures: [...new Set([...snapshot.failures, 'Обновлён один из целевых запросов MacBook/iPhone; полнота общего обхода не подтверждена'])] } : snapshot;
     if (env.AVITO_TRANSPORT !== 'http' && !env.AVITO_CAPTURE_MANIFEST) {
       await writeAvitoJson(statePath, { state: 'not_configured', message: 'Серверный сборщик установлен; доступ к Авито ещё не подтверждён', updatedAt: new Date().toISOString() });
       return { state: 'not_configured' };
@@ -118,25 +128,25 @@ export async function runAvitoWorker({ env = process.env, transportFactory = cre
     }
     const startedAt = new Date().toISOString();
     let counts = {}, transport;
-    const routeState = { transport: route.kind, routeKey: route.key };
+    const routeState = { transport: route.kind, routeKey: route.key, ...(automaticSearch ? { nextSearchTarget: (targetIndex + 1) % AVITO_SEARCH_TARGETS.length, searchQuery: AVITO_SEARCH_TARGETS[targetIndex].query } : {}) };
     await writeAvitoJson(statePath, { state: 'running', startedAt, ...routeState });
     try {
       const signal = AbortSignal.timeout(55 * 60000);
-      const previousQueue = await readFile(`${dir}/queue.json`, 'utf8').then(JSON.parse).catch(error => {
+      const previousQueue = await readFile(queuePath, 'utf8').then(JSON.parse).catch(error => {
         if (error.code === 'ENOENT') return undefined;
         throw new Error('Авито: не удалось прочитать сохранённую очередь', { cause: error });
       });
-      const previousDiscovery = await readFile(`${dir}/discovery.json`, 'utf8').then(JSON.parse).catch(e=>{if(e.code==='ENOENT')return undefined;throw new Error('Авито: не удалось прочитать сохранённую выдачу');});
+      const previousDiscovery = await readFile(discoveryPath, 'utf8').then(JSON.parse).catch(e=>{if(e.code==='ENOENT')return undefined;throw new Error('Авито: не удалось прочитать сохранённую выдачу');});
       const limit=(name,fallback,min,max)=>{const value=Number(env[name]);return Number.isFinite(value)&&value>=min&&value<=max?Math.trunc(value):fallback;};
       const maxRequests=limit('AVITO_MAX_REQUESTS',60,3,3000);
       if(!env.AVITO_CAPTURE_MANIFEST)transport=transportFactory({signal,proxyUrl:route.proxyUrl,
         session:await avitoSession(`${dir}/session.json`,route.key),intervalMs:limit('AVITO_INTERVAL_MS',10000,2000,60000),maxRequests});
-      const snapshot = env.AVITO_CAPTURE_MANIFEST ? await replayAvitoCapture(env.AVITO_CAPTURE_MANIFEST)
-        : await collectAvitoBatch({ searchUrl: env.AVITO_SEARCH_URL || `${AVITO_SEARCH}&localPriority=1`, signal, previousQueue, previousDiscovery, fetchPage: transport,maxDetails:maxRequests-1,
+      const snapshot = scopedSnapshot(env.AVITO_CAPTURE_MANIFEST ? await replayAvitoCapture(env.AVITO_CAPTURE_MANIFEST)
+        : await collectAvitoBatch({ searchUrl, signal, previousQueue, previousDiscovery, fetchPage: transport,maxDetails:maxRequests-1,
           onProgress: async progress => { counts = progress; await writeAvitoJson(statePath, { state: 'running', startedAt, updatedAt: new Date().toISOString(), ...routeState, counts }); },
-          onQueue: queue => writeAvitoJson(`${dir}/queue.json`, queue),
-          onDiscovery: discovery=>writeAvitoJson(`${dir}/discovery.json`,discovery),
-          onCheckpoint: partial => writeAvitoJson(`${dir}/snapshot.json`, partial) });
+          onQueue: queue => writeAvitoJson(queuePath, queue),
+          onDiscovery: discovery=>writeAvitoJson(discoveryPath,discovery),
+          onCheckpoint: partial => writeAvitoJson(`${dir}/snapshot.json`, scopedSnapshot(partial)) }));
       if(snapshot.listings.length||snapshot.complete)await writeAvitoJson(`${dir}/snapshot.json`, snapshot);
       const state = { state: snapshot.complete ? 'ready' : 'partial', ...routeState, updatedAt: snapshot.completedAt,
         counts: { pages: snapshot.pages, discovered: snapshot.discovered, detailed: snapshot.listings.length,...transport?.stats() }, failures: snapshot.failures };

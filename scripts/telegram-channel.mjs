@@ -27,7 +27,7 @@ export function parseTelegramChannel(messages, source) {
       const qualityWarnings = [...(item.qualityWarnings || [])];
       if (/\$|€|USD|EUR|USDT|рассроч|в месяц|от\s+\d|опт\s+от/i.test(line)) qualityWarnings.push('Нужно уточнить валюту или условия цены');
       const offer = { ...item, ...source, condition, qualityWarnings, submittedAt: new Date(observed).toISOString(), fetchedAt: new Date(observed).toISOString(), observedAt: new Date(observed).toISOString() };
-      const key = stableId('variant', variantFields.map(field => offer[field] ?? null));
+      const key = stableId('variant', [...variantFields.map(field => offer[field] ?? null), ...(offer.model.startsWith('iPhone') ? [offer.simType] : [])]);
       // A newer post replaces a variant's previous price, even if it rose.
       if (offers.has(key)) continue;
       const channelPath = source.sourceUsername || `c/${source.sourceChatId.replace(/^-100/, '')}`;
@@ -38,7 +38,7 @@ export function parseTelegramChannel(messages, source) {
         evidence: { ...item.evidence, method: 'telegram-channel-v1', sourceChatId: source.sourceChatId } });
     }
   }
-  if (!offers.size) failures.push('В сообщениях пока не найдены распознаваемые цены Mac. Нужны текст, модель, память и полная цена.');
+  if (!offers.size) failures.push('В сообщениях пока не найдены распознаваемые цены Mac или iPhone 17/18 Pro и Pro Max. Нужны текст, модель, память и полная цена.');
   return { offers: [...offers.values()], failures,
     stats: { protocol: 'Telegram Bot API', messages: messages.length, candidates, parsed: offers.size, rejected: failures.length } };
 }

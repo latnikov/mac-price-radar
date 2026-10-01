@@ -40,6 +40,23 @@ test('Russian procurement signals identify the new-device baseline and reject mi
   assert.equal(calls,1);
 });
 
+test('phone procurement signal names iPhone and preserves the plain price comparison wording', async t => {
+  const dir = await temp(t); let text;
+  const phone = { model: 'iPhone 18 Pro', storageGb: 256, color: 'Silver', simType: 'eSIM', region: 'US' };
+  const candidate = offer(undefined, { ...phone, title: 'iPhone 18 Pro 256GB Silver eSIM',
+    comparisonKind: 'russian-procurement-gap', peerCount: 0, matchKind: 'same_color',
+    procurement: { ...phone, retailer: 'BSA', price: 100000, condition: 'new', observedAt: new Date(NOW).toISOString() } });
+  const result = await sendAvitoAlerts({ env, dir, now: () => NOW, opportunities: opportunities([candidate]),
+    fetchImpl: async (url, options) => { text = JSON.parse(options.body).text; return response(); } });
+  assert.equal(result.sentCount, 1);
+  assert.match(text, /Русский закуп нового iPhone · BSA/);
+  assert.match(text, /не прибыль/);
+  for (const extra of [{ simType: 'unknown' }, { simType: 'Dual SIM' }, { region: 'EU' }, { storageGb: 512 }]) {
+    await sendAvitoAlerts({ env, dir, now: () => NOW, opportunities: opportunities([{ ...candidate, dedupKey: 'avito:1234567891:8000000', procurement: { ...candidate.procurement, ...extra } }]),
+      fetchImpl: async () => assert.fail('phone configuration mismatch must not send a signal') });
+  }
+});
+
 test('only the dedicated bot and explicit recipient enable alerts; business credentials are never reused', async t => {
   const dir = await temp(t);
   let calls = 0;

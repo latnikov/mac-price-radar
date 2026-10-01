@@ -11,6 +11,70 @@ import { openMasterStore } from '../scripts/master-store.mjs';
 import { normalizeAvitoListing } from '../scripts/avito-policy.mjs';
 import { record as avitoRecord } from './fixtures/avito/sample.mjs';
 import { avitoSellerColumns, groupOffersByPriceColumn } from '../web/avito-columns.js';
+import { prepareTableOffers, buildPriceTable, currentPrice } from '../web/price-table.js';
+import { configurationBadges } from '../web/product-families.js';
+import { parseProduct } from '../scripts/offer-normalization.mjs';
+
+test('table API preserves iPhone SIM identities through SQLite and keeps retail comparisons separate', async t => {
+  const app = await setup(t, { env: {} });
+  const fetchedAt = new Date().toISOString();
+  const models = ['iPhone 18 Pro', 'iPhone 18 Pro Max', 'iPhone 17 Pro', 'iPhone 17 Pro Max'];
+  const sims = ['eSIM', 'SIM + eSIM', 'unknown'];
+  const observations = models.flatMap((model, modelIndex) => sims.flatMap((simType, simIndex) => ['BSA', 'Technichno'].map(retailer => {
+    const procurement = retailer === 'BSA';
+    const slug = `${modelIndex}-${simIndex}-${retailer}`;
+    return parseProduct(`${model} 256GB Silver`, `https://shop.test/iphone-${slug}`, retailer,
+      (procurement ? 90000 : 110000) + modelIndex * 5000 + simIndex * 1000, fetchedAt, {
+        listingId: `iphone:${slug}`, simType, condition: 'new', region: 'US', bundle: 'standard',
+        stock: 'InStock', priceType: 'full', paymentMethod: 'cash', buyerType: 'retail', minimumQuantity: 1,
+        visibility: 'public', dataKind: 'live',
+      });
+  })));
+  assert.ok(observations.every(Boolean));
+  app.store.ingestRun({ observations });
+  const { offers } = await (await app.request('/api/table?sheet=retail')).json();
+  assert.equal(offers.length, 24);
+  assert.deepEqual(new Set(offers.map(offer => offer.simType)), new Set(sims));
+  const rows = buildPriceTable(prepareTableOffers(offers));
+  assert.equal(rows.length, 12);
+  for (const row of rows) {
+    assert.equal(row.offers.length, 2);
+    assert.equal(new Set(row.offers.map(offer => offer.simType)).size, 1);
+    assert.equal(row.analytics.averageRetail - row.analytics.minimumProcurement, 20000);
+    assert.equal(row.analytics.recommendedPrice, row.analytics.averageRetail - 500);
+    assert.ok(configurationBadges(row.sample).includes(row.sample.simType === 'unknown' ? 'SIM не указан' : row.sample.simType));
+  }
+});
+
+test('table API retains withdrawal status while exposing only safe last-attempt details', async t => {
+  const app = await setup(t, { env: {} });
+  const fetchedAt = new Date().toISOString();
+  const afm = parseProduct('iPhone 17 Pro 256GB Silver eSIM', 'https://afmcenter.ru/shop/iphone/iphone-17-pro?editionuid=101', 'AFM', 100000, fetchedAt, {
+    externalId: 'afm-iphone:100:101', sourceProductId: '100', sourceVariantId: '101', condition: 'new', region: 'US',
+    stock: 'InStock', priceType: 'full', paymentMethod: 'cash', buyerType: 'retail', minimumQuantity: 1,
+  });
+  const competitor = { ...afm, retailer: 'Technichno', url: 'https://shop.test/phone', externalId: 'competitor', sourceVariantId: 'competitor', price: 120000, priceMinor: 12000000 };
+  app.store.ingestRun({ runId: 'priced-phone', observations: [afm, competitor] });
+  app.store.ingestRun({ runId: 'withdrawn-phone', observations: [{ ...afm, price: null, priceMinor: null,
+    fetchedAt: new Date(Date.parse(fetchedAt) + 1000).toISOString(), observedAt: new Date(Date.parse(fetchedAt) + 1000).toISOString(),
+    status: 'withdrawn', validationStatus: 'withdrawn', rejected: true, qualityWarnings: ['Источник отозвал цену'],
+    raw: { privateBody: 'not-public' }, evidence: { privateBody: 'not-public' } }] });
+  const { offers } = await (await app.request('/api/table?sheet=retail')).json();
+  const withdrawn = offers.find(offer => offer.retailer === 'AFM');
+  assert.equal(withdrawn.price, 100000);
+  assert.equal(withdrawn.withdrawn, true);
+  assert.equal(withdrawn.latestAttempt.status, 'withdrawn');
+  assert.equal(withdrawn.latestAttempt.rejected, true);
+  assert.deepEqual(withdrawn.latestAttempt.qualityWarnings, ['Источник отозвал цену']);
+  assert.equal(JSON.stringify(withdrawn).includes('not-public'), false);
+  assert.ok(Object.keys(withdrawn.latestAttempt).every(key => ['status', 'rejected', 'validationStatus', 'qualityWarnings', 'validationIssues', 'observedAt', 'receivedAt'].includes(key)));
+  assert.equal(currentPrice(withdrawn), false);
+  const [row] = buildPriceTable(prepareTableOffers(offers));
+  assert.equal(row.offers.length, 2);
+  assert.equal(row.analytics.minimumRetail, 120000);
+  assert.equal(row.analytics.averageRetail, 120000);
+  assert.equal(row.analytics.recommendedPrice, 119500);
+});
 
 test('Avito API exposes ranked seller prices, honest readiness and no excluded sellers', async t => {
   const app = await setup(t, { env: {} });
@@ -164,7 +228,7 @@ test('table cache revalidates unchanged data and invalidates after a write; priv
 });
 test('assets and desktop prices revalidate while sessions remain uncached', async t => {
   const app = await setup(t);
-  for (const path of ['/web/', '/web/app.js', '/web/price-status.js', '/web/avito-columns.js', '/web/avito-status.js', '/web/view-state.js', '/web/price-table.js', '/web/styles.css', '/api/desktop-prices']) {
+  for (const path of ['/web/', '/web/app.js', '/web/price-status.js', '/web/avito-columns.js', '/web/avito-status.js', '/web/view-state.js', '/web/price-table.js', '/web/product-families.js', '/web/styles.css', '/api/desktop-prices']) {
     const response = await app.request(path);
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'private, no-cache');

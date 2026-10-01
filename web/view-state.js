@@ -1,6 +1,7 @@
-const families = new Set(['air', 'pro', 'neo', 'mini', 'studio', 'imac', '*']);
+import { PHONE_FAMILIES } from './product-families.js';
+const families = new Set(['air', 'pro', 'neo', 'mini', 'studio', 'imac', ...Object.keys(PHONE_FAMILIES), '*']);
 const sorts = new Set(['model', 'price-up', 'price-down', 'fresh', 'coverage', 'relevance']);
-export const emptyFilters = () => ({ family: null, chip: null, screen: '', ram: '', ssd: '', color: '', stock: '' });
+export const emptyFilters = () => ({ family: null, chip: null, screen: '', ram: '', ssd: '', color: '', sim: '', stock: '' });
 const shortText = value => String(value || '').replace(/[\x00-\x1f\x7f]/g, '').trim().slice(0, 120);
 const positiveNumber = value => /^\d+(?:\.\d+)?$/.test(value || '') && Number(value) > 0 && Number(value) <= 1e9 ? value : '';
 
@@ -14,7 +15,9 @@ export function readView(hash = '') {
     filters.chip = shortText(params.get('chip')) || '*';
     for (const key of ['screen', 'ram', 'ssd']) filters[key] = positiveNumber(params.get(key));
     filters.color = shortText(params.get('color'));
+    filters.sim = ['eSIM', 'SIM + eSIM', 'Dual SIM', 'unknown'].includes(params.get('sim')) ? params.get('sim') : '';
     filters.stock = ['in', 'out'].includes(params.get('stock')) ? params.get('stock') : '';
+    if (PHONE_FAMILIES[filters.family]) Object.assign(filters, { chip: '*', screen: '', ram: '' });
   }
   return { filters, query, min: positiveNumber(params.get('min')), max: positiveNumber(params.get('max')), sort: sorts.has(params.get('sort')) ? params.get('sort') : 'model' };
 }
@@ -30,12 +33,12 @@ export function writeView(view) {
 }
 
 const normalize = value => String(value ?? '').normalize('NFKC').toLowerCase().replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-const aliases = { 'про': 'pro', 'макс': 'max', 'ультра': 'ultra', 'эйр': 'air', 'аир': 'air', 'макбук': 'macbook', 'мак': 'mac', 'мини': 'mini', 'студио': 'studio', 'тб': 'tb', 'гб': 'gb' };
-const canonical = value => normalize(value).replace(/([мm])\s*(\d+)/g, 'm$2').split(/\s+/).map(word => aliases[word] || word).join(' ').replace(/\b(m\d+)(pro|max|ultra)\b/g, '$1 $2');
+const aliases = { 'про': 'pro', 'макс': 'max', 'ультра': 'ultra', 'эйр': 'air', 'аир': 'air', 'макбук': 'macbook', 'мак': 'mac', 'мини': 'mini', 'студио': 'studio', 'айфон': 'iphone', 'тб': 'tb', 'гб': 'gb' };
+const canonical = value => normalize(value).replace(/(^|\s)[мm]\s*(\d+)/g, '$1m$2').split(/\s+/).map(word => aliases[word] || word).join(' ').replace(/\b(m\d+)(pro|max|ultra)\b/g, '$1 $2');
 export const searchTerms = query => canonical(query).match(/\bm\d+\s+(?:pro|max|ultra)\b|\S+/g) || [];
 export function offerSearchText(offer) {
   const storage = ({ 1024: 1000, 2048: 2000, 4096: 4000, 8192: 8000, 16384: 16000 })[Number(offer.storageGb)] ?? Number(offer.storageGb);
-  return canonical([offer.title, offer.model, offer.chip, offer.color, offer.sku, offer.article, offer.retailer, offer.sourceTitle, offer.sellerName, offer.screenIn, offer.ramGb, offer.storageGb, storage >= 1000 ? `${storage / 1000} TB ТБ` : ''].filter(Boolean).join(' '));
+  return canonical([offer.title, offer.model, offer.chip, offer.color, offer.simType, offer.region, offer.sku, offer.article, offer.retailer, offer.sourceTitle, offer.sellerName, offer.screenIn, offer.ramGb, offer.storageGb, storage >= 1000 ? `${storage / 1000} TB ТБ` : ''].filter(Boolean).join(' '));
 }
 // Numbers and chip generations are exact; fuzzy matching only applies to words.
 const oneEdit = (a, b) => {

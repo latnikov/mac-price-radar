@@ -1,9 +1,11 @@
+import { PHONE_FAMILIES, phoneModelName } from './product-families.js';
 export const MAC_FAMILIES = [
   ['air', 'MacBook Air', 'laptop', 'Лёгкий и тонкий'], ['pro', 'MacBook Pro', 'laptop pro', 'Для больших задач'],
   ['neo', 'MacBook Neo', 'laptop neo', 'На каждый день'], ['mini', 'Mac mini', 'mini', 'Компактный настольный'],
   ['studio', 'Mac Studio', 'studio', 'Максимум мощности'], ['imac', 'iMac', 'imac', 'Всё в одном'], ['mac-pro', 'Mac Pro', 'studio', 'Рабочая станция'],
 ];
 export const COLORS = { 'Space Gray': 'Серый космос', 'Space Black': 'Чёрный космос', 'Sky Blue': 'Небесно-голубой', 'Rose Gold': 'Розовое золото', 'Natural Titanium': 'Натуральный титан', 'Black Titanium': 'Чёрный титан', 'White Titanium': 'Белый титан', 'Desert Titanium': 'Пустынный титан', 'Blue Titanium': 'Синий титан', Midnight: 'Тёмная ночь', Starlight: 'Сияющая звезда', Silver: 'Серебристый', Black: 'Чёрный', White: 'Белый', Blue: 'Синий', Green: 'Зелёный', Pink: 'Розовый', Purple: 'Фиолетовый', Yellow: 'Жёлтый', Orange: 'Оранжевый', Gold: 'Золотой', Red: 'Красный', Burgundy: 'Бордовый', Glacier: 'Ледяной', Blush: 'Розовый Blush', Indigo: 'Индиго', Citrus: 'Цитрусовый', 'Jet Black': 'Глянцевый чёрный', 'Cloud Pink': 'Облачный розовый', 'Slate Blue': 'Серо-синий' };
+Object.assign(COLORS, { 'Cosmic Orange': 'Космический оранжевый', 'Deep Blue': 'Тёмно-синий' });
 export const SPEC_KEYS = ['chip', 'screen', 'ram', 'storage', 'cpu', 'gpu', 'display', 'color', 'connection'];
 export const emptyForeignFilters = () => ({ category: 'Mac', family: '', ...Object.fromEntries(SPEC_KEYS.map(key => [key, ''])) });
 export const capacity = value => Number(value) >= 1024 ? `${Number(value) / 1024} TB` : `${value} GB`;
@@ -24,7 +26,9 @@ export function foreignSpecs(row) {
   const text = row.configuration || '';
   let path = '';
   try { path = new URL(row.guideUrl).pathname; } catch {}
-  const family = row.category === 'Mac' ? MAC_FAMILIES.find(([key]) => path.includes(key === 'air' || key === 'pro' || key === 'neo' ? `macbook-${key}` : key === 'imac' ? 'imac' : key === 'mac-pro' ? 'mac-pro' : `mac-${key}`))?.[0] || row.model : row.model;
+  const phone = row.category === 'iPhone' ? phoneModelName(path.slice(1).replace(/-/g, ' ')) || phoneModelName(row.model) : null;
+  const family = row.category === 'Mac' ? MAC_FAMILIES.find(([key]) => path.includes(key === 'air' || key === 'pro' || key === 'neo' ? `macbook-${key}` : key === 'imac' ? 'imac' : key === 'mac-pro' ? 'mac-pro' : `mac-${key}`))?.[0] || row.model
+    : phone ? Object.keys(PHONE_FAMILIES).find(key => PHONE_FAMILIES[key] === phone) : row.model;
   const device = ['Mac', 'iPad', 'iPhone', 'Vision Pro'].includes(row.category) && !accessoryPattern.test(text);
   const directChip = device ? text.match(chipPattern)?.[0] : '';
   const modelChips = row.category === 'iPad' && device ? [...new Set(String(row.model || '').match(chipPattern) || [])] : [];
@@ -39,13 +43,14 @@ export function foreignSpecs(row) {
   const gpu = text.match(/\b(\d+)\s*(?:C|[-\s]?cores?)\s*GPU\b/i)?.[1] || '';
   const display = /\bNano[-\s]?texture\s+(?:Display|Glass)\b/i.test(text) ? 'Nano-texture' : /\bStandard\s+(?:Display|Glass)\b/i.test(text) ? 'Standard' : '';
   const color = Object.keys(COLORS).sort((a, b) => b.length - a.length).find(value => new RegExp(`\\b${value}\\b`, 'i').test(text)) || '';
-  const connection = /\b10\s*GbE\b/i.test(text) ? '10GbE' : /Wi-Fi\s*\+\s*Cellular/i.test(text) ? 'Wi-Fi + Cellular' : /Wi-Fi\s*\+\s*Ethernet/i.test(text) ? 'Wi-Fi + Ethernet' : /Wi-Fi/i.test(text) ? 'Wi-Fi' : /GPS\s*\+\s*Cellular/i.test(text) ? 'GPS + Cellular' : /\bGPS\b/i.test(text) ? 'GPS' : '';
+  const phoneConnection = /(?:nano\s*)?SIM\s*(?:\+|\/)\s*eSIM/i.test(text) ? 'SIM + eSIM' : /Dual\s*SIM|2\s*SIM/i.test(text) ? 'Dual SIM' : /\beSIM\b/i.test(text) ? 'eSIM' : '';
+  const connection = row.category === 'iPhone' ? phoneConnection : /\b10\s*GbE\b/i.test(text) ? '10GbE' : /Wi-Fi\s*\+\s*Cellular/i.test(text) ? 'Wi-Fi + Cellular' : /Wi-Fi\s*\+\s*Ethernet/i.test(text) ? 'Wi-Fi + Ethernet' : /Wi-Fi/i.test(text) ? 'Wi-Fi' : /GPS\s*\+\s*Cellular/i.test(text) ? 'GPS + Cellular' : /\bGPS\b/i.test(text) ? 'GPS' : '';
   return { family, chip, screen, ram, storage, cpu, gpu, display, color, connection };
 }
 
 export function foreignModelLabel(row) {
   const specs = row.specs || foreignSpecs(row);
-  return (row.category === 'Mac' ? MAC_FAMILIES.find(([key]) => key === specs.family)?.[1] : '') || row.model || 'Модель не указана';
+  return (row.category === 'Mac' ? MAC_FAMILIES.find(([key]) => key === specs.family)?.[1] : PHONE_FAMILIES[specs.family]) || row.model || 'Модель не указана';
 }
 
 export function foreignBadges(row) {
@@ -62,7 +67,7 @@ export function foreignBadges(row) {
     connection: value => value === '10GbE' ? 'Ethernet 10 Гбит/с' : value,
   };
   return ['screen', 'chip', 'ram', 'storage', 'cpu', 'gpu', 'display', 'color', 'connection']
-    .filter(key => specs[key]).map(key => ({ key, value: specs[key], label: labels[key](specs[key]) }));
+    .filter(key => specs[key] && (row.category !== 'iPhone' || !['screen', 'chip', 'ram', 'cpu', 'gpu', 'display'].includes(key))).map(key => ({ key, value: specs[key], label: labels[key](specs[key]) }));
 }
 
 function compareChip(a, b) {

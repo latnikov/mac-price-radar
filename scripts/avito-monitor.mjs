@@ -4,6 +4,7 @@ import { calculateAvitoOpportunities } from './avito-opportunities.mjs';
 import { publicAvitoState } from './avito-access.mjs';
 import { AVITO, visibleAvitoOffer, avitoUrl, avitoUsedCondition, businessSellerName, macBookIdentity } from './avito-policy.mjs';
 import { rankAvitoProcurementOffers } from './avito-procurement.mjs';
+import { iphoneModel, isIphone } from './iphone.mjs';
 
 const read = async (path, fallback) => {
   try {
@@ -20,7 +21,7 @@ const safeText = (value, max = 250) => typeof value === 'string' ? value
 const validDate = value => typeof value === 'string' && Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
 function publicReview(item) {
   if (!item || item.city !== 'Нижний Новгород' || !/^\d{6,}$/.test(String(item.id))
-    || !macBookIdentity(item.title) || item.sellerType !== 'private' || !avitoUsedCondition(item.condition) || businessSellerName(item.sellerName)) return null;
+    || (!macBookIdentity(item.title) && !iphoneModel(item.title)) || item.sellerType !== 'private' || !avitoUsedCondition(item.condition) || businessSellerName(item.sellerName)) return null;
   let url;
   try { url = new URL(avitoUrl(item.url)); } catch { return null; }
   if (!new RegExp(`(?:_|/)${item.id}$`).test(url.pathname)) return null;
@@ -50,7 +51,7 @@ export async function readAvitoMonitor({ root, env = process.env, offers = [], n
   const acceptedIds=new Set(ranked.map(o=>String(o.externalId)));
   const listings=[...ranked.map(o=>({id:String(o.externalId),title:safeText(o.title,300),url:o.url,
     sellerName:safeText(o.sellerName,200),price:o.price,condition:'used',observedAt:o.observedAt||o.fetchedAt,
-    configuration:[o.model,o.chip,`${o.ramGb}/${o.storageGb}`,o.color].join(' · '),review:false,rank:o.avitoRank})),
+    configuration: (isIphone(o) ? [o.model, `${o.storageGb}GB`, o.simType, o.region, o.color] : [o.model,o.chip,`${o.ramGb}/${o.storageGb}`,o.color]).filter(value => value && value !== 'unknown').join(' · '),review:false,rank:o.avitoRank})),
     ...review.filter(o=>!acceptedIds.has(o.id)).map(o=>({...o,review:true,
       rank:{referencePrice:null,deltaRub:null,reasons:[o.reason,'Характеристики требуют проверки; сравнение с закупом не рассчитано']}}))];
   listings.sort((a,b)=>Number(b.rank.referencePrice!==null)-Number(a.rank.referencePrice!==null)
@@ -61,7 +62,7 @@ export async function readAvitoMonitor({ root, env = process.env, offers = [], n
   return { state, opportunities: calculateAvitoOpportunities(offers, { now }),listings,
     listingSummary:{total:listings.length,compared:listings.filter(o=>o.rank.referencePrice!==null).length,review:review.length,
       procurementSources:['Дима','BSA'],procurementMaxAgeHours:72},
-    coverage: { complete: false, message: 'Только б/у MacBook частных продавцов в Нижнем Новгороде. Полный охват не подтверждён: бюджет и бесплатный тариф ограничивают число карточек и запусков. Пропавшее из частичной выдачи объявление не считается проданным.' },
+    coverage: { complete: false, message: 'Только б/у MacBook и iPhone 17/18 Pro и Pro Max частных продавцов в Нижнем Новгороде. Полный охват не подтверждён: бюджет и бесплатный тариф ограничивают число карточек и запусков. Пропавшее из частичной выдачи объявление не считается проданным.' },
     notifications: { enabled: notifications.enabled === true, channel: notifications.channel === 'telegram' ? 'telegram' : 'site',
       lastSentAt: validDate(notifications.lastSentAt), message: safeText(notifications.message) },
     review: review.sort((a,b) => Date.parse(b.observedAt) - Date.parse(a.observedAt)).slice(0, 1000) };

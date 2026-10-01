@@ -16,6 +16,19 @@ const avito = (id = 1234567890, price = 80_000, extra = {}) => ({
 const peers = () => [avito(1234567891, 100_000), avito(1234567892, 110_000), avito(1234567893, 115_000)];
 const market = (target = avito(), evidence = peers(), options = {}) => calculateAvitoOpportunities([target, ...evidence], { now, ...options });
 
+test('phone peer opportunities keep known SIM and region groups separate with no laptop characteristics', () => {
+  const phone = { model: 'iPhone 17 Pro', chip: null, screenIn: null, ramGb: null, cpuCores: null, gpuCores: null, storageGb: 256, simType: 'eSIM', region: 'US', color: 'Silver' };
+  const target = avito(undefined, 80000, phone), evidence = peers().map(item => ({ ...item, ...phone }));
+  const result = market(target, evidence);
+  assert.equal(result.candidates.length, 1);
+  assert.equal(result.candidates[0].simType, 'eSIM');
+  assert.ok(!result.candidates[0].reviewReasons.some(reason => /CPU|GPU/.test(reason)));
+  for (const extra of [{ simType: 'Dual SIM' }, { region: 'EU' }, { simType: 'unknown' }, { region: 'unknown' }]) {
+    const different = [...evidence]; different[2] = { ...different[2], ...extra };
+    assert.equal(market(target, different).candidates.length, 0, JSON.stringify(extra));
+  }
+});
+
 test('used baseline uses lowest of three other private sellers and deducts costs without claiming profit', () => {
   const result = market(), candidate = result.candidates[0];
   assert.equal(candidate.referencePrice, 100_000);

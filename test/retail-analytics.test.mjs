@@ -13,6 +13,14 @@ test('catalogue grouping ignores missing CPU/GPU core details', () => {
   assert.equal(catalogConfigurationKey({ ...base, storageGb: 1024 }), catalogConfigurationKey({ ...base, storageGb: 1000 }));
 });
 
+test('iPhone catalogue comparison preserves SIM, condition and region identity', () => {
+  const phone = { model: 'iPhone 17 Pro', storageGb: 1000, simType: 'eSIM', condition: 'new', region: 'US' };
+  assert.equal(catalogConfigurationKey(phone), catalogConfigurationKey({ ...phone, storageGb: 1024, chip: 'A19 Pro' }));
+  for (const difference of [{ model: 'iPhone 17 Pro Max' }, { storageGb: 256 }, { simType: 'unknown' }, { simType: 'SIM + eSIM' }, { condition: 'unknown' }, { region: 'unknown' }]) {
+    assert.notEqual(catalogConfigurationKey(phone), catalogConfigurationKey({ ...phone, ...difference }));
+  }
+});
+
 test('retail analytics compares the minimum procurement with trusted Nizhny prices', () => {
   const analytics = calculateRetailAnalytics([
     { retailer: 'Дима', price: 100000, stock: 'source_reported' },

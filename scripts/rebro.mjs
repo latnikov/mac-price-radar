@@ -1,4 +1,5 @@
 import { decode, parseProduct, price } from './offer-normalization.mjs';
+import { iphoneModel } from './iphone.mjs';
 
 const origin = 'https://nn.rebro-store.ru';
 const catalogUrl = `${origin}/catalog/mac/`;
@@ -15,16 +16,17 @@ function attributes(tag) {
 
 const hasClass = (attrs, name) => String(attrs.class || '').split(/\s+/).includes(name);
 
-function safeCatalogUrl(value, { pagination = false } = {}) {
+function safeCatalogUrl(value, { pagination = false, pageUrl = catalogUrl } = {}) {
   let url;
-  try { url = new URL(decode(value), catalogUrl); }
+  try { url = new URL(decode(value), pageUrl); }
   catch { throw new Error('Rebro catalogue has an invalid URL'); }
-  if (url.origin !== origin || url.username || url.password || !url.pathname.startsWith('/catalog/mac/')) {
+  const cataloguePath = new URL(pageUrl).pathname;
+  if (url.origin !== origin || url.username || url.password || !url.pathname.startsWith(cataloguePath)) {
     throw new Error('Rebro catalogue URL points outside the Nizhny Novgorod Mac catalogue');
   }
   url.hash = '';
   if (pagination) {
-    if (url.pathname !== '/catalog/mac/') throw new Error('Rebro pagination points outside the Mac catalogue');
+    if (url.pathname !== cataloguePath) throw new Error('Rebro pagination points outside the catalogue');
     const page = url.searchParams.get('PAGEN_1');
     if (!/^\d+$/.test(page || '') || Number(page) < 2) throw new Error('Rebro pagination has an invalid page number');
     for (const key of [...url.searchParams.keys()]) if (key !== 'PAGEN_1') url.searchParams.delete(key);
@@ -62,8 +64,8 @@ function parseCard(card, openingTag, pageUrl) {
   const titleNode = childTag(card, 'a', 'link-head');
   if (!titleNode) throw new Error(`Rebro card ${externalId} has no product title`);
   const title = decode(titleNode.html);
-  const url = safeCatalogUrl(titleNode.attrs.href);
-  const supported = /\bApple\s+(?:MacBook\s+(?:Air|Pro|Neo)|iMac)\b/i.test(title);
+  const url = safeCatalogUrl(titleNode.attrs.href, { pageUrl });
+  const supported = new URL(pageUrl).pathname === '/catalog/iphone/' ? Boolean(iphoneModel(title)) : /\bApple\s+(?:MacBook\s+(?:Air|Pro|Neo)|iMac)\b/i.test(title);
   const unavailable = /Нет\s+в\s+наличии/i.test(decode(card));
   const currentPrice = childTag(card, 'b', 'product-price__price');
   if (!currentPrice) {
@@ -131,7 +133,7 @@ export function parseRebroPage(html, pageUrl = catalogUrl) {
     const attrs = attributes(`<a ${match[1]}>`);
     if (!hasClass(attrs, 'pagination__arrow') || !hasClass(attrs, '_next')) continue;
     if (!attrs.href) throw new Error('Rebro next page has no URL');
-    next = safeCatalogUrl(attrs.href, { pagination: true });
+    next = safeCatalogUrl(attrs.href, { pagination: true, pageUrl });
     break;
   }
   return {
@@ -144,12 +146,13 @@ export function parseRebroPage(html, pageUrl = catalogUrl) {
 }
 
 /** Loads every current Rebro Mac card and publishes priced MacBook/iMac offers. */
-export async function fetchRebroOffers({ fetchPage = url => fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 MacPriceRadar/2.0' } }), maxPages = 20 } = {}) {
+export async function fetchRebroOffers({ fetchPage = url => fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 MacPriceRadar/2.0' } }), maxPages = 20, catalogueUrl = catalogUrl } = {}) {
   if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 30) throw new Error('Rebro maxPages must be between 1 and 30');
   const seenPages = new Set();
   const seenProducts = new Set();
   const offers = [];
-  let url = catalogUrl;
+  if (![catalogUrl, `${origin}/catalog/iphone/`].includes(catalogueUrl)) throw new Error('Rebro unsupported catalogue URL');
+  let url = catalogueUrl;
   let total = null;
   let cards = 0;
   let supported = 0;

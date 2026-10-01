@@ -31,6 +31,7 @@ export function buildCatalogRows(catalog, offers, options = {}) {
           id: offer.variantId || `discovered:${productKey}`, name: offer.model || offer.title || 'Не распознан', chip: offer.chip,
           ramGb: offer.ramGb, storageGb: offer.storageGb, colors: [offer.color],
           cpuCores: offer.cpuCores, gpuCores: offer.gpuCores, keyboard: offer.keyboard, region: offer.region,
+          simType: offer.simType, condition: offer.condition,
           discovered: true, reviewStatus: offer.matchStatus,
           verificationNote: offer.qualityReasons.join('; ') || 'Характеристики указаны источником',
         },

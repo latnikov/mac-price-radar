@@ -1,5 +1,6 @@
 import { parseProduct } from './offer-normalization.mjs';
 import { readCachedBsaMessages } from './telegram-business.mjs';
+import { iphoneModel, iphoneStorage } from './iphone.mjs';
 
 function dateInTimeZone(now, timeZone) {
   const parts = new Intl.DateTimeFormat('en', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
@@ -54,11 +55,21 @@ function normalizeCoreNotation(title) {
 
 function normalizeProductTitle(line, contextModel) {
   let title = line
+    .normalize('NFKC')
     .replace(/М(?=\d)/g, 'M')
     .replace(/\b([А-ЯA-Z0-9-]+)\s*\[(?=[A-Z0-9-]+\])/g, '$1 ')
+    .replace(/\biPhone\s+[A-Z][A-Z0-9-]{3,}\s+(?=(?:17|18)\s*Pro\b)/gi, 'iPhone ')
     .replace(/\s+/g, ' ')
     .trim();
 
+  // Phone sections commonly put the family in the heading and only the
+  // storage, color and SIM configuration on their priced rows.
+  const phoneTitle = value => iphoneStorage(value) ? value : value.replace(/\b(128|256|512|1024|2048)\b/, '$1GB');
+  if (iphoneModel(title)) return phoneTitle(title);
+  if (contextModel?.startsWith('iPhone')) {
+    const compact = iphoneModel(`iPhone ${title}`);
+    return phoneTitle(compact ? `iPhone ${title}` : `${contextModel} ${title}`);
+  }
   if (/\bNEO\b/i.test(title)) {
     title = title.replace(/\bNEO\b/i, 'MacBook Neo 13" A18 Pro');
   } else if (!/\bMacBook\s+(?:Air|Pro)\b/i.test(title)) {
@@ -85,7 +96,10 @@ function sectionText(line) {
 
 function contextFrom(line, current) {
   const section = sectionText(line);
-  if (/\b(?:IMAC|MAC\s+MINI|MAC\s+STUDIO|STUDIO\s+DISPLAY|PRO\s+DISPLAY|IPAD|IPHONE|APPLE\s+WATCH)\b/i.test(section)) return null;
+  if (/чехол|\bcase\b|стекло|защит|запчаст|кабел|коробка\s+(?:для|от)/i.test(line)) return null;
+  if (/\bi\s*phone\b|айфон/i.test(section)) return iphoneModel(section) || (/^(?:i\s*phone|айфон)$/i.test(section) ? 'iPhone' : null);
+  if (/\b(?:IMAC|MAC\s+MINI|MAC\s+STUDIO|STUDIO\s+DISPLAY|PRO\s+DISPLAY|IPAD|APPLE\s+WATCH|AIRPODS)\b/i.test(section)) return null;
+  if (current?.startsWith('iPhone') && /^\d{2}\s+pro\b/i.test(section)) return iphoneModel(`iPhone ${section}`);
   if (/\bMACBOOK\s+NEO\b/i.test(section)) return 'MacBook Neo 13" A18 Pro';
   const pro = section.match(/\bMACBOOK\s+PRO\s+(14|16)\b/i);
   if (pro) return `MacBook Pro ${pro[1]}`;
@@ -94,6 +108,7 @@ function contextFrom(line, current) {
   if (/^MACBOOK\s+AIR$/i.test(section)) return 'MacBook Air';
   const compactAir = section.match(/^AIR\s*(13|15)\b/i);
   if (compactAir) return `MacBook Air ${compactAir[1]}`;
+  if (/\bMACBOOK\b/i.test(section)) return null;
   return current;
 }
 
@@ -104,7 +119,10 @@ function skuFrom(line) {
 
 function looksLikeProduct(line, contextModel) {
   const section = sectionText(line);
-  if (/\b(?:IMAC|MAC\s+MINI|MAC\s+STUDIO|STUDIO\s+DISPLAY|PRO\s+DISPLAY|IPAD|IPHONE|APPLE\s+WATCH)\b/i.test(section)) return false;
+  const title = normalizeProductTitle(line, contextModel);
+  if (iphoneModel(title)) return Boolean(iphoneStorage(title)) && !/чехол|case\b|стекло|защит|запчаст|кабел|коробка\s+(?:для|от)/i.test(title);
+  if (contextModel?.startsWith('iPhone') || /\bi\s*phone\b|айфон/i.test(section)) return false;
+  if (/\b(?:IMAC|MAC\s+MINI|MAC\s+STUDIO|STUDIO\s+DISPLAY|PRO\s+DISPLAY|IPAD|APPLE\s+WATCH|AIRPODS)\b/i.test(section)) return false;
   const hasFamily = /\b(?:MacBook\s+)?(?:Air|Pro|NEO)\b/i.test(line) || Boolean(contextModel);
   const hasChip = /[MМ]\d+(?:\s+(?:Pro|Max|Ultra))?\b/i.test(line) || /\bA18\s+Pro\b/i.test(line) || /\bNEO\b/i.test(line);
   const hasMemory = /\b\d{1,3}\s*(?:GB|ГБ|TB|ТБ)\b/i.test(line) || /\b\d{1,3}\s*\/\s*\d{1,4}\b/.test(line);
@@ -216,13 +234,13 @@ export function parseBsaMessages(messages, { now = new Date(), timeZone = 'Europ
         continue;
       }
       contextModel = parsed.model;
-      const sourceKey = [sku || 'no-sku', parsed.model, parsed.chip, parsed.ramGb, parsed.storageGb, parsed.color, condition].join('|');
+      const sourceKey = [sku || 'no-sku', parsed.model, parsed.chip, parsed.ramGb, parsed.storageGb, parsed.color, condition, ...(parsed.model.startsWith('iPhone') ? [parsed.simType] : [])].join('|');
       const url = new URL(`https://t.me/${sourceUsername}/${postId}`);
       url.searchParams.set('item', sourceKey);
       offers.push({
         ...parsed,
         url: url.href,
-        externalId: sku ? `${postId}:${sku}` : `${postId}:${sourceKey}`,
+        externalId: sku && !parsed.model.startsWith('iPhone') ? `${postId}:${sku}` : `${postId}:${sourceKey}`,
         sourceVariantId: sourceKey,
         validFrom: listDate,
         sourceSender,

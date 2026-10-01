@@ -78,12 +78,12 @@ function specsFrom(parameters, reasons) {
     else reasons.push(`Некорректная характеристика: ${name}`);
   };
   number('ramGb', value('оперативная память, гб', 'объем оперативной памяти', 'оперативная память'));
-  number('storageGb', value('объем накопителей, гб', 'объем накопителя, гб', 'объем ssd', 'общий объем накопителей'));
+  number('storageGb', value('объем накопителей, гб', 'объем накопителя, гб', 'объем ssd', 'общий объем накопителей', 'встроенная память', 'объем встроенной памяти', 'объем памяти'));
   number('screenIn', value('диагональ, дюйм', 'диагональ экрана', 'диагональ'));
   number('cpuCores', value('количество ядер процессора'));
   const chip = value('процессор', 'линейка процессора');
   if (chip) {
-    const match = chip.match(/^(?:Apple\s+)?(M\d+(?:\s+(?:Pro|Max|Ultra))?|A18\s+Pro)$/i);
+    const match = chip.match(/^(?:Apple\s+)?(M\d+(?:\s+(?:Pro|Max|Ultra))?|A\d{2}\s+Pro)$/i);
     if (match) specs.chip = match[1];
     else reasons.push('Процессор не подтверждён однозначными характеристиками');
   }
@@ -99,6 +99,10 @@ function specsFrom(parameters, reasons) {
     if (/\bNeo\b/i.test(specs.model || '') && /^желтый$/i.test(key(color))) specs.color = 'Citrus';
     if (/\bAir\b/i.test(specs.model || '') && /^M[45]$/i.test(specs.chip || '') && key(color) === 'голубой') specs.color = 'Sky Blue';
   }
+  const simType = value('тип sim-карты', 'тип sim', 'sim-карты');
+  if (simType) specs.simType = simType;
+  const region = value('регион');
+  if (region) specs.region = region;
   // Existing normalization derives the screen from the model string. Add only
   // an explicitly supplied size, never a catalogue default or slug value.
   if (specs.model && !/\b(?:13|14|15|16)\b/.test(specs.model) && specs.screenIn) {

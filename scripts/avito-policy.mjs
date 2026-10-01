@@ -1,8 +1,9 @@
 import { canonicalStorageGb } from './domain.mjs';
 import { parseProduct } from './offer-normalization.mjs';
+import { iphoneModel, iphoneStorage, iphoneSim, isIphone } from './iphone.mjs';
 
 export const AVITO = 'Авито НН';
-export const AVITO_VERSION = 'avito-nn-private-used-v4';
+export const AVITO_VERSION = 'avito-nn-private-used-v5';
 export const sellerNameKey = value => String(value || '').normalize('NFKC').toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
 export const excludedSeller = value => /макбучн|мкбчн|macbookbro|makbuchn|mkbchn/.test(sellerNameKey(value));
 export const avitoUsedCondition = value => /^(?:б\s*\/\s*у|used|как\s+нов(?:ое|ый|ая)|отличное|хорошее|удовлетворительное)$/i.test(String(value || '').trim());
@@ -15,7 +16,7 @@ export function avitoSellerType(item) {
     || /company|business|компания|магазин/i.test(`${seller.type || ''} ${seller.declaredType || ''} ${seller.postfix || ''}`)) return 'company';
   return seller.type === 'private' ? 'private' : 'unknown';
 }
-export const avitoGroupKey = o => [o.model, o.chip, o.screenIn, o.ramGb, canonicalStorageGb(o.storageGb), o.color, o.condition === 'used' ? 'used' : 'new'].join('|');
+export const avitoGroupKey = o => [o.model, o.chip, o.screenIn, o.ramGb, canonicalStorageGb(o.storageGb), o.color, o.condition === 'used' ? 'used' : 'new', ...(isIphone(o) ? [o.simType || 'unknown', o.region || 'unknown'] : [])].join('|');
 export function avitoUrl(value, { listing = false } = {}) {
   let url;
   try { url = new URL(value, 'https://www.avito.ru'); } catch { throw new Error('Авито: некорректная ссылка'); }
@@ -45,9 +46,12 @@ export function normalizeAvitoListing(item, { observedAt, sellerMap = {} } = {})
   if (!condition) return reject('Не подтверждено рабочее б/у состояние');
   if (sellerType !== 'private') return reject('Не подтверждён частный продавец', 'review');
   const title = String(item.title || '').trim();
-  if (/^(?:ноутбук\s+)?(?:razer|honor|hp|huawei|asus|acer|lenovo|dell|msi)\b/i.test(title) || (!macBookIdentity(title) && !macBookIdentity(item.specs?.model))) return reject('Объявление не о MacBook');
+  const phone = iphoneModel(title) || iphoneModel(item.specs?.model);
+  if (phone && /\bi\s*phone\s*\d+|айфон\s*\d+/i.test(title) && !iphoneModel(title)) return reject('Объявление не о целевом iPhone');
+  if (phone && item.specs?.model && iphoneModel(item.specs.model) !== phone) return reject('Конфликт характеристики: model', 'review');
+  if (/^(?:(?:ноутбук|смартфон|телефон)\s+)?(?:razer|honor|hp|huawei|asus|acer|lenovo|dell|msi|samsung|xiaomi)\b/i.test(title) || (!macBookIdentity(title) && !macBookIdentity(item.specs?.model) && !phone)) return reject('Объявление не о MacBook или целевом iPhone');
   const conditionTitle = title.replace(/не\s+вскрыт[а-я]*/gi, 'запечатан').replace(/как\s+нов[а-я]*/gi, 'б/у');
-  if (/скупк|выкуп|ремонт|запчаст|чехол|коробка\s+(?:от|для)|аренд|витрин|refurb|восстановлен|open.?box|не\s*рабоч|не\s*работа|неисправ|разбит|залит/i.test(conditionTitle)) return reject('Состояние или тип товара противоречат фильтрам');
+  if (/скупк|выкуп|ремонт|запчаст|чехол|\bcase\b|стекло|защит|кабел|коробка\s+(?:от|для)|аренд|витрин|refurb|восстановлен|open.?box|не\s*рабоч|не\s*работа|неисправ|разбит|залит/i.test(conditionTitle)) return reject('Состояние или тип товара противоречат фильтрам');
   if (condition === 'new' && /б\s*\/\s*у|вскрыт|\bused\b/i.test(conditionTitle)) return reject('Заголовок противоречит новому состоянию');
   if (condition === 'used' && /(?:^|\s)(?:новый|новая|новое|запечатан[а-я]*|new)(?:\s|[,.!?]|$)/i.test(conditionTitle)) return reject('Заголовок противоречит б/у состоянию', 'review');
   if (condition === 'used' && /(?:^|[.!?\n])\s*(?:ноутбук\s+|товар\s+)?(?:новый|новая|новое|запечатан[а-я]*)(?:\s|[,.!?]|$)|состояние\s*:\s*нов[а-я]+/i.test(item.description || '')) return reject('Описание противоречит б/у состоянию', 'review');
@@ -56,6 +60,10 @@ export function normalizeAvitoListing(item, { observedAt, sellerMap = {} } = {})
   if (Array.isArray(item.adapterReviewReasons) && item.adapterReviewReasons.length) return reject(item.adapterReviewReasons.map(String).join('; '), 'review');
   const memoryPairs = [...title.matchAll(/\d{1,3}\s*\/\s*\d{1,4}\s*(?:TB|ТБ|GB|ГБ)?/gi)].map(m => m[0].replace(/\s/g, '').toLowerCase());
   if (new Set(memoryPairs).size > 1) return reject('Несколько конфигураций в одном объявлении', 'review');
+  if (phone) {
+    const storageValues = [...title.matchAll(/\b(?:128|256|512|1024|2048|1|2)\s*(?:GB|ГБ|TB|ТБ|G|Г)(?=$|[^\p{L}])/giu)].map(match => iphoneStorage(match[0]));
+    if (new Set(storageValues).size > 1 || /\bpro\s*(?:\/|или)\s*(?:pro\s*)?max\b/i.test(title) || [...title.matchAll(/\b(?:17|18)\s*pro\b/gi)].length > 1) return reject('Несколько конфигураций в одном объявлении', 'review');
+  }
   // Do not infer an unconditional full price from an installment or promo.
   if (item.priceType !== 'full' || item.currency !== 'RUB' || !Number.isSafeInteger(item.price * 100) || item.price <= 0) return reject('Не подтверждена полная рублёвая цена', 'review');
   if (/(?:^|\s)от\s+\d|в\s+месяц|\/\s*мес|первоначальн|при\s+(?:обмене|сдаче|покупке\s+гарантии)|только\s+(?:в\s+кредит|при)/i.test(`${item.priceText || ''} ${title}`)) return reject('Условная цена', 'review');
@@ -76,14 +84,17 @@ export function normalizeAvitoListing(item, { observedAt, sellerMap = {} } = {})
   // Avito's generic color vocabulary names the Air's Sky Blue as «Голубой».
   // Limit that alias to the matching Air generations in our catalogue.
   const color = /^голубой$/i.test(String(specValue('color'))) && /MacBook Air/i.test(specValue('model')) && /^M[45]$/i.test(fromTitle?.chip || '') ? 'Sky Blue' : specValue('color');
-  const synthetic = [modelCase(specValue('model')), specValue('chip'), specValue('ramGb') ? `RAM ${specValue('ramGb')}GB` : '', specValue('storageGb') ? `SSD ${specValue('storageGb')}GB` : '', color,
-    specValue('cpuCores') ? `${specValue('cpuCores')}-core CPU` : '', specValue('gpuCores') ? `${specValue('gpuCores')}-core GPU` : ''].filter(Boolean).join(' ');
+  const synthetic = phone ? [iphoneModel(specValue('model')) || phone, specValue('storageGb') ? `${specValue('storageGb')}GB` : '', color,
+    specValue('simType'), specValue('chip')].filter(Boolean).join(' ')
+    : [modelCase(specValue('model')), specValue('chip'), specValue('ramGb') ? `RAM ${specValue('ramGb')}GB` : '', specValue('storageGb') ? `SSD ${specValue('storageGb')}GB` : '', color,
+      specValue('cpuCores') ? `${specValue('cpuCores')}-core CPU` : '', specValue('gpuCores') ? `${specValue('gpuCores')}-core GPU` : ''].filter(Boolean).join(' ');
   const fromSpecs = parseProduct(synthetic, parseUrl, AVITO, item.price, at);
-  if (fromTitle && fromSpecs) for (const field of ['model', 'chip', 'ramGb', 'storageGb', 'screenIn', 'color', 'cpuCores', 'gpuCores']) {
+  if (phone && specs.simType && iphoneSim(specs.simType) === 'unknown') return reject('Неоднозначная характеристика: simType', 'review');
+  if (fromTitle && fromSpecs) for (const field of ['model', 'chip', 'ramGb', 'storageGb', 'screenIn', 'color', 'cpuCores', 'gpuCores', 'simType']) {
     if (fromTitle[field] && fromSpecs[field] && fromTitle[field] !== 'unknown' && fromSpecs[field] !== 'unknown' && fromTitle[field] !== fromSpecs[field]) return reject(`Конфликт характеристики: ${field}`, 'review');
   }
   const parsed = fromSpecs || fromTitle;
-  if (!parsed || !parsed.screenIn || parsed.color === 'unknown' || parsed.qualityWarnings.length) return reject('Недостаточно однозначных характеристик', 'review');
+  if (!parsed || (!isIphone(parsed) && !parsed.screenIn) || parsed.color === 'unknown' || parsed.qualityWarnings.length) return reject('Недостаточно однозначных характеристик', 'review');
   if (fromTitle && fromTitle.condition !== 'unknown' && fromTitle.condition !== condition) return reject('Состояние противоречит заголовку');
   const risks = Array.isArray(item.adapterRisks) ? [...new Set(item.adapterRisks.filter(risk => typeof risk === 'string').map(risk => risk.slice(0, 200)))] : [];
   if (/под\s*заказ|предзаказ|срок\s+поставки/i.test(`${title} ${item.description || ''}`)) risks.push('Товар под заказ');
@@ -94,7 +105,7 @@ export function normalizeAvitoListing(item, { observedAt, sellerMap = {} } = {})
     sellerId: 'avito:marketplace', marketplaceSellerId: sellerId, sellerName: String(seller.name).slice(0, 200),
     marketplaceSellerType: 'private',
     matchedRetailer: sellerMap[sellerId] || null, sourceCity: 'Нижний Новгород',
-    title, rawTitle: title, condition, stock: item.active === false ? 'Discontinued' : 'source_reported',
+    title, rawTitle: title, condition, ...(phone ? { region: specs.region || 'unknown', simType: parsed.simType || iphoneSim(title) } : {}), stock: item.active === false ? 'Discontinued' : 'source_reported',
     priceType: 'full', paymentMethod: 'unknown', buyerType: 'retail', minimumQuantity: 1,
     validationStatus: 'accepted', avitoRisks: risks, adapterVersion: AVITO_VERSION,
     evidence: { method: item.method || 'avito-record-v1', observedAt: at, condition: item.condition, city: item.city,

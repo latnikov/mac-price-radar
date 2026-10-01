@@ -1,5 +1,6 @@
 import { crawlQueue } from './crawl-queue.mjs';
 import { decode, parseProduct, price } from './offer-normalization.mjs';
+import { iphoneModel, iphoneSim } from './iphone.mjs';
 
 const origin = 'https://imobile.market';
 const rootUrl = `${origin}/mac`;
@@ -12,7 +13,9 @@ function macbookUrl(value, pageUrl) {
     const url = new URL(decode(value).replace(/&amp;/gi, '&').replace(/&#38;/g, '&'), `${origin}/`);
     if (url.origin !== origin || url.username || url.password) return null;
     const segments = url.pathname.split('/').filter(Boolean);
-    if (segments[0] !== 'mac' || !segments.some(segment => /macbook/i.test(segment))) return null;
+    const phoneScope = new URL(pageUrl).pathname.startsWith('/iphone');
+    if (phoneScope ? segments[0] !== 'iphone' || !/^iphone_(?:17|18)_pro(?:_max)?$/.test(segments[1] || '')
+      : segments[0] !== 'mac' || !segments.some(segment => /macbook/i.test(segment))) return null;
     url.hash = '';
     url.search = '';
     return url.href;
@@ -61,6 +64,7 @@ export function parseImobileProducts(html, pageUrl) {
     if (!Number.isFinite(amount) || amount <= 0) throw new Error(`variant ${externalId} has invalid price`);
     const offer = parseProduct(title, pageUrl, 'iMobile', amount, undefined, {
       externalId,
+      ...(iphoneModel(title) ? { simType: iphoneSim(product.cellular) } : {}),
       sourceVariantId: externalId,
       sourceProductCode: String(product.code_model || '').trim() || null,
       sourceCity: 'Нижний Новгород',
@@ -90,9 +94,10 @@ export function parseImobileProducts(html, pageUrl) {
 }
 
 /** Crawls the current MacBook catalogue and fails rather than publishing a partial refresh. */
-export async function fetchImobileOffers({ fetchPage = url => fetch(url), maxPages = 100 } = {}) {
+export async function fetchImobileOffers({ fetchPage = url => fetch(url), maxPages = 100, catalogueUrl = rootUrl } = {}) {
   if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 100) throw new Error('iMobile maxPages must be between 1 and 100');
-  const seen = new Set([rootUrl]);
+  if (![rootUrl, `${origin}/iphone`].includes(catalogueUrl)) throw new Error('iMobile unsupported catalogue URL');
+  const seen = new Set([catalogueUrl]);
   const byVariant = new Map();
   const stats = { pagesFetched: 0, productPages: 0, variants: 0 };
   const enqueue = (url, add) => {
@@ -101,7 +106,7 @@ export async function fetchImobileOffers({ fetchPage = url => fetch(url), maxPag
     seen.add(url);
     add(url);
   };
-  await crawlQueue([rootUrl], async (url, add) => {
+  await crawlQueue([catalogueUrl], async (url, add) => {
     try {
       const response = await fetchPage(url);
       let html;
@@ -111,7 +116,7 @@ export async function fetchImobileOffers({ fetchPage = url => fetch(url), maxPag
         if (response.url && new URL(response.url).origin !== origin) throw new Error('redirect outside iMobile');
         html = await response.text();
       }
-      const offers = parseImobileProducts(html, url);
+      const offers = parseImobileProducts(html, url).filter(offer => catalogueUrl === rootUrl || iphoneModel(offer.model));
       stats.pagesFetched += 1;
       if (offers.length) stats.productPages += 1;
       for (const offer of offers) {

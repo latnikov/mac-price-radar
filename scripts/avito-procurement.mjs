@@ -1,6 +1,7 @@
 import { canonicalModelName, canonicalStorageGb, known, moneyMinor, normalize } from './domain.mjs';
 import { AVITO, visibleAvitoOffer } from './avito-policy.mjs';
 import { isProcurementOffer } from '../web/retail-analytics.js';
+import { isIphone } from './iphone.mjs';
 
 export const AVITO_PROCUREMENT_VERSION = 'russian-procurement-gap-v1';
 const CORE = ['model', 'chip', 'screenIn', 'ramGb', 'storageGb'];
@@ -8,8 +9,11 @@ const EXTRA = ['cpuCores', 'gpuCores', 'keyboard', 'region', 'displayType', 'bun
 const available = new Set(['InStock', 'source_reported', 'confirmed']);
 const value = (o, k) => k === 'storageGb' ? canonicalStorageGb(o[k]) : k === 'model' ? canonicalModelName(o[k]) : o[k];
 const at = o => Date.parse(o.observedAt || o.fetchedAt);
-const basic = o => CORE.every(k => known(value(o, k))) && ['screenIn','ramGb','storageGb'].every(k => Number.isFinite(value(o,k)) && value(o,k) > 0);
-const same = (a, b) => CORE.every(k => normalize(value(a,k)) === normalize(value(b,k)))
+const phoneCore = ['model', 'storageGb', 'simType', 'region', 'color'];
+const basic = o => isIphone(o) ? phoneCore.every(k => known(value(o,k))) && Number.isFinite(value(o,'storageGb')) && value(o,'storageGb') > 0
+  : CORE.every(k => known(value(o, k))) && ['screenIn','ramGb','storageGb'].every(k => Number.isFinite(value(o,k)) && value(o,k) > 0);
+const same = (a, b) => (isIphone(a) ? isIphone(b) && phoneCore.every(k => normalize(value(a,k)) === normalize(value(b,k)))
+  : !isIphone(b) && CORE.every(k => normalize(value(a,k)) === normalize(value(b,k))))
   && EXTRA.every(k => !known(a[k]) || !known(b[k]) || normalize(a[k]) === normalize(b[k]));
 const valid = (o, now) => o && o.visibility !== 'private' && o.currency === 'RUB' && typeof o.price === 'number' && moneyMinor(o.price) !== null
   && available.has(o.stock) && o.active !== false && !o.withdrawn && !o.rejected && !o.latestAttempt?.rejected
@@ -28,7 +32,7 @@ export function russianProcurementOffers(offers, { now = Date.now(), maxAgeHours
     const key = `${o.retailer}|${o.listingId || o.sourceVariantId || o.url}`;
     if (!latest.has(key) || at(o) >= at(latest.get(key))) latest.set(key,o);
   }
-  return [...latest.values()].filter(o => valid(o,now) && basic(o) && /^MacBook\b/i.test(o.model) && o.condition === 'new' && now-at(o) <= maxAgeHours*3_600_000);
+  return [...latest.values()].filter(o => valid(o,now) && basic(o) && (/^MacBook\b/i.test(o.model) || isIphone(o)) && o.condition === 'new' && now-at(o) <= maxAgeHours*3_600_000);
 }
 
 export function compareAvitoProcurement(offer, procurement, { now = Date.now(), costReserveRub = 3000 } = {}) {
@@ -40,14 +44,14 @@ export function compareAvitoProcurement(offer, procurement, { now = Date.now(), 
     procurement:null, matchKind:'none', fresh, alertEligible:false, reasons, score:0, level:'low' };
   if (!basic(offer)) { reasons.push('Недостаточно характеристик для сравнения с русским закупом'); return result; }
   const matches = procurement.filter(p => same(offer,p));
-  if (!matches.length) { reasons.push('Нет актуальной цены русского закупа для этой модели, чипа, RAM и SSD'); return result; }
+  if (!matches.length) { reasons.push(isIphone(offer) ? 'Нет актуальной цены русского закупа с совпадающими моделью, памятью, SIM, регионом и цветом' : 'Нет актуальной цены русского закупа для этой модели, чипа, RAM и SSD'); return result; }
   const colors = matches.filter(p => known(offer.color) && known(p.color) && normalize(offer.color) === normalize(p.color));
   const reference = [...(colors.length ? colors : matches)].sort((a,b) => a.price-b.price || at(b)-at(a) || String(a.listingId).localeCompare(String(b.listingId)))[0];
   const matchKind = colors.length ? 'same_color' : 'other_color';
   if (matchKind === 'other_color') reasons.push(`Цвет не совпадает или не указан: ориентир закупа — ${reference.color || 'не указан'}`);
-  const missingCores = ['cpuCores','gpuCores'].some(k => !known(offer[k]) || !known(reference[k]));
+  const missingCores = !isIphone(offer) && ['cpuCores','gpuCores'].some(k => !known(offer[k]) || !known(reference[k]));
   if (missingCores) reasons.push('Проверить число ядер CPU/GPU: в одной из карточек оно не указано');
-  reasons.push('Б/у сравнивается с закупом нового MacBook; разница не является ценой перепродажи или прибылью');
+  reasons.push(`Б/у сравнивается с закупом нового ${isIphone(offer) ? 'iPhone' : 'MacBook'}; разница не является ценой перепродажи или прибылью`);
   const gross = moneyMinor(reference.price)-moneyMinor(offer.price), net=gross-Math.round(costReserveRub*100);
   const deltaPercent = net/moneyMinor(reference.price)*100;
   const anomaly = offer.price < reference.price*0.6;
@@ -56,7 +60,8 @@ export function compareAvitoProcurement(offer, procurement, { now = Date.now(), 
   if(jump)reasons.push('Цена объявления изменилась более чем на 25%');
   return {...result,referencePrice:reference.price,grossDeltaRub:gross/100,deltaRub:net/100,deltaPercent:Math.round(deltaPercent*100)/100,
     matchKind,procurement:{retailer:reference.retailer,price:reference.price,color:reference.color,
-      condition:'new',url:reference.url,observedAt:new Date(at(reference)).toISOString(),listingId:reference.listingId || null},
+      condition:'new',url:reference.url,observedAt:new Date(at(reference)).toISOString(),listingId:reference.listingId || null,
+      ...(isIphone(offer) ? { model: reference.model, storageGb: reference.storageGb, simType: reference.simType, region: reference.region } : {})},
     alertEligible:fresh && matchKind==='same_color' && !anomaly && !jump && !offer.avitoRisks?.length,
     score:Math.max(0,Math.min(100,Math.round(50+deltaPercent))),level:fresh && matchKind==='same_color'?'high':'medium'};
 }

@@ -83,7 +83,7 @@ export function discoverTechnichnoLinks(html, pageUrl = rootUrl, document = docu
   return { products: [...products], pages: [...pages] };
 }
 
-function productOffer(html, url, document = documentElements(html)) {
+export function productOffer(html, url, document = documentElements(html)) {
   const { nodes, source } = document;
   const products = nodes.filter(node => isType(node, 'Product'));
   const product = products.find(node => hasToken(node.attrs.class, 'product-details__content'))
@@ -108,7 +108,7 @@ function productOffer(html, url, document = documentElements(html)) {
   const sourceGroupTitle = groupLink ? decode(source.slice(groupLink.body, groupLink.end)) || null : null;
   const groupSlug = decodeURIComponent(new URL(sourceGroupUrl).pathname.split('/').filter(Boolean).at(-1)).replace(/[-_]+/g, ' ');
   const groupMemory = (sourceGroupTitle || groupSlug).match(/(?:^|\s)(\d{1,3})\s*(?:GB|ГБ)(?=\s|\/|$)/i);
-  const sourceGroupRamGb = groupMemory ? Number(groupMemory[1]) : null;
+  const sourceGroupRamGb = groupMemory && !/^iPhone/.test(offer.model) ? Number(groupMemory[1]) : null;
   const sourceReportedRam = offer.ramGb;
   // Owner-confirmed typo on the Pro 14 M5 card; never guess other RAM conflicts.
   const correctedRam = /MacBook Pro 14/.test(offer.model) && offer.chip === 'M5'

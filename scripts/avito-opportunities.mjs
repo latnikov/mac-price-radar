@@ -1,6 +1,7 @@
 import { canonicalModelName, canonicalStorageGb, canonicalUrl, known, moneyMinor, normalize } from './domain.mjs';
 import { AVITO, avitoUrl, excludedSeller, businessSellerName } from './avito-policy.mjs';
 import { russianProcurementOffers, compareAvitoProcurement, AVITO_PROCUREMENT_VERSION } from './avito-procurement.mjs';
+import { isIphone } from './iphone.mjs';
 
 export const AVITO_OPPORTUNITIES_VERSION = 'private-used-asking-spread-v2';
 const BASIC_FIELDS = ['model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color'];
@@ -9,7 +10,8 @@ const AVAILABLE = new Set(['InStock', 'source_reported', 'confirmed']);
 const timestamp = offer => Date.parse(offer.observedAt || offer.fetchedAt);
 const field = (offer, name) => name === 'storageGb' ? canonicalStorageGb(offer[name])
   : name === 'model' ? canonicalModelName(offer[name]) : offer[name];
-const configKey = offer => BASIC_FIELDS.map(name => normalize(field(offer, name))).join('|');
+const basicFields = offer => isIphone(offer) ? ['model', 'storageGb', 'color', 'simType', 'region'] : BASIC_FIELDS;
+const configKey = offer => basicFields(offer).map(name => normalize(field(offer, name))).join('|');
 const compatible = (a, b) => EXTRA_FIELDS.every(name => !known(a[name]) || !known(b[name]) || normalize(a[name]) === normalize(b[name]));
 const minor = (value, name) => {
   const result = value === 0 ? 0 : typeof value === 'number' ? moneyMinor(value) : null;
@@ -33,8 +35,8 @@ function usable(offer, now, maxAgeHours) {
     && !['withdrawn', 'rejected'].includes(offer.latestAttempt?.status)
     && !offer.isDemo && !offer.demo && !offer.seed && offer.dataKind !== 'demo'
     && !offer.qualityWarnings?.length && !offer.validationIssues?.length
-    && BASIC_FIELDS.every(name => known(field(offer, name)))
-    && ['screenIn', 'ramGb', 'storageGb'].every(name => Number.isFinite(field(offer, name)) && field(offer, name) > 0)
+    && basicFields(offer).every(name => known(field(offer, name)))
+    && (isIphone(offer) ? ['storageGb'] : ['screenIn', 'ramGb', 'storageGb']).every(name => Number.isFinite(field(offer, name)) && field(offer, name) > 0)
     && (offer.minimumQuantity == null || offer.minimumQuantity === 1)
     && Number.isFinite(at) && at <= now + 60_000 && now - at <= maxAgeHours * 3_600_000
     && (!offer.validUntil || (Number.isFinite(Date.parse(offer.validUntil)) && Date.parse(offer.validUntil) > now))
@@ -108,6 +110,7 @@ export function calculatePrivatePeerOpportunities(offers, {
       sellerName: peer.sellerName, listingId: peer.listingId || null, condition: 'used', marketplaceSellerType: 'private',
       url: avitoUrl(peer.url, { listing: true }), price: peer.price, observedAt: new Date(timestamp(peer)).toISOString(),
       cpuCores: peer.cpuCores ?? null, gpuCores: peer.gpuCores ?? null,
+      ...(isIphone(peer) ? { model: peer.model, storageGb: canonicalStorageGb(peer.storageGb), color: peer.color, simType: peer.simType, region: peer.region } : {}),
     }));
     if (evidence.length < 3) { insufficientBaselineCount++; continue; }
     const priceMinor = moneyMinor(offer.price), referenceMinor = moneyMinor(evidence[0].price);
@@ -116,7 +119,7 @@ export function calculatePrivatePeerOpportunities(offers, {
     if (deltaMinor < minimumMinor || deltaPercent < minDeltaPercent) continue;
     const reviewReasons = [...(offer.avitoRisks || [])];
     reviewReasons.push('Б/у от частного продавца: проверить состояние, аккумулятор, ремонт и комплектацию; цены других объявлений не подтверждают цену сделки или прибыль');
-    const missingCores = ['cpuCores', 'gpuCores'].filter(name => !known(offer[name]) || evidence.some(peer => !known(peer[name])));
+    const missingCores = isIphone(offer) ? [] : ['cpuCores', 'gpuCores'].filter(name => !known(offer[name]) || evidence.some(peer => !known(peer[name])));
     if (missingCores.length) reviewReasons.push(`Проверить число ядер CPU/GPU: не все сопоставимые карточки указывают ${missingCores.join(', ')}`);
     const priceAnomaly = priceMinor < referenceMinor * 0.6;
     if (priceAnomaly) reviewReasons.push('Цена более чем на 40% ниже самого дешёвого сопоставимого объявления других частников; проверить цену и состояние вручную');
@@ -130,10 +133,11 @@ export function calculatePrivatePeerOpportunities(offers, {
       title: offer.title || offer.rawTitle || '', sellerName: offer.sellerName,
       condition: 'used', marketplaceSellerType: 'private', sellerType: 'private',
       comparisonKind: 'used-asking-price-spread',
-      comparisonNote: 'Разница с минимальной запрашиваемой ценой других независимых частных продавцов б/у MacBook после резерва расходов. Это цены объявлений, не состоявшихся сделок; цена перепродажи и прибыль не определены.',
+      comparisonNote: 'Разница с минимальной запрашиваемой ценой других независимых частных продавцов б/у устройства после резерва расходов. Это цены объявлений, не состоявшихся сделок; цена перепродажи и прибыль не определены.',
       marketplaceSellerId: offer.marketplaceSellerId, matchedRetailer: null,
       configurationKey: configKey(offer), model: offer.model, chip: offer.chip,
       ramGb: offer.ramGb, storageGb: canonicalStorageGb(offer.storageGb), screenIn: offer.screenIn, color: offer.color,
+      ...(isIphone(offer) ? { simType: offer.simType, region: offer.region } : {}),
       price: offer.price, referencePrice: referenceMinor / 100, grossDeltaRub: grossMinor / 100,
       costReserveRub, deltaRub: deltaMinor / 100, estimatedDeltaRub: deltaMinor / 100,
       deltaPercent: Math.round(deltaPercent * 100) / 100,
@@ -150,7 +154,7 @@ export function calculatePrivatePeerOpportunities(offers, {
   return {
     version: AVITO_OPPORTUNITIES_VERSION, generatedAt: new Date(now).toISOString(),
     thresholds: { minDeltaRub, minDeltaPercent, maxAgeHours, costReserveRub },
-    note: 'Только б/у MacBook частных продавцов Нижнего Новгорода. Ориентир — минимальная запрашиваемая цена минимум трёх других независимых частников с сопоставимой конфигурацией и цветом. Разница после резерва расходов не является гарантированной ценой перепродажи, выручкой или прибылью; состояние и фактическую цену сделки нужно проверить.',
+    note: 'Только б/у MacBook и iPhone 17/18 Pro и Pro Max частных продавцов Нижнего Новгорода. Ориентир — минимальная запрашиваемая цена минимум трёх других независимых частников с сопоставимой конфигурацией и цветом. Разница после резерва расходов не является гарантированной ценой перепродажи, выручкой или прибылью; состояние и фактическую цену сделки нужно проверить.',
     candidates,
     summary: { avitoCount: avito.length, eligibleCount: scoped.length, insufficientBaselineCount, candidateCount: candidates.length, alertEligibleCount: candidates.filter(candidate => candidate.alertEligible).length },
   };
@@ -166,11 +170,11 @@ export function calculateAvitoOpportunities(offers, {now=Date.now(),minDeltaRub=
     .map(({offer:o,rank:r})=>({...o,...r,configurationKey:configKey(o),sellerType:'private',peerCount:0,shopCount:1,
       evidence:[r.procurement],observedAt:new Date(timestamp(o)).toISOString(),estimatedDeltaRub:r.deltaRub,
       dedupKey:`avito:${o.externalId||new URL(o.url).pathname.match(/_(\d+)$/)[1]}:${moneyMinor(o.price)}`,
-      requiresReview:true,reviewReasons:r.reasons,status:'needs_review',comparisonNote:'Разница с русским закупом нового MacBook после резерва расходов; не прибыль.'}));
+      requiresReview:true,reviewReasons:r.reasons,status:'needs_review',comparisonNote:'Разница с русским закупом нового устройства после резерва расходов; не прибыль.'}));
   candidates.sort((a,b)=>b.deltaRub-a.deltaRub||String(a.listingId).localeCompare(String(b.listingId)));
   return {version:AVITO_PROCUREMENT_VERSION,generatedAt:new Date(now).toISOString(),
     thresholds:{minDeltaRub,minDeltaPercent,maxAgeHours,costReserveRub},
-    note:'Б/у MacBook частников Нижнего Новгорода сравниваются с актуальным русским закупом нового устройства (Дима/BSA). Разница после резерва — ориентир для проверки, не прибыль.',candidates,
+    note:'Б/у MacBook и iPhone 17/18 Pro и Pro Max частников Нижнего Новгорода сравниваются с актуальным русским закупом нового устройства (Дима/BSA). Разница после резерва — ориентир для проверки, не прибыль.',candidates,
     summary:{avitoCount:avito.length,eligibleCount:scoped.length,procurementCount:procurement.length,
       insufficientBaselineCount:compared.filter(x=>x.rank.referencePrice===null).length,candidateCount:candidates.length,
       alertEligibleCount:candidates.filter(x=>x.alertEligible).length}};

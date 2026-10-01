@@ -7,7 +7,7 @@ import { parseAvitoSnapshot } from './avito.mjs';
 import { AVITO, avitoUrl, avitoSellerType, avitoUsedCondition } from './avito-policy.mjs';
 import { writeAvitoJson } from './avito-storage.mjs';
 import { openMasterStore } from './master-store.mjs';
-export const APIFY_IMPORT_VERSION = 'private-used-v2';
+export const APIFY_IMPORT_VERSION = 'private-used-v3-iphone';
 
 async function readJson(path, fallback) {
   try { return JSON.parse(await readFile(path, 'utf8')); }
@@ -92,7 +92,7 @@ export async function importApifyRun({ records, run, root = process.cwd(), dir =
   return { counts: { total: snapshot.discovered, accepted: result.offers.length, review: result.review.length,
     excluded: result.excluded.length, detailed: snapshot.diagnostics.detailed },
     snapshotAt: run.finishedAt, runId: run.id, duplicate: ingested.duplicate,
-    coverage: { complete: false, message: 'Только б/у MacBook частных продавцов в Нижнем Новгороде. Получена ограниченная порция выдачи; полный охват не подтверждён.' } };
+    coverage: { complete: false, message: 'Только б/у MacBook и iPhone 17/18 Pro и Pro Max частных продавцов в Нижнем Новгороде. Получена ограниченная порция выдачи; полный охват не подтверждён.' } };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

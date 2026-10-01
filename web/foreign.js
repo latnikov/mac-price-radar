@@ -1,4 +1,5 @@
 import { MAC_FAMILIES, COLORS, SPEC_KEYS, emptyForeignFilters, capacity, foreignSpecs, matchesForeignRow, foreignModelLabel, foreignBadges, selectForeignPage } from './foreign-filters.js';
+import { PHONE_FAMILIES } from './product-families.js';
 const $ = id => document.getElementById(id);
 const number = value => new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 4 }).format(value);
 const date = value => new Date(value).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' });
@@ -29,7 +30,7 @@ function button(label, key, value, className = '') {
   return node;
 }
 function filterLabel(key, value) {
-  return key === 'family' ? MAC_FAMILIES.find(([id]) => id === value)?.[1] || value
+  return key === 'family' ? MAC_FAMILIES.find(([id]) => id === value)?.[1] || PHONE_FAMILIES[value] || value
     : key === 'ram' ? `RAM ${value} GB` : key === 'storage' ? capacity(value)
       : key === 'color' ? COLORS[value] || value : key === 'cpu' ? `CPU ${value}` : key === 'gpu' ? `GPU ${value}`
         : key === 'display' ? value === 'Nano-texture' ? 'Нанотекстура' : 'Стандартный экран'
@@ -48,13 +49,13 @@ function renderControls() {
     const name = document.createElement('span'); name.className = 'model-name'; name.textContent = label;
     const note = document.createElement('span'); note.className = 'model-caption'; note.textContent = `${caption} · ${base.filter(row => row.specs.family === key).length}`;
     node.append(icon, name, note); return node;
-  }) : families.map(value => button(value, 'family', value));
+  }) : families.map(value => button(filterLabel('family', value), 'family', value));
   $('foreign-family-options').replaceChildren(...familyButtons, button('Все модели', 'family', '', 'all-models'));
   const modelRows = base.filter(row => !filters.family || row.specs.family === filters.family);
   for (const [index, key] of SPEC_KEYS.entries()) {
     const candidates = modelRows.filter(row => SPEC_KEYS.slice(0, index).every(other => !filters[other] || row.specs[other] === filters[other]));
     const values = [...new Set(candidates.map(row => row.specs[key]).filter(Boolean))].sort((a, b) => ['ram', 'storage', 'screen', 'cpu', 'gpu'].includes(key) ? parseFloat(a) - parseFloat(b) : collator.compare(a, b));
-    $('foreign-' + key + '-group').hidden = !modelRows.some(row => row.specs[key]);
+    $('foreign-' + key + '-group').hidden = (filters.category === 'iPhone' || Boolean(PHONE_FAMILIES[filters.family])) && ['chip', 'screen', 'ram', 'cpu', 'gpu', 'display'].includes(key) || !modelRows.some(row => row.specs[key]);
     if (key === 'chip') {
       // Compare generations within each family and chip tier using this price list.
       const generationKey = row => `${row.specs.family}:${row.specs.chip.replace(/\d+/, '')}`;

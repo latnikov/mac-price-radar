@@ -11,10 +11,58 @@ import { parseAvitoSnapshot, fetchAvitoOffers } from '../scripts/avito.mjs';
 import { rankAvitoPeerOffers as rankAvitoOffers, robustLogMarket } from '../scripts/avito-ranking.mjs';
 import { openMasterStore } from '../scripts/master-store.mjs';
 import { at, search, url, record as fixtureRecord, searchPage, detailPage, snapshot } from './fixtures/avito/sample.mjs';
+import { AVITO_SEARCH_TARGETS } from '../scripts/avito-search-targets.mjs';
 
 const now = Date.parse(at);
 const record = (overrides = {}) => fixtureRecord({ title: 'MacBook Air 13 M4 16/256 Silver б/у', condition: 'Б/у', seller: { id: 'independent-person', name: 'Алексей', type: 'private' }, ...overrides });
 const offer = overrides => normalizeAvitoListing(record(overrides)).offer;
+test('Avito accepts only the four requested working used phones from NN private sellers and keeps SIM variants separate', () => {
+  for (const model of ['iPhone 18 Pro', 'iPhone 18 Pro Max', 'iPhone 17 Pro', 'iPhone 17 Pro Max']) {
+    const source = record({ title: `${model} 256GB Silver eSIM б/у`, specs: { region: 'US' } });
+    const result = normalizeAvitoListing(source);
+    assert.equal(result.status, 'accepted', model);
+    assert.equal(result.offer.model, model);
+    assert.ok(['chip', 'ramGb', 'cpuCores', 'gpuCores', 'screenIn'].every(field => result.offer[field] === null));
+    assert.notEqual(avitoGroupKey(result.offer), avitoGroupKey({ ...result.offer, simType: 'SIM + eSIM' }));
+    for (const extra of [{ city: 'Москва' }, { condition: 'Новое' }, { seller: { id: 'shop', name: 'Магазин', type: 'private' } }]) assert.equal(normalizeAvitoListing({ ...source, ...extra }).status, 'excluded');
+  }
+  for (const title of ['iPhone 16 Pro 256GB Silver', 'iPhone 18 256GB Silver', 'iPhone 17 Air 256GB Silver', 'Чехол iPhone 18 Pro 256GB Silver', 'Стекло iPhone 17 Pro Max 256GB Silver', 'Samsung 18 Pro 256GB Silver']) assert.equal(normalizeAvitoListing(record({ title })).status, 'excluded', title);
+  for (const extra of [{ specs: { storageGb: 512 } }, { specs: { simType: 'Dual SIM' } }, { specs: { model: 'iPhone 18 Pro Max' } }, { title: 'iPhone 18 Pro 256GB/512GB Silver eSIM' }, { title: 'iPhone 18 Pro/Pro Max 256GB Silver eSIM' }]) assert.equal(normalizeAvitoListing(record({ title: 'iPhone 18 Pro 256GB Silver eSIM', ...extra })).status, 'review', JSON.stringify(extra));
+  assert.equal(normalizeAvitoListing(record({ title: 'iPhone 18 Pro Silver eSIM', description: '256GB', url: 'https://www.avito.ru/nizhniy_novgorod/telefony/iphone_18_pro_256gb_1234567890' })).status, 'review');
+});
+
+test('Avito HTML phone parameters supply explicit storage and SIM without inferred laptop specs', () => {
+  const html = detailPage('Алексей', 'Б/у').replace('MacBook Air 13 M4 16/256 Silver новый', 'iPhone 18 Pro Max')
+    .replace('<li>Цвет: Silver</li>', '<li>Модель: iPhone 18 Pro Max</li><li>Встроенная память: 512 ГБ</li><li>Тип SIM-карты: eSIM</li><li>Цвет: Burgundy</li><li>Регион: US</li>');
+  const item = parseAvitoDetail(html, 'https://www.avito.ru/nizhniy_novgorod/telefony/iphone_1234567890', at);
+  assert.equal(item.specs.storageGb, 512);
+  assert.equal(item.specs.simType, 'eSIM');
+  const result = normalizeAvitoListing({ ...item, description: 'Исправен', seller: { id: 'person', name: 'Алексей', type: 'private' } });
+  assert.equal(result.status, 'accepted');
+  assert.equal(result.offer.model, 'iPhone 18 Pro Max');
+  assert.equal(result.offer.storageGb, 512);
+  assert.equal(result.offer.ramGb, null);
+});
+
+test('HTTP worker rotates the five default search targets with separate saved discovery and never claims global completeness', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'avito-phones-worker-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const calls = [];
+  const factory = () => {
+    const transport = async requested => { calls.push(requested); return /item_|_1234567890$/.test(new URL(requested).pathname) ? detailPage() : searchPage(['1234567890']); };
+    transport.close = async () => {}; transport.stats = () => ({}); return transport;
+  };
+  for (let i = 0; i < 5; i++) {
+    const state = await runAvitoWorker({ env: { AVITO_TRANSPORT: 'http', AVITO_DATA_DIR: dir }, transportFactory: factory });
+    assert.equal(state.state, 'partial');
+    const output = JSON.parse(await readFile(join(dir, 'snapshot.json'), 'utf8'));
+    assert.equal(output.scope, 'avito-nizhny-macbook');
+    assert.equal(output.complete, false);
+    assert.equal(calls[i * 2], `${AVITO_SEARCH_TARGETS[i].searchUrl}&localPriority=1`);
+  }
+  assert.equal(JSON.parse(await readFile(join(dir, 'state.json'), 'utf8')).nextSearchTarget, 0);
+  assert.ok(JSON.parse(await readFile(join(dir, 'discovery-4.json'), 'utf8')).searchUrl.includes('telefony'));
+});
 test('Avito verifies city, condition and seller independently, including store aliases', () => {
   assert.equal(offer().retailer, AVITO);
   for (const name of ['МАКБУЧНАЯ', 'мкбчн', 'М К Б Ч Н', 'Макбучной', 'MacBookBro']) assert.equal(normalizeAvitoListing(record({ seller: { id: 'x', name } })).status, 'excluded');
@@ -158,6 +206,20 @@ test('Avito snapshot validates completeness, unique IDs, and real observation ti
   assert.throws(() => parseAvitoSnapshot(snapshot([record(), record()]), { now }), /повтор/);
   assert.throws(() => parseAvitoSnapshot({ ...good, expectedTotal: 2 }, { now }), /полнота/);
   assert.throws(() => parseAvitoSnapshot(snapshot([record({ observedAt: '2026-09-25T00:00:00Z' })]), { now }), /дата/);
+});
+
+test('complete single-family search withdraws only covered offers and legacy laptop snapshots retain phones', async t => {
+  const dir = await mkdtemp(join(tmpdir(), 'avito-phone-withdrawals-'));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const old = model => ({ ...offer(), model, title: model, listingId: `avito:${model.includes('18') ? '1234567892' : model.includes('17') ? '1234567891' : '1234567890'}`, fetchedAt: '2026-09-26T11:00:00Z' });
+  const previous = [old('MacBook Air 13"'), old('iPhone 17 Pro'), old('iPhone 18 Pro')];
+  await writeFile(join(dir, 'snapshot.json'), JSON.stringify(snapshot([], { searchUrl: AVITO_SEARCH_TARGETS[3].searchUrl })));
+  let result = await fetchAvitoOffers({ env: { AVITO_DATA_DIR: dir }, previous, now });
+  assert.deepEqual(result.offers.map(item => item.model), ['iPhone 17 Pro']);
+  assert.equal(result.offers[0].stock, 'Discontinued');
+  await writeFile(join(dir, 'snapshot.json'), JSON.stringify(snapshot([])));
+  result = await fetchAvitoOffers({ env: { AVITO_DATA_DIR: dir }, previous, now });
+  assert.deepEqual(result.offers.map(item => item.model), ['MacBook Air 13"']);
 });
 test('Avito worker defaults to no network and exposes an honest readiness state', async t => {
   const dir = await mkdtemp(`${tmpdir()}/avito-disabled-`); t.after(() => rm(dir, { recursive: true, force: true }));

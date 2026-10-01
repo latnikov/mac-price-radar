@@ -1,5 +1,6 @@
 import { load } from 'cheerio';
 import { decode, parseProduct, price } from './offer-normalization.mjs';
+import { iphoneModel, iphoneColor, IPHONE_MODELS } from './iphone.mjs';
 
 const origin = 'https://hitapple.ru';
 const catalogUrl = `${origin}/category/mac/`;
@@ -8,7 +9,7 @@ const categories = new Map([
 ]);
 const fail = message => new Error(`HitApple: ${message}`);
 const clean = value => decode(value).replace(/\u00a0/g, ' ');
-const productTitle = /^(?:Apple\s+)?MacBook\s+(?:Air|Pro|Neo)\b/i;
+const productTitle = /^(?:Apple\s+)?(?:MacBook\s+(?:Air|Pro|Neo)|iPhone\s+(?:17|18)\s+Pro(?:\s+Max)?)\b/i;
 
 function safeUrl(value, base = catalogUrl) {
   let url;
@@ -22,8 +23,10 @@ function safeUrl(value, base = catalogUrl) {
 function categoryUrl(value, base = catalogUrl) {
   const url = safeUrl(value, base);
   const match = url.pathname.match(/^\/category\/mac\/([^/]+)\/(?:page\/(\d+)\/)?$/);
-  if (!match || !categories.has(match[1]) || (match[2] && Number(match[2]) < 1) || url.search) throw fail('pagination outside the MacBook catalogue');
-  if (match[2] && Number(match[2]) === 1) url.pathname = url.pathname.replace(/page\/1\/$/, '');
+  const phone = url.pathname.match(/^\/category\/iphone\/((?:17|18)-pro(?:-max)?)\/(?:page\/(\d+)\/)?$/);
+  const selected = phone || match;
+  if (!selected || (!phone && !categories.has(selected[1])) || (selected[2] && Number(selected[2]) < 1) || url.search) throw fail('pagination outside the device catalogue');
+  if (selected[2] && Number(selected[2]) === 1) url.pathname = url.pathname.replace(/page\/1\/$/, '');
   return url.href;
 }
 
@@ -46,19 +49,19 @@ async function responseText(response, url) {
   return response.text();
 }
 
-export function discoverHitappleCategories(html) {
+export function discoverHitappleCategories(html, { phones = false } = {}) {
   const $ = load(String(html));
   const urls = new Set();
   $('ul.products > li.product-category').each((_, element) => {
     const card = $(element), title = clean(card.find('.woocommerce-loop-category__title').text());
-    if (!/^MacBook\s+(?:Air|Pro|Neo)\b/i.test(title)) return;
+    if (phones ? !iphoneModel(title) : !/^MacBook\s+(?:Air|Pro|Neo)\b/i.test(title)) return;
     const url = categoryUrl(card.find('a').first().attr('href'));
     const slug = new URL(url).pathname.split('/').filter(Boolean).at(-1);
-    if (!new RegExp(`^MacBook\\s+${categories.get(slug)}$`, 'i').test(title)) throw fail('category title does not match its URL');
+    if (phones ? iphoneModel(title) !== iphoneModel(`iPhone ${slug.replace(/-/g, ' ')}`) : !new RegExp(`^MacBook\\s+${categories.get(slug)}$`, 'i').test(title)) throw fail('category title does not match its URL');
     if (urls.has(url)) throw fail('duplicate MacBook category');
     urls.add(url);
   });
-  if (urls.size !== categories.size) throw fail('incomplete crawl: expected Air, Pro and Neo categories');
+  if (urls.size !== (phones ? IPHONE_MODELS.length : categories.size)) throw fail('incomplete crawl: expected all requested categories');
   return [...urls];
 }
 
@@ -98,7 +101,7 @@ function normalizedOffer({ title, url, amount, rawPrice, stock, externalId, prod
       priceMeaning: 'Текущая розничная цена при наличном расчёте; старая цена и рассрочка исключены',
       availabilityMeaning: 'Наличие из публичного WooCommerce каталога или выбранного варианта' },
   });
-  if (!offer || !offer.screenIn || !offer.cpuCores || !offer.gpuCores || offer.color === 'unknown') throw fail(`unrecognized MacBook configuration: ${title}`);
+  if (!offer || (!iphoneModel(title) && (!offer.screenIn || !offer.cpuCores || !offer.gpuCores)) || offer.color === 'unknown') throw fail(`unrecognized device configuration: ${title}`);
   return offer;
 }
 
@@ -159,7 +162,12 @@ function neoSpecification(title, description) {
   return 'Apple MacBook Neo 13" A18 Pro 6-core CPU / 5-core GPU';
 }
 
-function variantColor(label, variant, neo) {
+function variantColor(label, variant, neo, phoneModel = null) {
+  if (phoneModel && iphoneColor(label, phoneModel) === 'unknown') {
+    const sourceImage = `${variant.image?.title || ''} ${variant.image?.alt || ''} ${variant.image?.url || ''}`;
+    const confirmed = iphoneColor(sourceImage, phoneModel);
+    if (confirmed !== 'unknown') return confirmed;
+  }
   if (!neo) return label;
   // HitApple labels Citrus as "Зеленый". Its own variant image identifies
   // the actual Apple color; do not infer this from a generic green label.
@@ -171,10 +179,11 @@ function variantColor(label, variant, neo) {
 }
 
 /** Parses exact WooCommerce variation prices; the parent minimum is never used. */
-export function parseHitappleVariations(html, pageUrl, { expectedProductId, fetchedAt = new Date().toISOString() } = {}) {
+export function parseHitappleVariations(html, pageUrl, { expectedProductId, fetchedAt = new Date().toISOString(), variants: suppliedVariants = null } = {}) {
   const url = parentUrl(productUrl(pageUrl));
   const $ = load(String(html));
-  const forms = $('form.variations_form');
+  const mainForms = $('.summary form.variations_form');
+  const forms = mainForms.length ? mainForms : $('form.variations_form');
   if (forms.length !== 1) throw fail('expected one variable product form');
   const form = forms.first();
   const productId = String(form.attr('data-product_id') || '');
@@ -184,17 +193,18 @@ export function parseHitappleVariations(html, pageUrl, { expectedProductId, fetc
   if (!/Цена указана при наличном расч[её]те/i.test(clean($('.summary').text()))) throw fail('cash price not confirmed');
   const description = clean($('.woocommerce-Tabs-panel--description').text());
   const neo = neoSpecification(title, description);
+  const phone = Boolean(iphoneModel(title));
   const optionLabels = new Map();
   form.find('select[name]').each((_, element) => {
     const select = $(element), name = select.attr('name');
-    if (!['attribute_pa_czvet', 'attribute_pa_obem-pamyati'].includes(name)) throw fail(`unsupported variant option: ${name}`);
+    if (!['attribute_pa_czvet', 'attribute_pa_obem-pamyati', ...(phone ? ['attribute_pa_svyaz'] : [])].includes(name)) throw fail(`unsupported variant option: ${name}`);
     const labels = new Map();
     select.find('option[value]').each((_, option) => { const value = $(option).attr('value'); if (value) labels.set(value, clean($(option).text())); });
     optionLabels.set(name, labels);
   });
-  if (optionLabels.size !== 2) throw fail('incomplete variable options');
+  if (optionLabels.size !== (phone ? 3 : 2)) throw fail('incomplete variable options');
   let variants;
-  try { variants = JSON.parse(form.attr('data-product_variations')); }
+  try { variants = suppliedVariants || JSON.parse(form.attr('data-product_variations')); }
   catch { throw fail('invalid variable product data'); }
   if (!Array.isArray(variants) || !variants.length) throw fail('incomplete crawl: variation data missing or requires AJAX');
   const ids = new Set(), combinations = new Set(), offers = [];
@@ -222,16 +232,17 @@ export function parseHitappleVariations(html, pageUrl, { expectedProductId, fetc
     if (!Number.isInteger(minimumQuantity) || minimumQuantity < 1) throw fail(`invalid variant minimum quantity: ${id}`);
     if (typeof variant.is_in_stock !== 'boolean' || typeof variant.is_purchasable !== 'boolean' || typeof variant.variation_is_active !== 'boolean' || typeof variant.variation_is_visible !== 'boolean') throw fail(`missing variant availability: ${id}`);
     const colorLabel = selected.get('attribute_pa_czvet');
-    const color = variantColor(colorLabel, variant, Boolean(neo));
+    const color = variantColor(colorLabel, variant, Boolean(neo), iphoneModel(title));
     const memory = selected.get('attribute_pa_obem-pamyati');
     if (neo && !/^8\s*\/\s*(?:256|512)\s*GB$/i.test(memory)) throw fail(`unverified Neo memory: ${memory}`);
-    const variantTitle = `${neo || normalizedTitle(title)} ${memory} ${color}`;
+    const variantTitle = `${neo || normalizedTitle(title)} ${memory} ${color} ${phone ? selected.get('attribute_pa_svyaz') : ''}`;
     const onBackorder = /available-on-backorder|предзаказ|под заказ|on backorder/i.test(String(variant.availability_html || ''));
     const stock = !variant.is_in_stock || !variant.is_purchasable || !variant.variation_is_active || !variant.variation_is_visible || onBackorder ? 'OutOfStock' : 'InStock';
     offers.push(normalizedOffer({ title: variantTitle, url: productUrl(variantUrl.href), amount, rawPrice: String(variant.display_price), stock,
       externalId: id, productId, variantId: id, minimumQuantity, fetchedAt,
       evidence: { method: 'woocommerce-product-variations-v1', productPage: url, sourceProductTitle: title,
         sourceVariantId: id, sourceVariantAttributes: variant.attributes, sourceColorLabel: colorLabel,
+        ...(phone ? { sourceColorImage: variant.image?.url || variant.image?.title } : {}),
         sourceCurrentPrice: variant.display_price, sourceRegularPrice: variant.display_regular_price,
         cashPriceNotice: 'Цена указана при наличном расчёте', sourceInStock: variant.is_in_stock,
         sourcePurchasable: variant.is_purchasable, sourceBackordersAllowed: variant.backorders_allowed, sourceOnBackorder: onBackorder,
@@ -242,7 +253,7 @@ export function parseHitappleVariations(html, pageUrl, { expectedProductId, fetc
 }
 
 /** Completes every category and exact variant before returning a new snapshot. */
-export async function fetchHitappleOffers({ fetchPage = url => fetch(url, { signal: AbortSignal.timeout(20000) }), maxPages = 30 } = {}) {
+export async function fetchHitappleOffers({ fetchPage = url => fetch(url, { signal: AbortSignal.timeout(20000) }), maxPages = 30, catalogueUrl = catalogUrl } = {}) {
   if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 100) throw fail('maxPages must be between 1 and 100');
   const fetchedAt = new Date().toISOString();
   const seen = new Set(), entries = new Map(), variableProducts = new Map();
@@ -253,7 +264,8 @@ export async function fetchHitappleOffers({ fetchPage = url => fetch(url, { sign
     seen.add(url);
     return responseText(await fetchPage(url), url);
   };
-  const roots = discoverHitappleCategories(await read(catalogUrl));
+  if (![catalogUrl, `${origin}/category/iphone/`].includes(catalogueUrl)) throw fail('unsupported catalogue URL');
+  const roots = discoverHitappleCategories(await read(catalogueUrl), { phones: catalogueUrl !== catalogUrl });
   stats.catalogPagesFetched++;
   for (const root of roots) {
     let url = root;
@@ -279,7 +291,37 @@ export async function fetchHitappleOffers({ fetchPage = url => fetch(url, { sign
   }
   const offers = [...entries.values()].flatMap(entry => entry.offer ? [entry.offer] : []);
   for (const [url, parent] of variableProducts) {
-    const parsed = parseHitappleVariations(await read(url), url, { expectedProductId: parent.id, fetchedAt });
+    const html = await read(url);
+    const $ = load(html), form = $('.summary form.variations_form').first();
+    let variants = null;
+    if (iphoneModel($('.summary h1.product_title').first().text()) && form.attr('data-product_variations') === 'false') {
+      const productId = form.attr('data-product_id');
+      const selections = form.find('select[name]').map((_, element) => {
+        const select = $(element), name = select.attr('name');
+        if (!['attribute_pa_czvet', 'attribute_pa_obem-pamyati', 'attribute_pa_svyaz'].includes(name)) throw fail(`unsupported AJAX variant option: ${name}`);
+        return { name, values: select.find('option[value]').map((_, option) => $(option).attr('value')).get().filter(Boolean) };
+      }).get();
+      if (selections.length !== 3 || !/^\d+$/.test(productId || '')) throw fail('incomplete AJAX phone options');
+      let combinations = [{}];
+      for (const { name, values } of selections) combinations = combinations.flatMap(prior => values.map(value => ({ ...prior, [name]: value })));
+      if (!combinations.length || combinations.length > 64) throw fail('unsupported AJAX phone combination count');
+      variants = [];
+      const queue = [...combinations];
+      await Promise.all(Array.from({ length: 3 }, async () => {
+        while (queue.length) {
+          const attributes = queue.shift();
+          const endpoint = `${origin}/?wc-ajax=get_variation`;
+          const body = new URLSearchParams({ product_id: productId, ...attributes });
+          let variant;
+          try { variant = JSON.parse(await responseText(await fetchPage(endpoint, { method: 'POST', body }), endpoint)); }
+          catch (error) { throw fail(`phone variation lookup failed: ${error.message}`); }
+          if (variant === false) continue;
+          if (!variant || Object.keys(attributes).some(name => variant.attributes?.[name] !== attributes[name])) throw fail('AJAX phone variation selection mismatch');
+          variants.push(variant);
+        }
+      }));
+    }
+    const parsed = parseHitappleVariations(html, url, { expectedProductId: parent.id, fetchedAt, variants });
     stats.productPagesFetched++;
     const byId = new Map(parsed.offers.map(offer => [offer.externalId, offer]));
     for (const entry of entries.values()) {

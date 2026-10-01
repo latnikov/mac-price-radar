@@ -19,6 +19,21 @@ const record = (overrides = {}) => ({
 const snapshot = records => apifySnapshot(records, options);
 const parsed = records => parseAvitoSnapshot(snapshot(records), { now: options.now });
 
+test('Apify phone records preserve the legacy snapshot scope and explicit memory, SIM and region without invented laptop fields', () => {
+  for (const model of ['iPhone 18 Pro', 'iPhone 18 Pro Max', 'iPhone 17 Pro', 'iPhone 17 Pro Max']) {
+    const phone = record({ title: `${model} Silver`, url: 'https://www.avito.ru/nizhniy_novgorod/telefony/iphone_1234567890',
+      parameters: parameters({ 'Состояние': 'Отличное', 'Модель': model, 'Встроенная память': '256 ГБ', 'Цвет': 'Silver', 'Тип SIM-карты': 'SIM + eSIM', 'Регион': 'EU' }) });
+    const output = snapshot([phone]);
+    assert.equal(output.scope, 'avito-nizhny-macbook');
+    const [offer] = parsed([phone]).offers;
+    assert.equal(offer?.model, model);
+    assert.equal(offer.storageGb, 256);
+    assert.equal(offer.simType, 'SIM + eSIM');
+    assert.equal(offer.region, 'EU');
+    assert.ok(['chip', 'ramGb', 'cpuCores', 'gpuCores', 'screenIn'].every(field => offer[field] === null));
+  }
+});
+
 test('Apify adapter produces a partial importable snapshot using observation time, explicit specs and seller identity', () => {
   const source = record(), input = structuredClone(source);
   const result = snapshot([source]);

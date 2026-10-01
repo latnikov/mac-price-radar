@@ -4,6 +4,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { writeAvitoJson } from './avito-storage.mjs';
+import { AVITO_SEARCH_TARGETS, avitoSearchTarget } from './avito-search-targets.mjs';
 
 export const APIFY_AVITO_ACTOR_ID = '4SsKYeXxLtIJLtzHp';
 export const APIFY_AVITO_PAGING_ACTOR_ID = 'km2oo0mCahDBKPOa6';
@@ -99,9 +100,13 @@ function configuration(env, ledger) {
   const priceMin = number('AVITO_APIFY_PRICE_MIN', null), priceMax = number('AVITO_APIFY_PRICE_MAX', null);
   for (const value of [priceMin, priceMax]) if (value !== null && (!Number.isSafeInteger(value) || value < 0 || value > 1_000_000_000)) throw safeError('CONFIG', 'Apify: некорректный диапазон цен');
   if (priceMin !== null && priceMax !== null && priceMin > priceMax) throw safeError('CONFIG', 'Apify: обратный диапазон цен');
-  const query = env.AVITO_APIFY_QUERY || 'MacBook';
-  if (!/^MacBook(?: (?:Air|Pro|Neo|M[1-5](?: Pro| Max| Ultra)?))*$/i.test(query) || query.length > 80) throw safeError('CONFIG', 'Apify: некорректный запрос MacBook');
-  return { periodStartedAt, periodEndsAt, limitUsd, maxResults, actorId, priceMin, priceMax, query,
+  // One target per already budgeted run; expanding the catalogue never adds
+  // paid POSTs or resets the existing run/budget/period limits.
+  const automaticQuery = !env.AVITO_APIFY_QUERY;
+  const query = env.AVITO_APIFY_QUERY || AVITO_SEARCH_TARGETS[ledger.entries.filter(entry => entry.automaticQuery).length % AVITO_SEARCH_TARGETS.length].query;
+  const target = avitoSearchTarget(query);
+  if (!target) throw safeError('CONFIG', 'Apify: некорректный запрос MacBook или iPhone 17/18 Pro и Pro Max');
+  return { periodStartedAt, periodEndsAt, limitUsd, maxResults, actorId, priceMin, priceMax, query: target.query, target, automaticQuery,
     maxRunUsd: number('AVITO_APIFY_MAX_RUN_USD', 0.40), runLimit: number('AVITO_APIFY_RUN_LIMIT', 10) };
 }
 
@@ -331,7 +336,7 @@ export async function runApifyWorker({
     gate = evaluateApifyBudget(ledger, { ...config, now: time() });
     if (pending.length || (!gate.allowed && !(manualRun && gate.reason === 'hourly_wait'))) return state(['run_limit', 'budget_limit', 'period_ended'].includes(gate.reason) ? 'paused' : 'partial', gateMessage(gate.reason));
     startedAt = new Date(time()).toISOString();
-    const entry = { attemptId: randomUUID(), status: 'POSTING', startedAt, requestedAt: startedAt, reservationUsd: config.maxRunUsd, actorId: config.actorId, ...(requestKey ? { requestKey } : {}),
+    const entry = { attemptId: randomUUID(), status: 'POSTING', startedAt, requestedAt: startedAt, reservationUsd: config.maxRunUsd, actorId: config.actorId, ...(requestKey ? { requestKey } : {}), ...(config.automaticQuery ? { automaticQuery: true } : {}),
       scope: { priceMin: config.priceMin, priceMax: config.priceMax, query: config.query } };
     ledger.entries.push(entry);
     await saveLedger(ledgerPath, ledger);
@@ -340,13 +345,13 @@ export async function runApifyWorker({
     try {
       const response = await apiJson(`/acts/${config.actorId}/runs?maxTotalChargeUsd=${config.maxRunUsd}&waitForFinish=0&timeout=${config.actorId === APIFY_AVITO_PAGING_ACTOR_ID ? 3600 : 180}&restartOnError=false${config.actorId === APIFY_AVITO_PAGING_ACTOR_ID ? '&memory=1024' : ''}`, {
         token, fetchImpl, method: 'POST', body: config.actorId === APIFY_AVITO_PAGING_ACTOR_ID ? {
-          mode: 'search', regions: ['nizhniy_novgorod'], category: 'noutbuki', dealType: 'any', query: config.query,
+          mode: 'search', regions: ['nizhniy_novgorod'], category: config.target.path, dealType: 'any', query: config.query,
           sortBy: 'date_desc', ownerOnly: true, maxListings: config.maxResults, fetchDetails: true,
-          incrementalMode: true, stateKey: 'macbookbro-avito-private-used-nn-v1', emitUnchanged: false, emitExpired: false,
+          incrementalMode: true, stateKey: config.target.category === 'laptops' ? 'macbookbro-avito-private-used-nn-v1' : `macbookbro-avito-private-used-nn-${config.query.toLowerCase().replace(/\s+/g, '-')}-v1`, emitUnchanged: false, emitExpired: false,
           proxy: { useApifyProxy: true, apifyProxyGroups: ['RESIDENTIAL'] },
         } : {
-          ...(config.priceMin === null && config.priceMax === null && config.query === 'MacBook' ? { searchUrl: APIFY_AVITO_SEARCH_URL } : {}),
-          sort: 'newest', query: config.query, location: 'Нижний Новгород', category: 'laptops',
+          ...(config.priceMin === null && config.priceMax === null && (config.query === 'MacBook' || config.target.category === 'phones') ? { searchUrl: config.query === 'MacBook' ? APIFY_AVITO_SEARCH_URL : `${config.target.searchUrl}&s=104` } : {}),
+          sort: 'newest', query: config.query, location: 'Нижний Новгород', category: config.target.category,
           ...(config.priceMin === null ? {} : { priceMin: config.priceMin }), ...(config.priceMax === null ? {} : { priceMax: config.priceMax }),
           maxResults: config.maxResults, includeDetails: true, includePhone: false, includeReviews: false, includeComparables: false,
         },

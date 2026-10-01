@@ -2,6 +2,37 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fetchBsaOffers, parseBsaMessages } from '../scripts/bsa.mjs';
 
+test('BSA reads all four phone families and section rows without borrowing Mac characteristics or merging SIM variants', () => {
+  const result = parseBsaMessages([{ id: 501, text: `01/10/2026
+MacBook Pro 14
+M5 Pro 24GB 512GB Silver — 200000
+iPhone 18 Pro
+🇺🇸 256 Silver eSIM — 130000
+🇪🇺 256GB Silver SIM + eSIM — 140000
+iPhone 18 Pro Max 512GB Burgundy eSIM — 180000
+iPhone
+17 Pro 256GB Deep Blue eSIM — 110000
+17 Pro Max 1TB Cosmic Orange Dual SIM — 170000
+iPhone 16 Pro
+256GB Silver eSIM — 90000
+iPhone 18 256GB Silver — 95000
+Чехол iPhone 18 Pro 256GB Silver — 15000
+iPad Pro
+M5 16GB 512GB Silver — 150000
+MacBook Air 13
+M5 16GB 512GB Silver — 125000` }], { now: '2026-10-01T10:00:00+03:00' });
+  assert.equal(result.failures.length, 0);
+  const phones = result.offers.filter(offer => offer.model.startsWith('iPhone'));
+  assert.deepEqual(phones.map(offer => [offer.model, offer.storageGb, offer.simType]), [
+    ['iPhone 18 Pro', 256, 'eSIM'], ['iPhone 18 Pro', 256, 'SIM + eSIM'],
+    ['iPhone 18 Pro Max', 512, 'eSIM'], ['iPhone 17 Pro', 256, 'eSIM'], ['iPhone 17 Pro Max', 1000, 'Dual SIM'],
+  ]);
+  assert.ok(phones.every(offer => [offer.chip, offer.ramGb, offer.cpuCores, offer.gpuCores, offer.screenIn].every(value => value === null)));
+  assert.notEqual(phones[0].sourceVariantId, phones[1].sourceVariantId);
+  assert.notEqual(phones[0].externalId, phones[1].externalId);
+  assert.equal(result.offers.at(-1).model, 'MacBook Air 13"');
+});
+
 test('BSA parser keeps only Moscow-today-and-later MacBook price lists', () => {
   const messages = [
     { id: 100, text: `MacBook Air\n22/09/2026\nMDH74 Air 13 (M5 16/512) Silver-120.000` },

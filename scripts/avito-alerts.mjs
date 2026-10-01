@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { avitoUrl } from './avito-policy.mjs';
 import { writeAvitoJson } from './avito-storage.mjs';
 import { googleRelayUrl, sendGoogleRelay } from './avito-google-relay.mjs';
+import { isIphone } from './iphone.mjs';
+import { canonicalStorageGb, known, normalize } from './domain.mjs';
 
 const MAX_ALERTS = 5;
 const SITE_URL = 'https://dev.macbookbro.ru/web/avito.html';
@@ -33,6 +35,12 @@ function formatCandidate(candidate, opportunities, now) {
     && Date.parse(candidate.procurement.observedAt) <= now + 60_000
     && now - Date.parse(candidate.procurement.observedAt) <= 72*3_600_000;
   const peers = candidate?.comparisonKind === 'used-asking-price-spread' && Number.isInteger(candidate.peerCount) && candidate.peerCount >= 3;
+  if (isIphone(candidate)) {
+    const fields = ['model', 'storageGb', 'color', 'simType', 'region'];
+    const value = (offer, field) => field === 'storageGb' ? canonicalStorageGb(offer[field]) : offer[field];
+    const samePhone = other => other && fields.every(field => known(value(candidate, field)) && known(value(other, field)) && normalize(value(candidate, field)) === normalize(value(other, field)));
+    if (procurement ? !samePhone(candidate.procurement) : !peers || !Array.isArray(candidate.evidence) || candidate.evidence.length < 3 || !candidate.evidence.every(samePhone)) return null;
+  }
   if (!candidate || candidate.alertEligible !== true || candidate.condition !== 'used'
     || candidate.marketplaceSellerType !== 'private' || (!procurement && !peers)
     || typeof candidate.dedupKey !== 'string' || !/^avito:\d+:\d+$/.test(candidate.dedupKey)
@@ -46,13 +54,13 @@ function formatCandidate(candidate, opportunities, now) {
   let url;
   try { url = avitoUrl(candidate.url, { listing: true }); } catch { return null; }
   if (url.length > 1500) return null;
-  const title = oneLine(candidate.title, 240) || 'MacBook на Авито';
+  const title = oneLine(candidate.title, 240) || 'Устройство на Авито';
   const seller = oneLine(candidate.sellerName, 100) || 'не указан';
   const fraction = Number.isFinite(candidate.deltaPercent) ? ` (${percent.format(candidate.deltaPercent)}% от ориентира)` : '';
   const text = [
     'Авито Сигналы · стоит проверить', title, `Б/у · частный продавец: ${seller}.`, '',
     `Цена Авито: ${rubles(candidate.price)}`,
-    procurement ? `Русский закуп нового MacBook · ${candidate.procurement.retailer}: ${rubles(candidate.referencePrice)}`
+    procurement ? `Русский закуп нового ${/^iPhone\b/i.test(candidate.model || '') ? 'iPhone' : 'MacBook'} · ${candidate.procurement.retailer}: ${rubles(candidate.referencePrice)}`
       : `Минимальная цена сопоставимых б/у у других частников: ${rubles(candidate.referencePrice)}`,
     `Резерв на дополнительные расходы: ${rubles(reserve)}`,
     `Разница после резерва: ${rubles(delta)}${fraction}`,

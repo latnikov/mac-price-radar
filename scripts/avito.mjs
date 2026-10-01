@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { AVITO, AVITO_VERSION, normalizeAvitoListing } from './avito-policy.mjs';
+import { AVITO, AVITO_VERSION, avitoUrl, normalizeAvitoListing } from './avito-policy.mjs';
+import { iphoneModel, isIphone } from './iphone.mjs';
 import { writeAvitoJson } from './avito-storage.mjs';
 
 export function parseAvitoSnapshot(snapshot, { now = Date.now(), sellerMap = {} } = {}) {
@@ -45,6 +46,19 @@ export async function fetchAvitoOffers({ env = process.env, previous = [], now =
   const current = new Set(result.offers.map(o => o.listingId));
   const uncertain = new Set(result.review.map(item => `avito:${item.id}`));
   const explicitlyExcluded = new Set(result.excluded.map(item => `avito:${item.id}`));
+  const coveredBySearch = old => {
+    // Historical complete snapshots covered laptops only. New phone searches
+    // may withdraw only the family actually searched, never unrelated targets.
+    if (!snapshot.searchUrl) return !isIphone(old);
+    try {
+      const search = new URL(avitoUrl(snapshot.searchUrl));
+      if (search.pathname === '/nizhniy_novgorod/telefony') {
+        const model = iphoneModel(search.searchParams.get('q'));
+        return Boolean(model && isIphone(old) && (model.endsWith('Max') ? old.model === model : old.model === model || old.model === `${model} Max`));
+      }
+      return search.pathname === '/nizhniy_novgorod/noutbuki' && !isIphone(old);
+    } catch { return false; }
+  };
   for (const item of result.review) {
     const old = prior.get(`avito:${item.id}`);
     if (!old || Date.parse(old.fetchedAt) >= Date.parse(snapshot.completedAt)) continue;
@@ -53,6 +67,7 @@ export async function fetchAvitoOffers({ env = process.env, previous = [], now =
   }
   for (const old of previous) {
     if (!result.complete && !explicitlyExcluded.has(old.listingId)) continue;
+    if (!explicitlyExcluded.has(old.listingId) && !coveredBySearch(old)) continue;
     if (old.retailer !== AVITO || current.has(old.listingId) || uncertain.has(old.listingId) || old.stock === 'Discontinued' || Date.parse(old.fetchedAt) >= Date.parse(snapshot.completedAt)) continue;
     result.offers.push({ ...old, priceObservedAt: old.priceObservedAt || old.fetchedAt, stock: 'Discontinued', validationStatus: 'accepted', rejected: false,
       fetchedAt: snapshot.completedAt, observedAt: snapshot.completedAt, adapterVersion: AVITO_VERSION, qualityWarnings: [],

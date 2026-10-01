@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { parseGoogleRate, parseCbrRate, findAppleGuides, findMacGuides, parseAppleGuide, convertForeignPrices, refreshForeignPrices, readForeignPrices, GUIDE_URL, RATE_URL } from '../scripts/foreign-prices.mjs';
+import { parseGoogleRate, parseCbrRate, findAppleGuides, findMacGuides, findPriceGuides, parseAppleGuide, convertForeignPrices, refreshForeignPrices, readForeignPrices, GUIDE_URL, IPHONE_GUIDE_URL, RATE_URL } from '../scripts/foreign-prices.mjs';
 
 const guideUrl = 'https://prices.appleinsider.com/macbook-air-13-inch-m5';
 // Synthetic contract fixture; real browser samples are tested below.
@@ -40,6 +40,35 @@ test('conversion adds four rubles to rate before multiplication and rounds final
 test('guide discovery stays on source host and limits scope to Macs', () => {
   assert.deepEqual(findMacGuides(`<a href="${guideUrl}">Air</a><a href="${guideUrl}#prices">Air</a><a href="https://other.test/macbook-pro">Bad</a><a href="/ipad-pro">iPad</a>`), [guideUrl]);
   assert.throws(() => findMacGuides('<h1>Access denied</h1>'));
+});
+
+test('server discovery retains Macs and includes exactly the four requested iPhone Pro guides', () => {
+  const paths = ['iphone-18-pro', 'iphone-18-pro-max', 'iphone-17-pro', 'iphone-17-pro-max'];
+  const html = `<a href="${guideUrl}">Air</a>` + paths.map(path => `<a href="/${path}">${path}</a><a href="/${path}#prices">duplicate</a>`).join('')
+    + '<a href="/iphone-18">Base</a><a href="/iphone-16-pro">Old</a><a href="/ipad-pro">iPad</a><a href="https://other.test/iphone-18-pro">Other</a>';
+  assert.deepEqual(findPriceGuides(html), [guideUrl, ...paths.map(path => `https://prices.appleinsider.com/${path}`)]);
+  assert.throws(() => findPriceGuides('<h1>Access denied</h1>'));
+});
+
+test('server refresh discovers phone category and records confirmed phone prices with their real check date', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'foreign-phones-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const paths = ['iphone-18-pro', 'iphone-18-pro-max', 'iphone-17-pro', 'iphone-17-pro-max'];
+  const fetchPage = async url => url === GUIDE_URL ? `<a href="${guideUrl}">Air</a>` : url === RATE_URL ? rateHtml
+    : url === IPHONE_GUIDE_URL ? paths.map(path => `<a href="/${path}">${path}</a>`).join('')
+      : url === guideUrl ? guide : `<h1>${new URL(url).pathname.slice(1).replace(/-/g, ' ')} Prices</h1><table><tr><th>Configuration</th><th>Best Price</th></tr><tr><td>256GB, Silver, eSIM</td><td>$1,199</td></tr></table>`;
+  const now = '2026-10-01T01:00:00Z';
+  const saved = await refreshForeignPrices({ root, fetchPage, now: () => now });
+  assert.equal(saved.guides, 5);
+  const phones = saved.rows.filter(row => row.category === 'iPhone');
+  assert.equal(phones.length, 4);
+  assert.ok(phones.every(row => row.fetchedAt === now && row.usd === 1199));
+  await assert.rejects(refreshForeignPrices({ root, fetchPage: async url => url === IPHONE_GUIDE_URL ? Promise.reject(new Error('iPhone catalog blocked')) : fetchPage(url) }));
+  const failed = await readForeignPrices(root);
+  assert.equal(failed.state, 'error'); assert.equal(failed.updatedAt, saved.updatedAt);
+  assert.deepEqual(failed.rows, saved.rows);
+  await assert.rejects(refreshForeignPrices({ root, fetchPage: async url => url === IPHONE_GUIDE_URL ? '<h1>Just a moment</h1>' : fetchPage(url) }), /недоступен каталог iPhone/);
+  assert.deepEqual((await readForeignPrices(root)).rows, saved.rows);
 });
 test('failed and partial collections preserve last good prices, rate and timestamps', async t => {
   const root = await mkdtemp(join(tmpdir(), 'foreign-prices-'));

@@ -51,3 +51,21 @@ test('procurement alerts require fresh private used cards, matching configuratio
   assert.equal(calculate(listing(undefined,50000)).candidates[0].alertEligible,false);
   assert.equal(calculate(undefined,[quote('BSA',100000,{color:'Midnight'})]).candidates[0].alertEligible,false);
 });
+
+test('phone procurement and opportunities match model, storage, SIM, region and color without requiring or inventing laptop specs', () => {
+  for (const model of ['iPhone 18 Pro', 'iPhone 18 Pro Max', 'iPhone 17 Pro', 'iPhone 17 Pro Max']) {
+    const phone = { model, chip: null, screenIn: null, ramGb: null, cpuCores: null, gpuCores: null, storageGb: 256, simType: 'eSIM', region: 'US', color: 'Silver' };
+    const target = listing(undefined, 80000, phone), baseline = quote('BSA', 100000, phone);
+    const result = rank(target, [baseline]);
+    assert.equal(result.referencePrice, 100000, model);
+    assert.equal(result.alertEligible, true);
+    assert.equal(result.procurement.simType, 'eSIM');
+    assert.ok(!result.reasons.some(reason => /CPU|GPU|RAM/.test(reason)));
+    assert.equal(calculateAvitoOpportunities([target, baseline], { now }).candidates[0].alertEligible, true);
+    for (const extra of [{ simType: 'SIM + eSIM' }, { simType: 'unknown' }, { region: 'EU' }, { region: 'unknown' }, { storageGb: 512 }, { color: 'Burgundy' }, { model: 'iPhone 16 Pro' }]) {
+      assert.equal(rank(target, [{ ...baseline, ...extra }]).referencePrice, null, JSON.stringify(extra));
+      assert.equal(calculateAvitoOpportunities([target, { ...baseline, ...extra }], { now }).candidates.length, 0);
+    }
+    for (const extra of [{ simType: 'unknown' }, { region: 'unknown' }]) assert.equal(rank({ ...target, ...extra }, [baseline]).referencePrice, null);
+  }
+});

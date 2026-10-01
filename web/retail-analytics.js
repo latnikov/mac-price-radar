@@ -1,3 +1,4 @@
+import { isPhone } from './product-families.js';
 export const PROCUREMENT_RETAILERS = ['Дима', 'BSA'];
 export const isProcurementOffer = offer => PROCUREMENT_RETAILERS.includes(offer?.retailer)
   || (offer?.sourceType === 'telegram_channel' && offer?.procurementApproved === true);
@@ -12,13 +13,13 @@ const canonicalStorage = value => ({ 1024: 1000, 2048: 2000, 4096: 4000, 8192: 8
 
 // Retailers frequently omit CPU/GPU core counts. Those optional details must
 // not split one sellable configuration into duplicate catalogue rows.
-export const catalogConfigurationKey = offer => [
+export const catalogConfigurationKey = offer => (isPhone(offer) ? [offer.model, canonicalStorage(offer.storageGb), offer.simType, offer.condition, offer.region] : [
   offer.model,
   offer.chip,
   offer.screenIn,
   offer.ramGb,
   canonicalStorage(offer.storageGb),
-].map(value => value ?? 'unknown').join('|');
+]).map(value => value ?? 'unknown').join('|');
 
 function usableOffer(offer) {
   return offer && Number.isFinite(offer.price) && offer.price > 0 && !['OutOfStock', 'Discontinued', 'SoldOut'].includes(offer.stock);

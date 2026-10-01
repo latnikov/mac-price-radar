@@ -1,5 +1,8 @@
 import { parseProduct } from './offer-normalization.mjs';
 import { readCachedChannelMessages } from './telegram-business.mjs';
+import { parseBsaMessages } from './bsa.mjs';
+import { isIphone } from './iphone.mjs';
+import { stableId } from './domain.mjs';
 
 const DEFAULT_CHAT_ID = '-1003421701174';
 
@@ -91,6 +94,24 @@ export function parseDimaMessages(messages, { now = new Date(), timeZone = 'Euro
         validFrom: messageDate,
         submittedAt: new Date(observed).toISOString(),
       });
+    }
+    // Supplier phone lists use the same section headings and compact priced
+    // rows as the other Telegram channels; retain Dima's source and age rules.
+    const phones = parseBsaMessages([{ ...message, date: new Date(observed).toISOString() }], { now: observed, timeZone }).offers.filter(isIphone);
+    candidates += phones.length;
+    for (const phone of phones) {
+      const variant = stableId('variant', [phone.model, phone.storageGb, phone.color, phone.simType, phone.condition, phone.region]);
+      if (seen.has(variant)) continue;
+      seen.add(variant);
+      const baseUrl = message.sourceUsername
+        ? `https://t.me/${String(message.sourceUsername).replace(/^@/, '')}/${postId}`
+        : privateChannelUrl(message.sourceChatId, postId);
+      const url = new URL(baseUrl);
+      url.searchParams.set('item', variant);
+      offers.push({ ...phone, retailer: 'Дима', ...source, url: url.href, externalId: variant, sourceVariantId: variant,
+        validFrom: messageDate, submittedAt: new Date(observed).toISOString(), fetchedAt: new Date(observed).toISOString(), observedAt: new Date(observed).toISOString(),
+        evidence: { ...phone.evidence, method: 'telegram-forward-v3', ...source, sourceChatId: message.sourceChatId || null, postId, messageDate,
+          sourcePostDate: message.date, submittedAt: new Date(observed).toISOString(), timestampBasis: message.submittedAt ? 'telegram-message' : message.receivedAt ? 'legacy-received' : 'source-date' } });
     }
   }
   return {

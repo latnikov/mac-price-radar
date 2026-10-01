@@ -26,7 +26,7 @@ export async function collectAvitoBatch({fetchPage,searchUrl,previousDiscovery,p
     if(started-Date.parse(prior.updatedAt)<=discoveryMaxAgeMs&&Date.parse(prior.updatedAt)<=started&&prior.nextUrl){try{if(sameSearch(prior.nextUrl,searchUrl))nextUrl=avitoUrl(prior.nextUrl);}catch{/* Reset a corrupt cursor. */}}
   }
   const discovery=()=>({schemaVersion:1,searchUrl,updatedAt:now(),nextUrl,items:[...items.values()]});
-  const snapshot=(complete=false)=>({schemaVersion:1,scope:'avito-nizhny-macbook',startedAt,completedAt:now(),complete,
+  const snapshot=(complete=false)=>({schemaVersion:1,scope:'avito-nizhny-macbook',searchUrl,startedAt,completedAt:now(),complete,
     expectedTotal,discovered:items.size,pages,duplicates:0,listings:[...listings],failures:[...new Set(failures)].slice(0,100)});
   const progress=()=>onProgress({stage:'details',pages,discovered:items.size,detailed:listings.length,inspected,remaining:items.size-inspected,expectedTotal,...fetchPage.stats?.()});
   const ingest=page=>{

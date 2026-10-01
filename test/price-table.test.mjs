@@ -166,3 +166,22 @@ test('MacBook color options exclude impossible finishes for family and chip', as
   assert.equal(validMacColor({ model: 'MacBook Air 13"', chip: 'M5', color: 'Starlight' }), true);
   assert.equal(validMacColor({ model: 'MacBook Air 13"', chip: 'M1', color: 'Sky Blue' }), false);
 });
+
+test('iPhone comparison separates SIM, capacity, model, color, condition and region without imputing unknowns', () => {
+  const phone = { ...base, model: 'iPhone 18 Pro Max', chip: null, screenIn: null, ramGb: null, cpuCores: null, gpuCores: null,
+    storageGb: 256, simType: 'eSIM', keyboard: 'not_applicable', region: 'US' };
+  const matching = { ...phone, retailer: 'Technichno', price: 120000 };
+  const differences = [
+    { simType: 'SIM + eSIM' }, { simType: 'Dual SIM' }, { simType: 'unknown' },
+    { storageGb: 512 }, { model: 'iPhone 18 Pro' }, { model: 'iPhone 17 Pro Max' }, { model: 'iPhone 17 Pro' },
+    { color: 'Deep Blue' }, { condition: 'used' }, { condition: 'unknown' }, { region: 'CN' }, { region: 'unknown' },
+  ];
+  const rows = build([phone, matching, ...differences.map((difference, index) => ({ ...matching, url: `https://shop.test/phone-${index}`, price: 50000, ...difference }))]);
+  assert.equal(rows.length, differences.length + 1);
+  const row = rows.find(row => row.offers.length === 2);
+  assert.equal(row.analytics.minimumProcurement, 100000);
+  assert.equal(row.analytics.minimumRetail, 120000);
+  assert.equal(row.analytics.averageRetail, 120000);
+  assert.equal(row.analytics.recommendedPrice, 119500);
+  assert.ok(rows.filter(other => other !== row).every(other => other.analytics.minimumProcurement === null));
+});

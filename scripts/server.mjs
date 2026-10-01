@@ -33,6 +33,7 @@ const STATIC_FILES = new Map([
   ['/web/avito-monitor.css', ['web/avito-monitor.css', 'text/css; charset=utf-8']],
   ['/web/avito-columns.js', ['web/avito-columns.js', 'text/javascript; charset=utf-8']],
   ['/web/view-state.js', ['web/view-state.js', 'text/javascript; charset=utf-8']],
+  ['/web/product-families.js', ['web/product-families.js', 'text/javascript; charset=utf-8']],
   ['/web/price-table.js', ['web/price-table.js', 'text/javascript; charset=utf-8']],
   ['/web/styles.css', ['web/styles.css', 'text/css; charset=utf-8']],
   ['/web/favicon.svg', ['web/favicon.svg', 'image/svg+xml']],
@@ -253,10 +254,16 @@ export async function createMasterServer({ root = process.cwd(), store, refreshR
         const source = tableSource;
         const snapshot = await responseCache('table', `${sheet}:${revision}:${channelData.etag}:${source.hasAvito ? Math.floor(Date.now() / 60000) : ''}`, () => {
           const fields = ['listingId', 'sourceVariantId', 'optionId', 'sku', 'article', 'displayType', 'bundle', 'retailer', 'title', 'model', 'chip', 'screenIn', 'ramGb', 'storageGb', 'color', 'cpuCores', 'gpuCores', 'keyboard', 'region', 'price', 'currency', 'stock', 'url', 'fetchedAt', 'submittedAt', 'validFrom', 'validUntil', 'condition', 'paymentMethod', 'minimumQuantity', 'priceType', 'validationStatus', 'qualityWarnings', 'marketplaceSellerId', 'marketplaceSellerType', 'sellerName', 'matchedRetailer', 'sourceCity', 'avitoRank'];
-          fields.push('sourceType', 'sourceTitle', 'sourceChatId', 'sourceUsername');
+          fields.push('simType', 'withdrawn', 'sourceType', 'sourceTitle', 'sourceChatId', 'sourceUsername');
           const offers = rankAvitoOffers(source.offers)
             .filter(offer => sheet === 'all' || (sheet === 'avito' ? offer.retailer === AVITO : offer.retailer !== AVITO))
-            .map(offer => Object.fromEntries(fields.filter(field => offer[field] !== undefined).map(field => [field, offer[field]])));
+            .map(offer => {
+              const projected = Object.fromEntries(fields.filter(field => offer[field] !== undefined).map(field => [field, offer[field]]));
+              if (offer.latestAttempt) projected.latestAttempt = Object.fromEntries(
+                ['status', 'rejected', 'validationStatus', 'qualityWarnings', 'validationIssues', 'observedAt', 'receivedAt']
+                  .filter(field => offer.latestAttempt[field] !== undefined).map(field => [field, offer.latestAttempt[field]]));
+              return projected;
+            });
           return { schemaVersion: 1, offers, telegramSources: sheet === 'avito' ? [] : channelData.sources };
         });
         return cachedReply(req, res, snapshot);

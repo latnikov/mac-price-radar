@@ -1,4 +1,5 @@
 import { decode, parseProduct, price } from './offer-normalization.mjs';
+import { iphoneModel } from './iphone.mjs';
 
 const origin = 'https://nn.stores-apple.com';
 const catalogUrl = `${origin}/catalog/mac/`;
@@ -31,12 +32,12 @@ function productUrl(value) {
   return url.href;
 }
 
-function paginationUrl(value) {
+function paginationUrl(value, pageUrl = catalogUrl) {
   let url;
-  try { url = new URL(decode(value), catalogUrl); }
+  try { url = new URL(decode(value), pageUrl); }
   catch { throw new Error('Apple Store NN pagination has invalid URL'); }
   const page = url.searchParams.get('PAGEN_4');
-  if (url.origin !== origin || url.pathname !== '/catalog/mac/' || url.username || url.password
+  if (url.origin !== origin || url.pathname !== new URL(pageUrl).pathname || url.username || url.password
     || !/^\d+$/.test(page || '') || Number(page) < 2) {
     throw new Error('Apple Store NN pagination points outside the catalogue');
   }
@@ -74,7 +75,8 @@ function parseCard(card, openingTag, pageUrl, stock) {
   const titleMatch = card.match(/<div\b[^>]*class\s*=\s*["'][^"']*\bitem-title\b[^"']*["'][^>]*>[\s\S]*?<a\b([^>]*)>([\s\S]*?)<\/a>/i);
   if (!titleMatch) throw new Error(`Apple Store NN card ${externalId} has no title`);
   const title = decode(titleMatch[2]);
-  if (!/\bApple\s+MacBook\s+(?:Air|Pro|Neo)\b/i.test(title)) return { externalId, offer: null };
+  const phones = new URL(pageUrl).pathname === '/catalog/iphones/';
+  if (phones ? !iphoneModel(title) : !/\bApple\s+MacBook\s+(?:Air|Pro|Neo)\b/i.test(title)) return { externalId, offer: null };
 
   const link = attributes(`<a ${titleMatch[1]}>`).href;
   if (!link) throw new Error(`Apple Store NN MacBook ${externalId} has no URL`);
@@ -143,19 +145,20 @@ export function parseAppleStorePage(html, pageUrl = catalogUrl) {
     if (!/\brel\s*=\s*(?:["'][^"']*\bnext\b[^"']*["']|next\b)/i.test(match[0])) continue;
     const href = attributes(match[0]).href;
     if (!href) throw new Error('Apple Store NN next page has no URL');
-    next = paginationUrl(href);
+    next = paginationUrl(href, pageUrl);
     break;
   }
   return { total, next, entries, cardCount: cards.length, offers: entries.flatMap(entry => entry.offer ? [entry.offer] : []) };
 }
 
 /** Loads every current MacBook card from all public catalogue pages. */
-export async function fetchAppleStoreOffers({ fetchPage = url => fetch(url), maxPages = 10 } = {}) {
+export async function fetchAppleStoreOffers({ fetchPage = url => fetch(url), maxPages = 10, catalogueUrl = catalogUrl } = {}) {
   if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > 25) throw new Error('Apple Store NN maxPages must be between 1 and 25');
   const seenPages = new Set();
   const seenProducts = new Set();
   const offers = [];
-  let url = crawlUrl;
+  if (![catalogUrl, `${origin}/catalog/iphones/`].includes(catalogueUrl)) throw new Error('Apple Store NN unsupported catalogue URL');
+  let url = `${catalogueUrl}?sort=NAME&order=asc`;
   let total = null;
   let cards = 0;
   while (url) {

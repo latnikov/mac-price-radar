@@ -4,6 +4,7 @@ import { mkdtemp, readFile, writeFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { APIFY_AVITO_ACTOR_ID, evaluateApifyBudget, fetchApifyDataset, runApifyWorker } from '../scripts/avito-apify-worker.mjs';
+import { AVITO_SEARCH_TARGETS } from '../scripts/avito-search-targets.mjs';
 
 const start = '2026-09-30T12:00:00.000Z', end = '2026-10-07T12:00:00.000Z';
 const now = Date.parse('2026-09-30T14:00:00.000Z');
@@ -20,6 +21,37 @@ async function fixture(t, ledger = initialLedger()) {
   return { root, ledgerPath: join(root, 'apify-ledger.json'), statePath: join(root, 'apify-state.json'),
     options: { root, env: { AVITO_DATA_DIR: root, APIFY_TOKEN: 'private-test-token' }, now: () => now, sleep: async () => {} } };
 }
+
+test('Apify accepts all four exact phone queries in the phone category and keeps one budgeted POST per run', async t => {
+  for (const target of AVITO_SEARCH_TARGETS.slice(1)) {
+    const f = await fixture(t); let posts = 0;
+    const result = await runApifyWorker({ ...f.options, env: { ...f.options.env, AVITO_APIFY_QUERY: target.query },
+      fetchImpl: async (url, options) => {
+        if (options.method === 'POST') { posts++; const input = JSON.parse(options.body); assert.equal(input.query, target.query); assert.equal(input.category, 'phones'); assert.equal(input.searchUrl, `${target.searchUrl}&s=104`); assert.equal(input.includePhone, false); return reply({ data: run() }); }
+        return reply([]);
+      }, importRun: async () => ({ counts: { accepted: 0 } }) });
+    assert.equal(result.state, 'partial'); assert.equal(posts, 1); assert.equal(result.budget.runsUsed, 2);
+  }
+});
+
+test('automatic Apify queries rotate within the existing budget while unsupported phones cannot start a run', async t => {
+  for (let index = 0; index < AVITO_SEARCH_TARGETS.length; index++) {
+    const seeded = initialLedger();
+    seeded.entries[0].automaticQuery = index > 0;
+    for (let n = 1; n < index; n++) seeded.entries.push({ runId: `automatic${n}`, status: 'SUCCEEDED', costUsd: 0.01, startedAt: start, importedAt: start, automaticQuery: true });
+    const f = await fixture(t, seeded); let posts = 0;
+    await runApifyWorker({ ...f.options, fetchImpl: async (url, options) => {
+      if (options.method === 'POST') { posts++; assert.equal(JSON.parse(options.body).query, AVITO_SEARCH_TARGETS[index].query); return reply({ data: run() }); }
+      return reply([]);
+    }, importRun: async () => ({ counts: {} }) });
+    assert.equal(posts, 1);
+    assert.equal(JSON.parse(await readFile(f.ledgerPath, 'utf8')).entries.at(-1).automaticQuery, true);
+  }
+  for (const query of ['iPhone 16 Pro', 'iPhone 18', 'iPhone 17 Air', 'Samsung', 'iPhone 17 Pro OR MacBook']) {
+    const f = await fixture(t); const state = await runApifyWorker({ ...f.options, env: { ...f.options.env, AVITO_APIFY_QUERY: query }, fetchImpl: async () => assert.fail('invalid query must not reach Apify') });
+    assert.equal(state.state, 'error');
+  }
+});
 
 test('budget counts the seeded trial, all reservations and stops at the week, $5 or ten runs', () => {
   const ledger = initialLedger();

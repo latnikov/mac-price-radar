@@ -12,7 +12,7 @@ const absoluteUrl = (value, baseUrl) => {
 };
 
 export function findRifaCategoryUrls(html, baseUrl = 'https://rifastore.ru/') {
-  const values = [...String(html).matchAll(/href=["']([^"']*\/categories\/macbook-[^"']+)["']/gi)]
+  const values = [...String(html).matchAll(/href=["']([^"']*\/categories\/(?:macbook-[^"']+|iphone-(?:17|18)-pro(?:-max)?))["']/gi)]
     .map(match => absoluteUrl(match[1], baseUrl))
     .filter(Boolean);
   return [...new Set(values)];

@@ -2,6 +2,19 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fetchDimaOffers, parseDimaMessages } from '../scripts/dima.mjs';
 
+test('Dima reads all four iPhone models, source links and sections; newest price wins separately for each SIM configuration', () => {
+  const phones = `iPhone 18 Pro\n256GB Silver eSIM — 130000\n256GB Silver SIM + eSIM — 140000\niPhone 18 Pro Max 512GB Burgundy eSIM — 180000\niPhone 17 Pro 256GB Deep Blue eSIM — 110000\niPhone 17 Pro Max 1TB Cosmic Orange Dual SIM — 170000\nЧехол iPhone 17 Pro 256GB — 15000\niPhone 16 Pro 256GB Silver — 90000`;
+  const result = parseDimaMessages([
+    { id: 501, date: '2026-10-01T07:00:00Z', sourceChatId: '-1003421701174', text: phones },
+    { id: 500, date: '2026-10-01T06:00:00Z', sourceChatId: '-1003421701174', text: 'iPhone 18 Pro 256GB Silver eSIM — 125000' },
+  ], { now: '2026-10-01T08:00:00Z' });
+  assert.equal(result.offers.length, 5);
+  assert.equal(result.offers[0].price, 130000);
+  assert.deepEqual([...new Set(result.offers.map(offer => offer.model))], ['iPhone 18 Pro', 'iPhone 18 Pro Max', 'iPhone 17 Pro', 'iPhone 17 Pro Max']);
+  assert.ok(result.offers.every(offer => offer.retailer === 'Дима' && offer.url.startsWith('https://t.me/c/3421701174/501?item=') && offer.fetchedAt === '2026-10-01T07:00:00.000Z' && offer.chip === null && offer.ramGb === null));
+  assert.notEqual(result.offers[0].sourceVariantId, result.offers[1].sourceVariantId);
+});
+
 const price = `MacBook: НАВИГАЦИЯ
 MacBook MDHH4 Air 13 Sky Blue (M5, 16GB, 512GB) 2026 123500
 MacBook MGED4 Pro 16 Space Black (M5 Max,36GB,2TB)2026 326000

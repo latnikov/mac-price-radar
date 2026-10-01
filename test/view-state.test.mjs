@@ -20,6 +20,19 @@ test('malformed links cannot inject fields or invalid numeric filters', () => {
   assert.equal(readView('#q=' + 'a'.repeat(1000)).query.length, 120);
 });
 
+test('shared iPhone views retain capacity and SIM while removing Mac-only restrictions', () => {
+  for (const model of ['iphone-18-pro', 'iphone-18-pro-max', 'iphone-17-pro', 'iphone-17-pro-max']) {
+    const view = readView(`#family=${model}&chip=M5&screen=14&ram=16&ssd=256&sim=SIM+%2B+eSIM&color=Silver`);
+    assert.equal(view.filters.family, model);
+    assert.equal(view.filters.chip, '*'); assert.equal(view.filters.screen, ''); assert.equal(view.filters.ram, '');
+    assert.equal(view.filters.ssd, '256'); assert.equal(view.filters.sim, 'SIM + eSIM');
+    assert.deepEqual(readView(writeView(view)), view);
+  }
+  const phone = offerSearchText({ model: 'iPhone 17 Pro Max', storageGb: 256, simType: 'eSIM' });
+  assert.equal(matchesSearch(phone, searchTerms('айфон 17 про макс 256 esim')), true);
+  assert.equal(matchesSearch(phone, searchTerms('айфон 18 про')), false);
+});
+
 test('search matches article, hardware and seller across casing and punctuation', () => {
   const text = offerSearchText({ title: 'MacBook Air MDH74', chip: 'M5', ramGb: 16, storageGb: 1024, color: 'Silver', retailer: 'Айфория' });
   for (const query of ['air m5 16', 'mdh74', '1 ТБ silver', 'АЙФОРИЯ', 'air/m5']) assert.equal(matchesSearch(text, searchTerms(query)), true, query);

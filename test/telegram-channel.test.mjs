@@ -8,6 +8,18 @@ import { buildPriceTable } from '../web/price-table.js';
 const source = telegramSource({ sourceChatId: '-100998877', sourceTitle: 'Новый поставщик' }, {});
 const message = (id, text, date = '2026-09-28T10:00:00Z') => ({ id, date, text, ...source });
 
+test('Telegram channel replacement preserves iPhone model and SIM identity across latest prices', () => {
+  const result = parseTelegramChannel([
+    message(1, 'iPhone 18 Pro 256GB Silver eSIM — 125000', '2026-09-28T09:00:00Z'),
+    message(2, 'iPhone 18 Pro\n256GB Silver eSIM — 130000\n256GB Silver SIM + eSIM — 140000\niPhone 18 Pro Max 512GB Burgundy — 180000\niPhone 17 Pro 256GB Deep Blue — 110000\niPhone 17 Pro Max 1TB Cosmic Orange — 170000'),
+  ], source);
+  assert.equal(result.offers.length, 5);
+  assert.equal(result.offers[0].price, 130000);
+  assert.notEqual(result.offers[0].externalId, result.offers[1].externalId);
+  const earlier = parseTelegramChannel([message(1, 'iPhone 18 Pro 256GB Silver eSIM — 125000')], source);
+  assert.equal(result.offers[0].externalId, earlier.offers[0].externalId);
+});
+
 test('new private channel parses undated forwarded lists using their original date and real post link', () => {
   const result = parseTelegramChannel([message(10, 'MacBook MDHH4 Air 13 Sky Blue (M5, 16GB, 512GB) 2026 116500\nMacBook MGED4 Pro 16 Space Black (M5 Max,36GB,2TB)2026 326000')], source);
   assert.equal(result.offers.length, 2);

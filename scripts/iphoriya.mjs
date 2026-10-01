@@ -1,4 +1,6 @@
 import { parseProduct } from './offer-normalization.mjs';
+import { iphoneModel, iphoneSim } from './iphone.mjs';
+import { crawlQueue } from './crawl-queue.mjs';
 
 const ORIGIN = 'https://iphoriya.ru';
 const CATEGORY_SLUGS = new Set(['macbook-air', 'macbook-pro', 'macbook-neo']);
@@ -26,6 +28,9 @@ function productOffer(product) {
   const amount = Number(prices.price) / 10 ** minorUnit;
   const offer = parseProduct(product.name, url.href, 'Айфория', amount, undefined, {
     externalId: `iphoriya:${product.id}`,
+    ...(iphoneModel(product.name) ? { sourceProductId: String(product.parent || product.id), sourceVariantId: String(product.id),
+      simType: iphoneSim(product.variation), condition: 'new', displayType: 'standard', bundle: 'standard',
+      priceType: 'full', paymentMethod: 'any', buyerType: 'retail', minimumQuantity: 1 } : {}),
     stock: product.is_in_stock === true ? 'InStock' : product.is_in_stock === false ? 'OutOfStock' : 'unknown',
     rawPrice: prices.price,
     evidence: { method: 'woocommerce-store-api-v1', productId: product.id, rawPrice: prices.price, currencyMinorUnit: minorUnit },
@@ -34,12 +39,12 @@ function productOffer(product) {
   return offer;
 }
 
-export async function fetchIphoriyaOffers({ fetchPage = url => fetch(url), pageSize = 100, maxPages = 10 } = {}) {
+export async function fetchIphoriyaOffers({ fetchPage = url => fetch(url), pageSize = 100, maxPages = 10, categorySlugs = CATEGORY_SLUGS } = {}) {
   const categoryUrl = `${ORIGIN}/wp-json/wc/store/v1/products/categories?per_page=100`;
   const categoryResponse = await jsonResponse(await fetchPage(categoryUrl), categoryUrl);
   if (!Array.isArray(categoryResponse.data)) throw new Error('Iphoriya incomplete crawl: malformed categories');
-  const categories = categoryResponse.data.filter(category => CATEGORY_SLUGS.has(category.slug));
-  if (categories.length !== CATEGORY_SLUGS.size || new Set(categories.map(category => category.slug)).size !== CATEGORY_SLUGS.size) throw new Error('Iphoriya incomplete crawl: MacBook categories are missing');
+  const categories = categoryResponse.data.filter(category => categorySlugs.has(category.slug));
+  if (categories.length !== categorySlugs.size || new Set(categories.map(category => category.slug)).size !== categorySlugs.size) throw new Error('Iphoriya incomplete crawl: requested categories are missing');
   const expectedTotal = categories.reduce((sum, category) => sum + Number(category.count || 0), 0);
   const categoryIds = categories.map(category => positiveInteger(category.id, 'category id')).sort((a, b) => a - b);
   const products = [];
@@ -60,7 +65,22 @@ export async function fetchIphoriyaOffers({ fetchPage = url => fetch(url), pageS
   }
   if (!products.length || products.length !== total || expectedTotal !== total) throw new Error(`Iphoriya incomplete crawl: received ${products.length} of ${total || expectedTotal}`);
   if (new Set(products.map(product => product.id)).size !== products.length) throw new Error('Iphoriya incomplete crawl: duplicate product id');
-  const offers = products.map(productOffer);
+  const offers = [];
+  await crawlQueue(products, async product => {
+    if (!iphoneModel(product.name) || product.type !== 'variable') { offers.push(productOffer(product)); return; }
+    if (!Array.isArray(product.variations) || !product.variations.length) throw new Error(`Iphoriya incomplete crawl: missing phone variants ${product.id}`);
+    const ids = new Set();
+    for (const variant of product.variations) {
+      if (!Number.isInteger(variant.id) || ids.has(variant.id)) throw new Error('Iphoriya incomplete crawl: invalid or duplicate phone variant');
+      ids.add(variant.id);
+      const endpoint = `${ORIGIN}/wp-json/wc/store/v1/products/${variant.id}`;
+      const { data } = await jsonResponse(await fetchPage(endpoint), endpoint);
+      if (data.id !== variant.id || data.parent !== product.id || data.type !== 'variation' || data.prices?.price_range) throw new Error('Iphoriya incomplete crawl: phone variant identity mismatch');
+      const offer = productOffer(data);
+      if (offer.simType === 'unknown') throw new Error('Iphoriya incomplete crawl: missing phone SIM variant');
+      offers.push(offer);
+    }
+  });
   return {
     offers,
     failures: [],

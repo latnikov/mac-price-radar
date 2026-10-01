@@ -47,6 +47,7 @@ h1 { margin: 0; font-size: clamp(25px, 2.5vw, 34px); letter-spacing: -1.15px; li
 .model-choice:hover { background: #f2f6fe; border-color: #c0d1f4; }
 .model-choice.active::after { content: ''; position: absolute; right: 10px; top: 10px; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
 .model-name { margin-top: 14px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.device.phone + .model-name { white-space: normal; text-align: center; }
 .model-caption { margin-top: 5px; color: var(--muted); font-size: 10px; }
 #family-options .all-models { grid-column: 1 / -1; justify-self: start; border: 0; min-height: 28px; padding: 6px 0; color: #66748a; background: transparent; font-size: 12px; box-shadow: none; }
 #family-options .all-models.active { color: var(--accent); font-weight: 600; }
@@ -60,6 +61,8 @@ h1 { margin: 0; font-size: clamp(25px, 2.5vw, 34px); letter-spacing: -1.15px; li
 .device.studio { width: 42px; height: 33px; border: 1.5px solid currentColor; border-radius: 7px; background: linear-gradient(#f1f4f8 40%, #dce4ef 42%, #cdd7e5); }
 .device.imac { width: 42px; height: 28px; border: 1.5px solid currentColor; border-bottom-width: 5px; border-radius: 3px; background: linear-gradient(135deg, #e0ecf6, #c2d4ea); }
 .device.imac::after { content: ''; position: absolute; bottom: -10px; left: 13px; height: 6px; width: 12px; border-bottom: 2px solid currentColor; background: linear-gradient(90deg, transparent 4px, #9aa9be 4px 8px, transparent 8px); }
+.device.phone { width: 21px; height: 33px; border: 1.5px solid currentColor; border-radius: 5px; background: linear-gradient(145deg, #edf2fa, #c8d9ef); box-shadow: inset 0 0 0 2px #fafcff; }
+.device.phone::after { content: ''; position: absolute; top: 3px; left: 6px; width: 7px; height: 2px; border-radius: 2px; background: currentColor; }
 .chip-history { margin-top: 12px; }
 .chip-history summary { width: fit-content; color: var(--muted); cursor: pointer; font-size: 12px; padding: 5px 0; }
 .chip-history .choice-group { padding-top: 10px; }

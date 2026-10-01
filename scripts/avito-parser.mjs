@@ -148,7 +148,8 @@ export function parseAvitoDetail(html, listingUrl, observedAt = new Date().toISO
     description: text('[data-marker="item-view/item-description"]'),
     specs: { model: parameters['модель'], chip: parameters['процессор'],
       ramGb: memory(parameters['оперативная память'] || parameters['оперативная память, гб']),
-      storageGb: memory(parameters['объем накопителя'] || parameters['объем накопителей, гб']), color: parameters['цвет'] },
+      storageGb: memory(parameters['объем накопителя'] || parameters['объем накопителей, гб'] || parameters['встроенная память'] || parameters['объем встроенной памяти'] || parameters['объем памяти']), color: parameters['цвет'],
+      simType: parameters['тип sim-карты'] || parameters['тип sim'] || parameters['sim-карты'], region: parameters['регион'] },
     active: !/объявление\s+(?:снято\s+с\s+публикации|закрыто|продано)/i.test($('body').text()),
     observedAt, method: 'avito-html-v1', documentHash: createHash('sha256').update(html).digest('hex'),
   };

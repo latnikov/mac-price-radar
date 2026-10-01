@@ -29,6 +29,8 @@ import { inPublicSourceScope } from './domain.mjs';
 import { createCollectorFetch } from './collector-fetch.mjs';
 import { collectSources, collectionFailures, scheduleSources } from './collection-runner.mjs';
 import { crawlQueue } from './crawl-queue.mjs';
+import { IPHONE_RETAILERS, fetchRetailIphones } from './iphone-retail.mjs';
+import { isIphone } from './iphone.mjs';
 const FOREIGN_SOURCE = 'AppleInsider';
 
 const privateDir = 'data/private';
@@ -97,6 +99,21 @@ try {
   const iphoriyaFetchOptions = { attempts: 3, baseDelayMs: 5000, maxDelayMs: 5000 };
   const failedObservation = (retailer, url, title, error) => ({ retailer, url, title: title || url, price: null, priceMinor: null, currency: 'RUB', condition: 'unknown', fetchedAt: new Date().toISOString(), dataKind: 'live', visibility: 'public', validationStatus: 'rejected', qualityWarnings: [error] });
   async function collect(retailer) {
+    if (!IPHONE_RETAILERS.has(retailer)) return collectMac(retailer);
+    const phoneFetch = createCollectorFetch({ signal: runSignal });
+    const phoneOptions = { fetchPage: retailer === 'Айфория' ? url => phoneFetch.fetchResponse(url, iphoriyaFetchOptions) : phoneFetch.fetchPage };
+    const results = await Promise.allSettled([collectMac(retailer), fetchRetailIphones(retailer, phoneOptions)]);
+    const mac = results[0].status === 'fulfilled' ? results[0].value : null;
+    const phones = results[1].status === 'fulfilled' ? results[1].value : null;
+    if (networkBySource.has(retailer)) networkBySource.get(retailer).iphone = phoneFetch.metrics;
+    const failures = results.flatMap((result, index) => result.status === 'rejected' ? [`${index ? 'iPhone' : 'Mac'}: ${result.reason.message}`] : result.value.failures || []);
+    if (!mac && !phones) throw new Error(failures.join('; '));
+    return { offers: [...(mac?.offers || []), ...(phones?.offers || [])], failures,
+      counts: { ...(mac?.counts || {}), iphones: phones?.offers.length || 0, iphoneCollection: phones?.stats || null,
+        ...(retailer === 'AFM' ? { products: (mac?.counts?.products || 0) + (phones?.stats?.uniqueProducts || phones?.stats?.products || 0) } : {}) },
+      unpriced: [...(mac?.unpriced || []), ...(phones?.unpriced || [])] };
+  }
+  async function collectMac(retailer) {
     const { fetchPage, fetchResponse, metrics } = createCollectorFetch({ signal: runSignal });
     networkBySource.set(retailer, metrics);
     const out = [], failures = [];
@@ -196,7 +213,8 @@ try {
       const unique = deduplicateRifaOffers(out);
       return { offers: unique, failures, counts: { pagesDiscovered: seen.size, pagesFetched, found: cardsFound, unique: unique.length, duplicateCards: cardsFound - unique.length } };
     }
-    const urls = knownProductUrls(previousOffers, retailer);
+    // Phone URLs need their own exact variant prices, not a parent-page Mac fallback.
+    const urls = knownProductUrls(previousOffers.filter(offer => !isIphone(offer)), retailer);
     for (const slug of slugs(retailer === 'BigGeek' ? 'SLUGS_BIGGEEK' : 'SLUGS_IPHORIYA')) {
       urls.add((retailer === 'BigGeek' ? 'https://biggeek.ru/products/' : 'https://iphoriya.ru/product/') + slug);
     }
@@ -235,7 +253,7 @@ try {
         observations.push(...result.offers.map(offer => ({ ...offer, visibility: 'public', dataKind: 'live' })));
         continue;
       }
-      const unpricedAfmIds = retailer === 'AFM' ? new Set((result.unpriced || []).map(item => `afm:${item.productId}:${item.editionId}`)) : new Set();
+      const unpricedAfmIds = retailer === 'AFM' ? new Set((result.unpriced || []).map(item => item.externalId || `afm:${item.productId}:${item.editionId}`)) : new Set();
       const previousForAssessment = previousOffers.filter(o => o.retailer === retailer && o.visibility !== 'private' && !unpricedAfmIds.has(o.externalId));
       const assessment = assessCollection(previousForAssessment, result.offers, result.failures);
       if (retailer === 'AFM' && result.counts?.products > 0 && result.offers.length === 0 && result.unpriced?.length > 0 && !result.failures.length) {

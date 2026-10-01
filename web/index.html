@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Mac Price Radar — цены Mac в магазинах Нижнего Новгорода</title>
-  <meta name="description" content="Закупочные прайсы и цены Mac в соседних магазинах Нижнего Новгорода в одной таблице.">
+  <title>Mac Price Radar — цены Mac и iPhone в магазинах Нижнего Новгорода</title>
+  <meta name="description" content="Закупочные прайсы и цены Mac и iPhone в соседних магазинах Нижнего Новгорода в одной таблице.">
   <meta name="theme-color" content="#f5f6f8">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
-  <meta property="og:title" content="Mac Price Radar — сравнение цен Mac">
+  <meta property="og:title" content="Mac Price Radar — сравнение цен Mac и iPhone">
   <meta property="og:description" content="Сравниваем закупочные прайсы и цены магазинов Нижнего Новгорода по конфигурациям и цветам.">
   <meta property="og:url" content="https://dev.macbookbro.ru/web/">
   <meta property="og:image" content="https://dev.macbookbro.ru/web/og-image.jpg">
@@ -31,22 +31,26 @@
 <nav class="sheet-tabs" aria-label="Листы цен"><a href="./index.html" aria-current="page">Российские цены</a><a href="./foreign.html">Зарубежные цены ↗</a><a href="./avito.html">Авито</a></nav>
 <section class="filters" id="filters">
   <div class="filter-top">
-    <h1>Цены на Mac</h1>
+    <h1>Цены на Mac и iPhone</h1>
     <button id="reset" class="secondary">Сбросить выбор</button>
   </div>
   <div class="search-bar">
     <label for="search">Быстрый поиск</label>
-    <div class="search-input"><span aria-hidden="true">⌕</span><input id="search" type="search" maxlength="120" placeholder="Например: pro 14 m5 pro или про 14 м5 про" autocomplete="off"><button id="clear-search" type="button" aria-label="Очистить поиск" hidden>×</button></div>
+    <div class="search-input"><span aria-hidden="true">⌕</span><input id="search" type="search" maxlength="120" placeholder="Например: iPhone 18 Pro Max 256 или MacBook Air M5" autocomplete="off"><button id="clear-search" type="button" aria-label="Очистить поиск" hidden>×</button></div>
   </div>
   <div class="filter-step">
     <div class="step-label"><strong><span class="step-number">1</span> Модель</strong><span>С чего начнём?</span></div>
-    <div class="choice-group" id="family-options" aria-label="Линейка Apple Mac">
+    <div class="choice-group" id="family-options" aria-label="Модели Mac и iPhone">
       <button type="button" class="choice model-choice" data-filter="family" data-value="air"><span class="device laptop" aria-hidden="true"></span><span class="model-name">MacBook Air</span><span class="model-caption">Лёгкий и тонкий</span></button>
       <button type="button" class="choice model-choice" data-filter="family" data-value="pro"><span class="device laptop pro" aria-hidden="true"></span><span class="model-name">MacBook Pro</span><span class="model-caption">Для больших задач</span></button>
       <button type="button" class="choice model-choice" data-filter="family" data-value="neo"><span class="device laptop neo" aria-hidden="true"></span><span class="model-name">MacBook Neo</span><span class="model-caption">На каждый день</span></button>
       <button type="button" class="choice model-choice" data-filter="family" data-value="mini"><span class="device mini" aria-hidden="true"></span><span class="model-name">Mac mini</span><span class="model-caption">Компактный настольный</span></button>
       <button type="button" class="choice model-choice" data-filter="family" data-value="studio"><span class="device studio" aria-hidden="true"></span><span class="model-name">Mac Studio</span><span class="model-caption">Максимум мощности</span></button>
       <button type="button" class="choice model-choice" data-filter="family" data-value="imac"><span class="device imac" aria-hidden="true"></span><span class="model-name">iMac</span><span class="model-caption">Всё в одном</span></button>
+      <button type="button" class="choice model-choice" data-filter="family" data-value="iphone-18-pro"><span class="device phone" aria-hidden="true"></span><span class="model-name">iPhone 18 Pro</span><span class="model-caption">Память, SIM и цвет</span></button>
+      <button type="button" class="choice model-choice" data-filter="family" data-value="iphone-18-pro-max"><span class="device phone" aria-hidden="true"></span><span class="model-name">iPhone 18 Pro Max</span><span class="model-caption">Память, SIM и цвет</span></button>
+      <button type="button" class="choice model-choice" data-filter="family" data-value="iphone-17-pro"><span class="device phone" aria-hidden="true"></span><span class="model-name">iPhone 17 Pro</span><span class="model-caption">Память, SIM и цвет</span></button>
+      <button type="button" class="choice model-choice" data-filter="family" data-value="iphone-17-pro-max"><span class="device phone" aria-hidden="true"></span><span class="model-name">iPhone 17 Pro Max</span><span class="model-caption">Память, SIM и цвет</span></button>
       <button type="button" class="choice all-models" data-filter="family" data-value="*">Все модели <span aria-hidden="true">↗</span></button>
     </div>
   </div>
@@ -62,6 +66,7 @@
     <div class="spec-group"><span>Размер</span><div class="choice-group compact" id="screen-options"></div></div>
     <div class="spec-group"><span>Память</span><div class="choice-group compact" id="ram-options"></div></div>
     <div class="spec-group"><span>Накопитель</span><div class="choice-group compact" id="ssd-options"></div></div>
+    <div class="spec-group" hidden><span>SIM</span><div class="choice-group compact" id="sim-options"></div></div>
     <div class="spec-group wide"><span>Цвет</span><div class="choice-group compact" id="color-options"></div></div>
     <div class="spec-group"><span>Наличие</span><div class="choice-group compact" id="stock-options">
       <button type="button" class="choice" data-filter="stock" data-value="">Любое</button>
@@ -87,8 +92,8 @@
 <p id="search-overview" class="search-overview" role="status" aria-live="polite" hidden></p>
 <div class="table-meta" id="table-meta" hidden><span id="count"></span><div><button id="avito-jump" class="secondary" type="button" aria-controls="table-wrap" hidden>К продавцам Авито →</button><label>Сортировать <select id="sort"><option value="relevance">По совпадению</option><option value="model">По модели</option><option value="price-up">Сначала дешевле</option><option value="price-down">Сначала дороже</option><option value="fresh">Сначала свежие</option><option value="coverage">Больше продавцов</option></select></label><button id="export" class="secondary">Скачать срез JSON</button></div></div>
 <div id="column-controls" class="column-controls" aria-label="Видимость столбцов" hidden></div>
-<div id="selection-prompt" class="selection-prompt"><span class="empty-symbol" aria-hidden="true">↗</span><strong>Ваш Mac. Все цены.</strong><p>Выберите модель выше, чтобы сравнить закупку<br>и предложения магазинов.</p></div>
-<div class="table-wrap" id="table-wrap" tabindex="0" aria-label="Таблица цен, прокручивается по горизонтали" hidden><table><caption class="sr-only">Цены магазинов по конфигурациям и цветам Mac.</caption><thead id="head"></thead><tbody id="rows"></tbody></table></div>
+<div id="selection-prompt" class="selection-prompt"><span class="empty-symbol" aria-hidden="true">↗</span><strong>Mac и iPhone. Все цены.</strong><p>Выберите модель выше, чтобы сравнить закупку<br>и предложения магазинов.</p></div>
+<div class="table-wrap" id="table-wrap" tabindex="0" aria-label="Таблица цен, прокручивается по горизонтали" hidden><table><caption class="sr-only">Цены магазинов по конфигурациям и цветам Mac и iPhone.</caption><thead id="head"></thead><tbody id="rows"></tbody></table></div>
 <nav id="pagination" class="pagination" aria-label="Страницы таблицы" hidden><button id="page-prev" type="button">← Назад</button><span id="page-info" role="status" aria-live="polite"></span><button id="page-next" type="button">Далее →</button></nav>
 <div id="empty" hidden><strong>Подходящих предложений нет</strong><p>Уберите один из фильтров выше или попробуйте другой запрос.</p><button id="clear-specs" type="button">Сбросить параметры и поиск</button></div>
 </section>

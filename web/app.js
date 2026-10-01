@@ -4,6 +4,7 @@ import { AVITO, avitoSellerColumns, priceColumnKey, groupOffersByPriceColumn, sh
 import { avitoStatus } from './avito-status.js';
 import { emptyFilters, readView, writeView, searchTerms, offerSearchText, matchesSearch, searchScore } from './view-state.js';
 import { prepareTableOffers, buildPriceTable, selectTablePage, currentPrice, searchOverview, validMacColor, TABLE_PAGE_SIZE } from './price-table.js';
+import { PHONE_FAMILIES, isPhone, productFamily, productScreen, storageLabel, configurationBadges } from './product-families.js';
 
 const $ = id => document.getElementById(id);
 const avitoSheet = document.body.dataset.sheet === 'avito';
@@ -58,15 +59,15 @@ const sortCollator = new Intl.Collator('ru', { numeric: true });
 const moscowDay = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Moscow', year: 'numeric', month: '2-digit', day: '2-digit' });
 const number = value => numberFormat.format(Number(value));
 const plural = (n, forms) => forms[n % 100 >= 11 && n % 100 <= 14 ? 2 : n % 10 === 1 ? 0 : n % 10 >= 2 && n % 10 <= 4 ? 1 : 2];
-const storage = value => value >= 1024 && value % 1024 === 0 ? `${value / 1024} TB` : value >= 1000 && value % 1000 === 0 ? `${value / 1000} TB` : value ? `${value} GB` : '—';
+const storage = storageLabel;
 const amount = offer => `${number(offer.price)} ₽`;
 const rubles = value => Number.isFinite(value) ? `${number(value)} ₽` : '—';
 const stock = offer => ['InStock', 'confirmed', 'source_reported'].includes(offer.stock) ? 'in' : ['OutOfStock', 'Discontinued', 'SoldOut'].includes(offer.stock) ? 'out' : 'unknown';
 const compareOffers = (a, b) => a.price - b.price || String(a.url).localeCompare(String(b.url));
 const model = offer => String(offer.model || offer.title || 'Не распознано').replace(/\s+/g, ' ').trim();
-const family = offer => /^Mac mini/i.test(model(offer)) ? 'mini' : /^Mac Studio/i.test(model(offer)) ? 'studio' : /MacBook\s+Air/i.test(model(offer)) ? 'air' : /MacBook\s+Pro/i.test(model(offer)) ? 'pro' : /MacBook\s+Neo/i.test(model(offer)) ? 'neo' : /^iMac\b/i.test(model(offer)) ? 'imac' : 'other';
-const screen = offer => offer.screenIn || Number(model(offer).match(/\b(13|14|15|16|24|27)\b/)?.[1]) || null;
-const characteristics = offer => [offer.keyboard && offer.keyboard !== 'unknown' ? `KB ${offer.keyboard}` : null, offer.region && offer.region !== 'unknown' ? offer.region : null].filter(Boolean).join(' · ');
+const family = productFamily;
+const screen = productScreen;
+const characteristics = offer => [offer.keyboard && !['unknown', 'not_applicable'].includes(offer.keyboard) ? `KB ${offer.keyboard}` : null, offer.region && offer.region !== 'unknown' ? offer.region : null].filter(Boolean).join(' · ');
 const message = value => {
   $('message').textContent = value ? 'Не удалось выполнить запрос. Проверьте соединение и попробуйте ещё раз.' : '';
   $('message').hidden = !value;
@@ -102,13 +103,7 @@ function configurationCell(offer, variant = false) {
   const cell = text('td', null, 'configuration-cell');
   cell.append(text('span', model(offer).replace(/\s+\d+(?:\.\d+)?["″]$/, ''), 'configuration-model'));
   const badges = text('span', null, 'configuration-badges');
-  const values = [
-    screen(offer) ? `${screen(offer)}″` : null,
-    offer.chip || null,
-    offer.ramGb ? `RAM ${offer.ramGb} GB` : null,
-    offer.storageGb ? `SSD ${storage(offer.storageGb)}` : null,
-    variant ? variantLabel(offer) : null,
-  ];
+  const values = [...configurationBadges(offer), variant ? variantLabel(offer) : null];
   for (const value of values.filter(Boolean)) badges.append(text('span', value, 'configuration-badge'));
   cell.append(badges);
   return cell;
@@ -227,10 +222,13 @@ function renderControls() {
     const active = state.filters.family === button.dataset.value;
     button.classList.toggle('active', active); button.setAttribute('aria-pressed', active ? 'true' : 'false');
   }
-  $('chip-step').hidden = state.filters.family === null;
+  const phoneSelected = Boolean(PHONE_FAMILIES[state.filters.family]);
+  if (phoneSelected) Object.assign(state.filters, { chip: '*', screen: '', ram: '' });
+  $('advanced-filters').querySelector('summary').textContent = phoneSelected ? 'Уточнить память, SIM и цвет' : 'Уточнить процессор, память и цвет';
+  $('chip-step').hidden = state.filters.family === null || phoneSelected;
   if (state.filters.family === null) { $('spec-step').hidden = true; return; }
 
-  const chips = [...new Set(familyOffers().map(offer => offer.chip).filter(Boolean))].sort((a, b) => sortCollator.compare(a, b));
+  const chips = [...new Set(familyOffers().filter(offer => !isPhone(offer)).map(offer => offer.chip).filter(chip => chip && chip !== 'unknown'))].sort((a, b) => sortCollator.compare(a, b));
   const currentSet = state.filters.family === '*' ? new Set(Object.values(CURRENT_CHIPS).flatMap(set => [...set])) : (CURRENT_CHIPS[state.filters.family] || new Set());
   const current = chips.filter(chip => currentSet.has(chip));
   const older = chips.filter(chip => !currentSet.has(chip));
@@ -243,10 +241,15 @@ function renderControls() {
   $('spec-step').hidden = state.filters.chip === null;
   if (state.filters.chip === null) return;
   const base = familyOffers().filter(offer => state.filters.chip === '*' || offer.chip === state.filters.chip);
-  $('screen-options').parentElement.hidden = !base.some(offer => screen(offer));
+  $('screen-options').parentElement.hidden = phoneSelected || !base.some(offer => screen(offer));
+  $('ram-options').parentElement.hidden = phoneSelected || !base.some(offer => offer.ramGb);
+  $('ssd-options').parentElement.querySelector('span').textContent = phoneSelected ? 'Объём памяти' : 'Накопитель';
   renderOptions('screen-options', 'screen', base.map(screen), value => `${value}″`);
   renderOptions('ram-options', 'ram', base.map(offer => offer.ramGb), value => `${value} GB`);
   renderOptions('ssd-options', 'ssd', base.map(offer => offer.storageGb), storage);
+  $('sim-options').parentElement.hidden = !base.some(isPhone);
+  const sims = [...new Set(base.filter(isPhone).map(offer => offer.simType || 'unknown'))].sort();
+  $('sim-options').replaceChildren(choiceButton('Любой', 'sim', '', state.filters.sim === ''), ...sims.map(value => choiceButton(value === 'unknown' ? 'Не указан' : value, 'sim', value, state.filters.sim === value)));
   const availableColors = base.filter(validMacColor).map(offer => offer.color);
   if (state.filters.color && !availableColors.includes(state.filters.color)) state.filters.color = '';
   renderOptions('color-options', 'color', availableColors, value => value, 'Любой');
@@ -268,6 +271,7 @@ function filtered() {
     && (!selected.screen || String(screen(offer)) === selected.screen)
     && (!selected.ram || String(offer.ramGb) === selected.ram)
     && (!selected.ssd || String(offer.storageGb) === selected.ssd)
+    && (!selected.sim || (offer.simType || 'unknown') === selected.sim)
     && (!selected.color || offer.color === selected.color)
     && (!selected.stock || stock(offer) === selected.stock)
     && (minimum === '' || offer.price >= Number(minimum))
@@ -298,9 +302,11 @@ function retailerGroups(offers) {
 
 function variantLabel(offer) {
   const condition = { new: 'новый', used: 'б/у', refurbished: 'восстановленный', display: 'витринный', open_box: 'вскрытая коробка' }[offer.condition] || null;
-  return [offer.color === 'unknown' ? null : offer.color,
+  return [offer.color === 'unknown' ? isPhone(offer) ? 'Цвет не указан' : null : offer.color,
     offer.cpuCores && offer.gpuCores ? `CPU ${offer.cpuCores} / GPU ${offer.gpuCores}` : null,
-    condition, characteristics(offer), ...['displayType', 'bundle'].map(field => offer[field] && !['unknown', 'standard'].includes(offer[field]) ? offer[field] : null)].filter(Boolean).join(' · ');
+    condition || (isPhone(offer) ? 'Состояние не указано' : null), characteristics(offer),
+    isPhone(offer) && (!offer.region || offer.region === 'unknown') ? 'Регион не указан' : null,
+    ...['displayType', 'bundle'].map(field => offer[field] && !['unknown', 'standard'].includes(offer[field]) ? offer[field] : null)].filter(Boolean).join(' · ');
 }
 
 function offerDetails(cell, offer, { showVariant = false, analytics, colorTrust } = {}) {
@@ -536,10 +542,10 @@ function procurementAge(offer) {
   return `Прайс от ${new Date(sourceDay + 'T12:00:00Z').toLocaleDateString('ru-RU')}`;
 }
 
-function resetSpecs() { Object.assign(state.filters, { screen: '', ram: '', ssd: '', color: '', stock: '' }); $('min-price').value = ''; $('max-price').value = ''; }
+function resetSpecs() { Object.assign(state.filters, { screen: '', ram: '', ssd: '', color: '', sim: '', stock: '' }); $('min-price').value = ''; $('max-price').value = ''; }
 
 function renderActiveFilters() {
-  const labels = { family: { air: 'MacBook Air', pro: 'MacBook Pro', neo: 'MacBook Neo', mini: 'Mac mini', studio: 'Mac Studio', imac: 'iMac' }, stock: { in: 'В наличии', out: 'Нет в наличии' } };
+  const labels = { family: { air: 'MacBook Air', pro: 'MacBook Pro', neo: 'MacBook Neo', mini: 'Mac mini', studio: 'Mac Studio', imac: 'iMac', ...PHONE_FAMILIES }, sim: { unknown: 'SIM не указан' }, stock: { in: 'В наличии', out: 'Нет в наличии' } };
   const nodes = [];
   const add = (label, clear) => {
     const button = text('button', `${label} ×`, 'filter-tag'); button.type = 'button';
@@ -549,7 +555,7 @@ function renderActiveFilters() {
   };
   for (const [key, value] of Object.entries(state.filters)) {
     if (value == null || value === '' || value === '*') continue;
-    const label = labels[key]?.[value] || (key === 'ram' ? `${value} GB RAM` : key === 'ssd' ? `SSD ${storage(Number(value))}` : key === 'screen' ? `${value}″` : value);
+    const label = labels[key]?.[value] || (key === 'ram' ? `${value} GB RAM` : key === 'ssd' ? `${PHONE_FAMILIES[state.filters.family] ? '' : 'SSD '}${storage(Number(value))}` : key === 'screen' ? `${value}″` : value);
     add(label, () => {
       if (key === 'family') { state.filters.family = '*'; state.filters.chip = '*'; resetSpecs(); }
       else if (key === 'chip') { state.filters.chip = '*'; resetSpecs(); }

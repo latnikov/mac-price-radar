@@ -107,3 +107,19 @@ test('price pages use configuration for ties, keep missing prices last and prese
   const empty = selectForeignPage([], { page: -1, pageSize: 0 });
   assert.deepEqual(empty.rows, []); assert.equal(empty.page, 1); assert.equal(empty.start, 0); assert.equal(empty.end, 0);
 });
+
+test('foreign iPhone models retain generation and Max while showing capacity and SIM without SSD or Mac badges', () => {
+  for (const family of ['iphone-18-pro', 'iphone-18-pro-max', 'iphone-17-pro', 'iphone-17-pro-max']) {
+    const row = { category: 'iPhone', model: 'iPhone Pro Prices', guideUrl: `https://prices.appleinsider.com/${family}`,
+      configuration: 'A19 Pro, 256GB, Deep Blue, SIM + eSIM', rub: 100000 };
+    const specs = foreignSpecs(row);
+    assert.equal(specs.family, family);
+    assert.equal(specs.storage, '256'); assert.equal(specs.ram, '');
+    assert.equal(specs.connection, 'SIM + eSIM'); assert.equal(specs.color, 'Deep Blue');
+    assert.deepEqual(foreignBadges(row).map(badge => badge.key), ['storage', 'color', 'connection']);
+    assert.equal(foreignBadges(row)[0].label, '256 GB');
+    assert.equal(matchesForeignRow(row, { ...emptyForeignFilters(), category: 'iPhone', family }), true);
+    assert.equal(matchesForeignRow(row, { ...emptyForeignFilters(), category: 'iPhone', family, connection: 'eSIM' }), false);
+    assert.match(foreignModelLabel(row), /iPhone (17|18) Pro/);
+  }
+});

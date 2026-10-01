@@ -1,4 +1,5 @@
 import { canonicalModelName, canonicalStorageGb, moneyMinor } from './domain.mjs';
+import { iphoneModel, parseIphone } from './iphone.mjs';
 export { moneyMinor } from './domain.mjs';
 export const decode = value => String(value ?? '')
   .replace(/&nbsp;|&#160;/g, ' ')
@@ -13,6 +14,7 @@ export const price = value => { const minor = moneyMinor(value); return minor ==
 
 export function parseProduct(title, url, retailer, amount, fetchedAt = new Date().toISOString(), metadata = {}) {
   const decodedTitle = decode(title);
+  if (iphoneModel(decodedTitle)) return parseIphone(decodedTitle, url, retailer, amount, fetchedAt, metadata);
   const normalizedTitle = decodedTitle
     .replace(/\([^)]*\)/g, '')
     .replace(/, английская раскладка.*$/i, '')

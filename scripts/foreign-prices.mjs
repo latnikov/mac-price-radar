@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 export const FOREIGN_SOURCE = 'AppleInsider';
 export const GUIDE_URL = 'https://prices.appleinsider.com/current-gen';
+export const IPHONE_GUIDE_URL = 'https://prices.appleinsider.com/iphone';
 export const RATE_URL = 'https://www.google.com/finance/quote/USD-RUB?hl=en';
 export const CBR_RATE_URL = 'https://www.cbr.ru/scripts/XML_daily.asp';
 const clean = value => String(value || '').replace(/\s+/g, ' ').trim();
@@ -48,6 +49,13 @@ export function findMacGuides(html) {
   });
   if (!urls.size || urls.size > 100) throw new Error('AppleInsider: не найден полный список разделов Mac');
   return [...urls];
+}
+
+// Keep the existing Mac coverage and collect only the requested iPhone models.
+export function findPriceGuides(html) {
+  const guides = findAppleGuides(html).filter(url => /^\/(?:macbook|mac-mini|mac-studio|mac-pro|imac)[a-z0-9-]*$|^\/iphone-(?:17|18)-pro(?:-max)?$/.test(new URL(url).pathname));
+  if (!guides.length || guides.length > 104) throw new Error('AppleInsider: не найден список разделов Mac и iPhone Pro');
+  return guides;
 }
 
 export function parseAppleGuide(html, guideUrl, { allowEmpty = false } = {}) {
@@ -123,16 +131,19 @@ export async function refreshForeignPrices({ fetchPage, root = '.', now = () => 
   const attemptedAt = now();
   let snapshot;
   try {
-    const results = await Promise.allSettled([fetchPage(GUIDE_URL), fetchPage(RATE_URL)]);
+    const results = await Promise.allSettled([fetchPage(GUIDE_URL), fetchPage(RATE_URL), fetchPage(IPHONE_GUIDE_URL)]);
     const failures = results.filter(result => result.status === 'rejected').map(result => result.reason.message);
     if (failures.length) throw new Error(failures.join('; '));
-    const guides = findMacGuides(results[0].value);
+    for (const index of [0, 2]) if (/Just a moment|Access denied|Error 403|Attention Required|403 Forbidden/i.test(results[index].value)) {
+      throw new Error(`AppleInsider: недоступен каталог ${index === 0 ? 'Mac' : 'iPhone'}`);
+    }
+    const guides = findPriceGuides(`${results[0].value}\n${results[2].value}`);
     const googleRate = parseGoogleRate(results[1].value);
     const rows = [], queue = [...guides];
     await Promise.all(Array.from({ length: 2 }, async () => {
       while (queue.length) {
         const url = queue.shift();
-        try { rows.push(...parseAppleGuide(await fetchPage(url), url)); }
+        try { rows.push(...parseAppleGuide(await fetchPage(url), url).map(row => ({ ...row, fetchedAt: attemptedAt }))); }
         catch (error) { failures.push(error.message); }
       }
     }));
