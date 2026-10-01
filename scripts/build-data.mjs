@@ -1,5 +1,7 @@
 import { readFile, writeFile, rename, mkdir, open, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { runWithCollectorLock } from './collector-lock.mjs';
 import { parseProduct, price } from './offer-normalization.mjs';
 import { findRifaCategoryUrls, findRifaPageUrls, parseRifaCategory, deduplicateRifaOffers } from './rifastore.mjs';
 import { fetchTechnichnoOffers } from './technichno.mjs';
@@ -32,6 +34,12 @@ const FOREIGN_SOURCE = 'AppleInsider';
 const privateDir = 'data/private';
 await mkdir(`${privateDir}/backups`, { recursive: true, mode: 0o700 });
 const lockPath = `${privateDir}/build.lock`;
+if (process.platform === 'linux' && process.env.MACBOOKBRO_COLLECTOR_LOCK !== 'held') {
+  const code = await runWithCollectorLock(lockPath, process.execPath, [...process.execArgv, fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+    { stdio: 'inherit', env: { ...process.env, MACBOOKBRO_COLLECTOR_LOCK: 'held' } });
+  if (code === 75) console.error('Сборщик уже выполняется; повторный запуск пропущен.');
+  process.exit(code);
+}
 async function acquireLock() {
   try {
     const handle = await open(lockPath, 'wx', 0o600);
@@ -48,7 +56,7 @@ async function acquireLock() {
     throw new Error(`Сборщик уже работает (PID ${owner.pid})`);
   }
 }
-await acquireLock();
+if (process.platform !== 'linux') await acquireLock();
 const atomicJson = async (path, value) => {
   const temporary = `${path}.${process.pid}.tmp`;
   await writeFile(temporary, JSON.stringify(value, null, 2), { mode: 0o600 });
@@ -251,5 +259,5 @@ try {
   console.log(`Мастер-база: ${result.length} строк, ${result.reduce((n, r) => n + r.offers.length, 0)} наблюдений; ${failures.length} источников требуют проверки`);
 } finally {
   store?.close();
-  await unlink(lockPath);
+  if (process.platform !== 'linux') await unlink(lockPath);
 }

@@ -44,7 +44,7 @@ def main():
         shutil.copy2(name, backup / (str(index) + '-' + Path(name).name))
     shutil.copytree('/srv/macbookbro-orders', backup / 'order-code', ignore=shutil.ignore_patterns('data', '*.sqlite*'))
     shutil.copytree('/srv/macbookbro-shop', backup / 'shop-code', ignore=shutil.ignore_patterns('data', '*.sqlite*', 'node_modules'))
-    extra_files = ['/etc/macbookbro-platform.json', '/etc/systemd/journald.conf.d/macbookbro.conf',
+    extra_files = ['/srv/mac-price-radar/dev/scripts/collector-lock.mjs', '/etc/macbookbro-platform.json', '/etc/systemd/journald.conf.d/macbookbro.conf',
         '/etc/ssh/sshd_config.d/20-macbookbro.conf', '/etc/systemd/system/mac-price-radar@dev.service.d/platform.conf',
         '/etc/systemd/system/mac-price-radar-apify.service.d/platform.conf']
     extra_files += [str(Path('/etc/systemd/system') / unit.name) for unit in (release / 'deploy/platform').iterdir() if unit.suffix in ['.service', '.timer']]
@@ -192,7 +192,7 @@ order.macbookbro.ru {
             else:
                 shutil.copy2(p, target)
         shutil.copy2(release / 'storefront/telegram-transport.mjs', '/srv/macbookbro-orders/telegram-transport.mjs')
-        for name in ['master-store.mjs', 'build-data.mjs', 'foreign-prices.mjs']:
+        for name in ['master-store.mjs', 'collector-lock.mjs', 'build-data.mjs', 'foreign-prices.mjs']:
             shutil.copy2(release / 'scripts' / name, Path('/srv/mac-price-radar/dev/scripts') / name)
         shutil.copy2(release / 'web/foreign.js', '/srv/mac-price-radar/dev/web/foreign.js')
         update_env(Path('/etc/mac-price-radar/dev.env'), {'AUTO_REFRESH_INTERVAL_MS': '0'})
