@@ -18,16 +18,17 @@ export function inboxList(inbox, { q = '', accountId = '', unread = false, offse
     <nav>${offset > 0 ? `<a href="?${params}&offset=${Math.max(0, offset - 50)}">← Назад</a>` : ''}${rows.length === 50 ? `<a href="?${params}&offset=${offset + 50}">Дальше →</a>` : ''}</nav>`;
 }
 
-export function inboxDialog(inbox, d, session, { offset = 0, canSend = false } = {}) {
+export function inboxDialog(inbox, d, session, { offset = 0, canSend = false, compact = false } = {}) {
   const messages = inbox.messages(d.id, offset), outgoing = inbox.outgoing(d.id);
-  return `<p><a href="/crm/inbox">← Все диалоги</a></p><h2>${esc(d.title)}</h2>
+  const historyUrl = value => compact ? `/crm/desk?dialog=${d.id}&messageOffset=${value}#history` : `?offset=${value}`;
+  return `${compact?'':'<p><a href="/crm/inbox">← Все диалоги</a></p>'}<h2>${esc(d.title)}</h2>
     <p><b>${esc(d.account_label)}</b> · ${channelName(d.channel)} · ${d.unread < 0 ? 'Площадка не передала статус прочтения' : d.unread > 0 ? 'Непрочитано на площадке' : 'Прочитано на площадке'}</p>
-    ${!d.history_complete ? '<p class="notice">История загружена не полностью. Здесь может быть только последнее сообщение.</p>' : ''}
-    <form method="post" action="/crm/inbox/${d.id}/profile">${csrf(session)}<label>Сегмент<input name="segment" maxlength="100" value="${esc(d.segment)}" placeholder="Например: подбор MacBook"></label>
-    <label>Заметки о клиенте<textarea name="note" maxlength="5000">${esc(d.note)}</textarea></label><button>Сохранить</button></form>
-    <h3>История переписки</h3>${messages.map(m => `<div class="box"><small>${m.direction === 'out' ? 'Наш ответ' : m.direction === 'in' ? 'Клиент' : 'Служебное сообщение'} · ${when(m.created_at)}</small><p class="description">${esc(m.body)}</p>${m.kind !== 'text' ? '<small>Вложение пока доступно в исходном мессенджере.</small>' : ''}</div>`).join('') || '<p>История сообщений ещё не получена.</p>'}
-    <nav>${messages.length === 100 ? `<a href="?offset=${offset + 100}">Более ранние сообщения</a>` : ''}${offset > 0 ? `<a href="?offset=${Math.max(0, offset - 100)}">Более новые сообщения</a>` : ''}</nav>
-    <h3>Ответить клиенту</h3><p>Ответ уйдёт с аккаунта <b>${esc(d.account_label)}</b>.</p>
+    ${d.archive_through ? `<p class="notice">Архив Telegram Desktop: ${d.archive_messages} сообщений и событий, последнее — ${when(d.archive_through)}. Состав архива ограничен этой выгрузкой. Статус новых сообщений — в разделе «Подключения».</p>` : !d.history_complete ? '<p class="notice">История загружена не полностью. Здесь может быть только последнее сообщение.</p>' : ''}
+    ${compact ? '' : `<form method="post" action="/crm/inbox/${d.id}/profile">${csrf(session)}<label>Сегмент<input name="segment" maxlength="100" value="${esc(d.segment)}" placeholder="Например: подбор MacBook"></label>
+    <label>Заметки о клиенте<textarea name="note" maxlength="5000">${esc(d.note)}</textarea></label><button>Сохранить</button></form>`}
+    <h3 id="history">История переписки</h3><p><a href="#reply">К полю ответа ↓</a></p>${messages.map(m => `<div class="box crm-message ${m.direction}"><small>${m.direction === 'out' ? 'Наш ответ' : m.direction === 'in' ? 'Клиент' : 'Служебное сообщение'} · ${when(m.created_at)}</small><p class="description">${esc(m.body)}</p>${m.kind !== 'text' ? '<small>Вложение пока доступно в исходном мессенджере.</small>' : ''}</div>`).join('') || '<p>История сообщений ещё не получена.</p>'}
+    <nav>${messages.length === 100 ? `<a href="${historyUrl(offset + 100)}">Более ранние сообщения</a>` : ''}${offset > 0 ? `<a href="${historyUrl(Math.max(0, offset - 100))}">Более новые сообщения</a>` : ''}</nav>
+    <h3 id="reply">Ответить клиенту</h3><p>Ответ уйдёт с аккаунта <b>${esc(d.account_label)}</b>.</p>
     ${!canSend ? '<p class="notice">Отправка для этого аккаунта пока не включена. Можно сохранить черновик.</p>' : ''}
     <form method="post" action="/crm/inbox/${d.id}/draft">${csrf(session)}<label>Сообщение<textarea name="body" rows="5" maxlength="4000" required></textarea></label><button>Сохранить черновик</button></form>
     ${outgoing.map(m => `<div class="box"><b>${esc(deliveryName[m.state])}</b><p class="description">${esc(m.body)}</p>${m.state === 'draft' && canSend ? `<form method="post" action="/crm/inbox/${d.id}/send">${csrf(session)}${hidden('replyId', m.id)}<button class="primary">Отправить с ${esc(d.account_label)}</button></form>` : ''}</div>`).join('')}`;

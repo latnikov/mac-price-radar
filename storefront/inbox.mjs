@@ -29,8 +29,8 @@ export function openInbox(store, { recoverOutbox = true } = {}) {
       ON CONFLICT(id) DO UPDATE SET label=excluded.label`).run(id, channel, String(remoteId), text(label, 100));
     return account(id);
   }
-  const dialog = id => db.prepare(`SELECT d.*,a.channel,a.label AS account_label,a.remote_id AS account_remote_id
-    FROM inbox_dialogs d JOIN inbox_accounts a ON a.id=d.account_id WHERE d.id=?`).get(id);
+  const dialog = id => db.prepare(`SELECT d.*,a.channel,a.label AS account_label,a.remote_id AS account_remote_id,x.through_at AS archive_through,x.message_count AS archive_messages
+    FROM inbox_dialogs d JOIN inbox_accounts a ON a.id=d.account_id LEFT JOIN inbox_archives x ON x.dialog_id=d.id WHERE d.id=?`).get(id);
   function saveDialog(accountId, input) {
     if (!account(accountId) || !input.id) throw fail(400, 'Неизвестный диалог.');
     const id = key(accountId, input.id);
@@ -39,11 +39,11 @@ export function openInbox(store, { recoverOutbox = true } = {}) {
       .run(id, accountId, String(input.id), text(input.title || 'Клиент', 200), input.unread == null ? -1 : input.unread ? 1 : 0, Number(input.updatedAt) || now());
     return dialog(id);
   }
-  function saveMessages(dialogId, messages) {
+  function saveMessages(dialogId, messages, { onlyMissing = false } = {}) {
     if (!dialog(dialogId)) throw fail(404, 'Диалог не найден.');
     return tx(() => {
       const insert = db.prepare(`INSERT INTO inbox_messages(id,dialog_id,remote_id,direction,body,kind,created_at) VALUES(?,?,?,?,?,?,?)
-        ON CONFLICT(dialog_id,remote_id) DO UPDATE SET body=excluded.body,kind=excluded.kind,direction=excluded.direction`);
+        ON CONFLICT(dialog_id,remote_id) ${onlyMissing?'DO NOTHING':'DO UPDATE SET body=excluded.body,kind=excluded.kind,direction=excluded.direction'}`);
       for (const m of messages) {
         if (!m.id || !['in', 'out', 'system'].includes(m.direction)) throw fail(400, 'Некорректное сообщение.');
         insert.run(key(dialogId, m.id), dialogId, String(m.id), m.direction, text(m.body, 50000), text(m.kind || 'text', 40), Number(m.createdAt) || now());
@@ -55,8 +55,8 @@ export function openInbox(store, { recoverOutbox = true } = {}) {
       (SELECT body FROM inbox_messages WHERE dialog_id=d.id ORDER BY created_at DESC,id DESC LIMIT 1) AS preview
       FROM inbox_dialogs d JOIN inbox_accounts a ON a.id=d.account_id
       WHERE (?='' OR d.account_id=?) AND (?=0 OR d.unread>0)
-      AND (?='' OR instr(lower(d.title),lower(?))>0 OR EXISTS
-        (SELECT 1 FROM inbox_messages m WHERE m.dialog_id=d.id AND instr(lower(m.body),lower(?))>0))
+      AND (?='' OR instr(casefold(d.title),casefold(?))>0 OR EXISTS
+        (SELECT 1 FROM inbox_messages m WHERE m.dialog_id=d.id AND instr(casefold(m.body),casefold(?))>0))
       ORDER BY d.updated_at DESC,d.id LIMIT ? OFFSET ?`)
       .all(accountId, accountId, unread ? 1 : 0, q, q, q, Math.min(100, limit), Math.max(0, offset));
   }

@@ -4,6 +4,13 @@ import { cleanField, shipmentNames, rublesToKopecks } from './checkout-data.mjs'
 
 export const dealStates = { new: 'Новая', contacted: 'Связались', offered: 'Предложение', waiting: 'Ждём решения', won: 'Выиграна', lost: 'Потеряна' };
 export const costStatuses = ['FACT', 'MANUAL', 'ESTIMATE', 'UNKNOWN'];
+export function crmDate(value) {
+  const raw = String(value || '');
+  if (!raw) return null;
+  const normalized = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(raw) ? raw + '+03:00' : raw;
+  if (!/[zZ]$|[+-]\d{2}:\d{2}$/.test(normalized) || !Number.isFinite(Date.parse(normalized))) throw fail(400, 'Проверьте дату и время.');
+  return Date.parse(normalized);
+}
 const parse = row => row && { ...row, data: JSON.parse(row.data) };
 const boundedNote = value => { const text = String(value ?? '').trim(); if (text.length > 3000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(text)) throw fail(400, 'Сократите заметку.'); return text; };
 
@@ -32,6 +39,7 @@ export function openRetail(store) {
     const order = db.prepare('SELECT data,created_at FROM orders WHERE id=?').get(id), data = JSON.parse(order.data);
     const dealId = randomUUID();
     db.prepare('INSERT INTO deals(id,customer_id,order_id,title,created_at,updated_at) VALUES(?,?,?,?,?,?)').run(dealId, c.id, id, data.lines.map(l => l.title).join(' + ').slice(0, 250), order.created_at, now());
+    db.prepare('INSERT INTO deal_events(deal_id,to_state,actor,at) VALUES(?,?,?,?)').run(dealId,'new','customer',order.created_at);
     db.prepare('INSERT INTO costs(order_id,updated_at) VALUES(?,?)').run(id, now());
     db.prepare('INSERT INTO fulfillment VALUES(?,?,1,?)').run(id, JSON.stringify(data.delivery || { method: 'pickup', feeKopecks: 0, state: 'confirmed' }), now());
     store.hooks.accountOrderCreated?.(id, session, contact);
@@ -43,7 +51,7 @@ export function openRetail(store) {
   function customers(q = '') {
     return db.prepare(`SELECT c.*,(SELECT COUNT(*) FROM order_customers x WHERE x.customer_id=c.id) AS order_count,
       (SELECT COUNT(*) FROM dialog_customers x WHERE x.customer_id=c.id) AS dialog_count FROM customers c
-      WHERE ?='' OR instr(lower(c.name||' '||c.phone||' '||c.email),lower(?))>0 ORDER BY c.updated_at DESC LIMIT 100`).all(q, q);
+      WHERE ?='' OR instr(casefold(c.name||' '||c.phone||' '||c.email),casefold(?))>0 ORDER BY c.updated_at DESC LIMIT 100`).all(q, q);
   }
   const customerOrders = id => db.prepare('SELECT o.* FROM orders o JOIN order_customers c ON c.order_id=o.id WHERE c.customer_id=? ORDER BY o.created_at DESC LIMIT 100').all(id);
   function linkDialog(dialogId, customerId, actor) {
@@ -61,21 +69,21 @@ export function openRetail(store) {
       const lost = cleanField(input.lostReason, 200, 'Причина потери');
       if (state === 'lost' && !lost) throw fail(400, 'Укажите причину потери сделки.');
       const c = customer(input.customerId || old?.customer_id); if (!c) throw fail(400, 'Выберите клиента.');
-      const rawNext = String(input.nextAt || '');
-      const nextAt = rawNext ? Date.parse(rawNext) : null;
-      if (rawNext && !Number.isFinite(nextAt)) throw fail(400, 'Проверьте дату следующего действия.');
+      if (old && c.id !== old.customer_id) throw fail(409, 'Клиент существующей сделки не меняется этой формой.');
+      const nextAt = crmDate(input.nextAt);
       const id = old?.id || randomUUID(), title = cleanField(input.title || old?.title, 250, 'Сделка');
       if (!title) throw fail(400, 'Укажите название сделки.');
       db.prepare(`INSERT INTO deals(id,customer_id,order_id,title,state,responsible,next_at,lost_reason,note,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
         ON CONFLICT(id) DO UPDATE SET title=excluded.title,state=excluded.state,responsible=excluded.responsible,next_at=excluded.next_at,lost_reason=excluded.lost_reason,note=excluded.note,revision=excluded.revision,updated_at=excluded.updated_at`)
         .run(id, c.id, old?.order_id || null, title, state, cleanField(input.responsible, 120, 'Ответственный'), nextAt, lost, boundedNote(input.note), (old?.revision || 0) + 1, old?.created_at || now(), now());
+      if(!old||old.state!==state)db.prepare('INSERT INTO deal_events(deal_id,from_state,to_state,actor,at) VALUES(?,?,?,?,?)').run(id,old?.state||null,state,actor,now());
       audit(actor, 'deal_saved', id); return id;
     });
   }
-  const deals = () => db.prepare('SELECT d.*,c.name,c.phone FROM deals d JOIN customers c ON c.id=d.customer_id ORDER BY d.updated_at DESC LIMIT 100').all();
+  const deals = ({state='',offset=0}={}) => db.prepare("SELECT d.*,c.name,c.phone FROM deals d JOIN customers c ON c.id=d.customer_id WHERE (?='' OR d.state=?) ORDER BY d.updated_at DESC,d.id LIMIT 50 OFFSET ?").all(state,state,offset);
   function saveTask(input, actor) {
     const title = cleanField(input.title, 250, 'Задача'); if (!title) throw fail(400, 'Укажите задачу.');
-    const dueAt = input.dueAt ? Date.parse(input.dueAt) : null;
+    const dueAt = crmDate(input.dueAt);
     if (input.dueAt && !Number.isFinite(dueAt)) throw fail(400, 'Проверьте срок задачи.');
     if (input.customerId && !customer(input.customerId)) throw fail(404, 'Клиент не найден.');
     const id = randomUUID();
@@ -83,7 +91,7 @@ export function openRetail(store) {
     audit(actor, 'task_created', id); return id;
   }
   function finishTask(id, actor) { if (!db.prepare("UPDATE tasks SET state='done' WHERE id=? AND state='open'").run(id).changes) throw fail(409, 'Задача уже завершена или не найдена.'); audit(actor, 'task_completed', id); }
-  const tasks = () => db.prepare('SELECT t.*,c.name FROM tasks t LEFT JOIN customers c ON c.id=t.customer_id ORDER BY t.state,COALESCE(t.due_at,9223372036854775807),t.created_at DESC LIMIT 100').all();
+  const tasks = ({state='open',offset=0}={}) => db.prepare("SELECT t.*,c.name FROM tasks t LEFT JOIN customers c ON c.id=t.customer_id WHERE t.state=? ORDER BY COALESCE(t.due_at,9223372036854775807),t.created_at DESC,t.id LIMIT 50 OFFSET ?").all(state,offset);
   const fulfillment = id => parse(db.prepare('SELECT * FROM fulfillment WHERE order_id=?').get(id));
   const proposal = id => parse(db.prepare("SELECT * FROM order_proposals WHERE order_id=? AND state='pending' ORDER BY created_at DESC,rowid DESC LIMIT 1").get(id));
   function propose(id, input, actor) {

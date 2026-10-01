@@ -36,6 +36,7 @@ export function normalizeProduct(input, previous = {}) {
 export function openShopStore(path, { now = Date.now, recoverJobs = true } = {}) {
   mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(path); chmodSync(path, 0o600);
+  db.function('casefold', { deterministic: true }, value => String(value ?? '').toLocaleLowerCase('ru-RU'));
   db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS products(id TEXT PRIMARY KEY, draft TEXT NOT NULL, published TEXT, revision INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);

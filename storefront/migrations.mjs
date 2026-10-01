@@ -34,6 +34,29 @@ const migrations = [
     ALTER TABLE customer_requests ADD COLUMN reply TEXT NOT NULL DEFAULT '';
     ALTER TABLE customer_requests ADD COLUMN replied_at INTEGER;
   ` },
+  { version: 5, sql: `
+    CREATE TABLE crm_profiles(customer_id TEXT PRIMARY KEY REFERENCES customers(id),kind TEXT NOT NULL DEFAULT 'unclassified',suggested_segment TEXT NOT NULL DEFAULT '',segment_basis TEXT NOT NULL DEFAULT '',import_source TEXT NOT NULL DEFAULT '',updated_at INTEGER NOT NULL);
+    CREATE TABLE crm_imports(id TEXT PRIMARY KEY,channel TEXT NOT NULL,account_id TEXT NOT NULL,source_hash TEXT NOT NULL,started_at INTEGER NOT NULL,completed_at INTEGER,dialogs INTEGER NOT NULL DEFAULT 0,messages INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL,UNIQUE(channel,account_id,source_hash));
+    CREATE TABLE deal_events(id INTEGER PRIMARY KEY AUTOINCREMENT,deal_id TEXT NOT NULL REFERENCES deals(id),from_state TEXT,to_state TEXT NOT NULL,actor TEXT NOT NULL,at INTEGER NOT NULL);
+    CREATE TABLE telegram_connections(id TEXT PRIMARY KEY,account_id TEXT NOT NULL,user_id TEXT NOT NULL,enabled INTEGER NOT NULL,can_reply INTEGER NOT NULL,updated_at INTEGER NOT NULL);
+    CREATE TABLE telegram_updates(update_id INTEGER PRIMARY KEY,received_at INTEGER NOT NULL);
+    CREATE TABLE telegram_dialog_connections(dialog_id TEXT PRIMARY KEY,connection_id TEXT NOT NULL REFERENCES telegram_connections(id));
+    CREATE INDEX dialog_customers_customer ON dialog_customers(customer_id);
+    CREATE INDEX inbox_customer_tasks ON tasks(customer_id,state,due_at);
+  ` },
+  { version: 6, sql: `
+    CREATE TABLE telegram_update_queue(update_id INTEGER PRIMARY KEY,payload TEXT NOT NULL,state TEXT NOT NULL DEFAULT 'pending',attempts INTEGER NOT NULL DEFAULT 0,next_at INTEGER NOT NULL DEFAULT 0,error TEXT,received_at INTEGER NOT NULL);
+    CREATE INDEX telegram_update_pending ON telegram_update_queue(state,next_at);
+    CREATE TABLE inbox_archives(dialog_id TEXT PRIMARY KEY,import_id TEXT NOT NULL REFERENCES crm_imports(id),through_at INTEGER NOT NULL,message_count INTEGER NOT NULL);
+    CREATE INDEX ms_objects_agent ON ms_objects(type,json_extract(data,'$.agent.meta.href'));
+    CREATE TABLE deal_documents(deal_id TEXT NOT NULL REFERENCES deals(id),document_type TEXT NOT NULL,remote_id TEXT NOT NULL,linked_at INTEGER NOT NULL,PRIMARY KEY(deal_id,document_type,remote_id));
+    CREATE TABLE crm_merges(id INTEGER PRIMARY KEY,source_id TEXT NOT NULL,target_id TEXT NOT NULL,actor TEXT NOT NULL,at INTEGER NOT NULL,detail TEXT NOT NULL);
+  ` },
+  { version: 7, sql: `
+    CREATE TABLE telegram_message_versions(dialog_id TEXT NOT NULL,remote_id TEXT NOT NULL,update_id INTEGER NOT NULL,PRIMARY KEY(dialog_id,remote_id));
+    CREATE TABLE telegram_connection_versions(connection_id TEXT PRIMARY KEY,update_id INTEGER NOT NULL);
+    CREATE UNIQUE INDEX deal_document_once ON deal_documents(document_type,remote_id);
+  ` },
 ];
 
 export function migrateShop(db, now = Date.now()) {

@@ -17,7 +17,7 @@ export function createDataSync(store, inbox, { env = process.env, fetchImpl = fe
     api: env[`${prefix}_CLIENT_ID`] && env[`${prefix}_CLIENT_SECRET`] ? createAvitoInboxApi({ clientId: env[`${prefix}_CLIENT_ID`], clientSecret: env[`${prefix}_CLIENT_SECRET`], fetchImpl }) : null }));
   status('МойСклад', '', token ? 'pending' : 'blocked', { error: token ? null : 'Нужен доступ к учётному аккаунту' });
   for (const a of avitoApis) status('Авито', a.label, a.api ? 'pending' : 'blocked', { error: a.api ? null : 'Нужны отдельные ключи этого профиля' });
-  status('Telegram', '@macbookbro', configuredSecret(env, 'STORE_TELEGRAM_INGEST_TOKEN') ? 'pending' : 'blocked', { error: configuredSecret(env, 'STORE_TELEGRAM_INGEST_TOKEN') ? null : 'Нужны авторизация рабочего аккаунта и подключение синхронизации' });
+  if (!configuredSecret(env, 'STORE_CRM_TELEGRAM_BOT_TOKEN')) status('Telegram', '@macbookbro', configuredSecret(env, 'STORE_TELEGRAM_INGEST_TOKEN') ? 'pending' : 'blocked', { error: configuredSecret(env, 'STORE_TELEGRAM_INGEST_TOKEN') ? null : 'Нужны авторизация рабочего аккаунта и подключение синхронизации' });
 
   async function msGet(path) {
     let response;
@@ -57,23 +57,28 @@ export function createDataSync(store, inbox, { env = process.env, fetchImpl = fe
   }
   async function syncMoysklad() {
     if (!token) return;
-    const entities = ['counterparty', 'product', 'variant', 'customerorder', 'supply', 'demand', 'salesreturn', 'enter', 'loss', 'paymentin', 'cashin'];
+    const snapshotTypes = ['currency', 'supply', 'demand', 'retaildemand', 'salesreturn', 'retailsalesreturn', 'enter', 'loss', 'paymentin', 'cashin'];
+    const entities = ['currency', 'retaildemand', 'retailsalesreturn', 'counterparty', 'product', 'variant', 'customerorder', 'supply', 'demand', 'salesreturn', 'enter', 'loss', 'paymentin', 'cashin'];
     for (const entity of entities) {
       const channel = `МойСклад · ${entity}`, previous = db.prepare('SELECT cursor FROM sync_state WHERE channel=? AND account_id=?').get(channel, '');
       const cursor = previous?.cursor ? JSON.parse(previous.cursor) : {};
       status(channel, '', 'syncing');
       try {
-        let offset = 0, imported = 0, updated = cursor.updated || null;
+        let offset = 0, imported = 0, updated = cursor.updated || null; const snapshot = snapshotTypes.includes(entity), seen = new Set();
         while (true) {
-          const filter = cursor.updated ? `updated>=${cursor.updated}` : ['supply', 'demand', 'salesreturn', 'enter', 'loss', 'paymentin', 'cashin'].includes(entity) ? 'moment>=2026-01-01 00:00:00' : '';
-          const params = new URLSearchParams({ limit: '100', offset: String(offset), order: 'updated' }); if (filter) params.set('filter', filter);
+          const filter = snapshot ? (entity === 'currency' ? '' : 'moment>=2026-01-01 00:00:00') : cursor.updated ? `updated>=${cursor.updated}` : '';
+          const params = new URLSearchParams({ limit: '100', offset: String(offset) });
+          if (entity !== 'currency') params.set('order', 'updated');
+          if (filter) params.set('filter', filter);
           const result = await msGet(`entity/${entity}?${params}`);
           ingestMoysklad(entity, result.rows);
+          for (const row of result.rows) seen.add(String(row.id));
           for (const r of result.rows) if (r.updated && (!updated || r.updated > updated)) updated = r.updated;
           imported += result.rows.length; offset += result.rows.length;
           if (result.rows.length < 100) { if (Number(result.meta?.size) > offset) throw new Error('МойСклад вернул неполную страницу'); break; }
           if (offset > 100000) throw new Error('Начальный импорт слишком велик: нужна поэтапная загрузка');
         }
+        if (snapshot) tx(() => { for (const row of db.prepare('SELECT remote_id FROM ms_objects WHERE type=?').all(entity)) if (!seen.has(row.remote_id)) db.prepare('DELETE FROM ms_objects WHERE type=? AND remote_id=?').run(entity, row.remote_id); });
         status(channel, '', 'ready', { cursor: { updated, imported }, success: true });
       } catch (e) { status(channel, '', 'error', { error: String(e.message).startsWith('МойСклад') || String(e.message).startsWith('Нет ответа') || String(e.message).startsWith('Неизвестный') ? e.message : 'Не удалось завершить импорт; сохранённые страницы доступны' });if(e.auth){status('МойСклад','','error',{error:'Доступ отклонён: нужен действующий API-токен'});return;} }
     }
@@ -85,7 +90,7 @@ export function createDataSync(store, inbox, { env = process.env, fetchImpl = fe
         const rows = data.rows.map(row => ({ ...row, id: row.assortment?.id || row.meta?.href?.split('/').pop() })).filter(r => r.id);
         if(rows.length!==data.rows.length)throw new Error('invalid_stock_id');
         snapshot.push(...rows); stock += rows.length; offset += data.rows.length;
-        if (data.rows.length < 100) break;
+        if (data.rows.length < 100) { if (Number(data.meta?.size) > offset) throw new Error('incomplete_stock'); break; }
         if (offset > 100000) throw new Error('stock_limit');
       }
       tx(()=>{db.prepare("DELETE FROM ms_objects WHERE type='stock'").run();ingestMoysklad('stock',snapshot);});
@@ -127,7 +132,7 @@ export function createDataSync(store, inbox, { env = process.env, fetchImpl = fe
         if (offset > 1000) { partial = true; break; }
       } while (true);
       db.prepare('UPDATE inbox_accounts SET state=?,synced_at=? WHERE id=?').run(partial ? 'partial' : 'ready', now(), account.id);
-      status('Авито', a.label, partial ? 'partial' : 'ready', { success: true, error: partial ? 'Новые сообщения получены; полнота истории требует тарифа и проверки пагинации' : null });
+      status('Авито', a.label, partial ? 'partial' : 'ready', { success: true, error: partial ? 'Получены доступные диалоги и последние сообщения. История требует тарифа API мессенджера; глубина списка ограничена Авито.' : null });
     } catch { status('Авито', a.label, 'error', { error: 'Проверьте доступ, тариф и идентификатор подключённого профиля' }); }
   }
   let running = false;
@@ -150,7 +155,7 @@ export function createDataSync(store, inbox, { env = process.env, fetchImpl = fe
       }
       const complete=packet.complete===true||(packet.live===true&&account.state==='ready');
       db.prepare("UPDATE inbox_accounts SET state=?,synced_at=? WHERE id=?").run(complete ? 'ready' : 'partial', now(), account.id);
-      status('Telegram', '@macbookbro', complete ? 'ready' : 'partial', { success: true, error: complete ? null : 'Импорт облачной истории продолжается' });
+      if (!configuredSecret(env, 'STORE_CRM_TELEGRAM_BOT_TOKEN')) status('Telegram', '@macbookbro', complete ? 'ready' : 'partial', { success: true, error: complete ? null : 'Импорт облачной истории продолжается' });
     });
   }
   return { sync, syncMoysklad, ingestMoysklad, ingestTelegram, status };

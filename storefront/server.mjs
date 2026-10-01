@@ -19,6 +19,9 @@ import { customerRoutes } from './customer-routes.mjs';
 import { retailRoutes } from './retail-routes.mjs';
 import { telegramIngest } from './telegram-ingest.mjs';
 import { inboxCustomerLink } from './retail-views.mjs';
+import { openCrmDesk } from './crm-desk.mjs';
+import { contactLinkView, deskView, deskSummary, contactDirectory } from './crm-desk-views.mjs';
+import { createTelegramBusinessCrm } from './telegram-business-crm.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const equal=(a,b)=>{const x=Buffer.from(String(a)),y=Buffer.from(String(b));return x.length===y.length&&timingSafeEqual(x,y);};
@@ -35,6 +38,9 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
   const store=openShopStore(dbPath,{now});
   const inbox=openInbox(store);
   const retail=openRetail(store);
+  const desk=openCrmDesk(store,inbox,retail);
+  desk.reconcileDialogs();
+  const telegramCrm=createTelegramBusinessCrm(store,inbox,desk,{env,fetchImpl});
   const accounts=openAccounts(store,{env,fetchImpl,origin});
   const dataSync=createDataSync(store,inbox,{env,fetchImpl});
   const ingestTelegram=telegramIngest(store,dataSync,configuredSecret(env,'STORE_TELEGRAM_INGEST_TOKEN'));
@@ -46,7 +52,8 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
       if(remoteId)avitoApis.set(remoteId,createAvitoInboxApi({clientId:env[`${prefix}_CLIENT_ID`],clientSecret:env[`${prefix}_CLIENT_SECRET`],fetchImpl}));
     }
   }
-  const replyAdapter=d=>env.STORE_INBOX_SEND_ENABLED==='1'&&d.channel==='avito'&&avitoApis.has(d.account_remote_id)
+  const replyAdapter=d=>d.channel==='telegram'&&env.STORE_TELEGRAM_SEND_ENABLED==='1'&&telegramCrm.capability(d).allowed
+    ?telegramCrm.send:d.channel==='avito'&&env.STORE_INBOX_SEND_ENABLED==='1'&&avitoApis.has(d.account_remote_id)
     ? async(dialog,body)=>avitoApis.get(dialog.account_remote_id).send(dialog.account_remote_id,dialog.remote_id,body) : null;
   const readPassword=(kind)=>env[`STORE_${kind}_PASSWORD_FILE`]?readFileSync(env[`STORE_${kind}_PASSWORD_FILE`],'utf8').trim():env[`STORE_${kind}_PASSWORD`]||'';
   const ownerPassword=readPassword('ADMIN'),managerPassword=readPassword('MANAGER');
@@ -142,9 +149,28 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
       if(path.startsWith('/crm')){
         res.setHeader('X-Robots-Tag','noindex, nofollow');
         if(!s.role)return redirect(res,'/crm/login');
-        const managerWrite=/^\/crm\/(?:orders\/MB-[A-F0-9]{12}(?:\/(?:shipment|propose|accept))?|inbox\/[a-f0-9]{64}\/(?:profile|draft|send|link)|customers\/save|deals\/save|tasks\/save|tasks\/[a-f0-9-]{36}\/done|requests\/[a-f0-9-]{36}\/reply)$/;
-        if(req.method==='POST'&&path!=='/crm/logout'&&!managerWrite.test(path)&&s.role!=='owner')throw fail(403,'Действие доступно владельцу.');
-        if(await retailRoutes({path,req,res,url,s,form,store,retail,adminRender,redirect,sync:()=>background(dataSync.sync)}))return;
+        const deskWrite=/^\/crm\/desk\/[a-f0-9]{64}\/(customer|deal|remind|link)$/;
+        const managerWrite=/^\/crm\/(?:orders\/MB-[A-F0-9]{12}(?:\/(?:shipment|propose|accept))?|inbox\/[a-f0-9]{64}\/(?:profile|draft|send|link)|customers\/save|deals\/save|deals\/[a-f0-9-]{36}\/document|tasks\/save|tasks\/[a-f0-9-]{36}\/done|requests\/[a-f0-9-]{36}\/reply)$/;
+        if(req.method==='POST'&&path!=='/crm/logout'&&!managerWrite.test(path)&&!deskWrite.test(path)&&s.role!=='owner')throw fail(403,'Действие доступно владельцу.');
+        if(path==='/crm/desk/link'&&req.method!=='POST') return adminRender('Связь с клиентом',contactLinkView(desk,textField(url.searchParams.get('dialog'),64),{q:textField(url.searchParams.get('q'),100),offset:Math.max(0,Math.trunc(Number(url.searchParams.get('offset')))||0)},s));
+        if(path==='/crm/desk'&&req.method!=='POST'){
+          const dialogId=textField(url.searchParams.get('dialog'),64),d=dialogId?inbox.dialog(dialogId):null;
+          if(dialogId&&!d)throw fail(404,'Диалог не найден.');
+          const reason=d?.channel==='telegram'?telegramCrm.capability(d).reason:d&&!replyAdapter(d)?'Отправка Авито ждёт проверки прав и тарифа этого профиля.':'';
+          return adminRender('Единая переписка',deskView(inbox,desk,s,{dialogId,q:textField(url.searchParams.get('q'),100),accountId:textField(url.searchParams.get('account'),64),unread:url.searchParams.get('unread')==='1',offset:Math.max(0,Math.trunc(Number(url.searchParams.get('offset')))||0)},d?inboxDialog(inbox,d,s,{compact:true,canSend:Boolean(replyAdapter(d)),offset:Math.max(0,Math.trunc(Number(url.searchParams.get('messageOffset')))||0)}):'',reason));
+        }
+        if(path==='/crm/sales'&&req.method!=='POST')return adminRender('Воронка и метрики',deskSummary(desk));
+        if(path==='/crm/contacts'&&req.method!=='POST')return adminRender('Контакты',contactDirectory(desk,{q:textField(url.searchParams.get('q'),100),segment:textField(url.searchParams.get('segment'),100),kind:textField(url.searchParams.get('kind'),40),offset:Math.max(0,Math.trunc(Number(url.searchParams.get('offset')))||0)},s));
+        const deskAction=path.match(deskWrite);
+        if(deskAction&&req.method==='POST'){
+          const id=desk.ensureCustomer(path.split('/')[3]),customer=retail.customer(id),action=deskAction[1];
+          if(action==='customer'){store.tx(()=>{retail.saveCustomer({id,segment:form.segment,note:form.note},s.role);desk.setKind(id,form.kind,s.role);});}
+          if(action==='deal')retail.saveDeal({customerId:id,title:form.title,state:'new'},s.role);
+          if(action==='remind')desk.remind(id,form,s.role);
+          if(action==='link')desk.linkContact(path.split('/')[3],form.customerId,s.role);
+          return redirect(res,`/crm/desk?dialog=${path.split('/')[3]}`);
+        }
+        if(await retailRoutes({path,req,res,url,s,form,store,retail,desk,adminRender,redirect,sync:()=>background(dataSync.sync)}))return;
         if(path==='/crm/logout'&&req.method==='POST'){store.db.prepare('UPDATE sessions SET role=NULL,auth_until=0 WHERE id=?').run(s.id);return redirect(res,'/');}
         if(path==='/crm/inbox'&&req.method!=='POST')return adminRender('Переписка',inboxList(inbox,{
           q:textField(url.searchParams.get('q'),100),accountId:textField(url.searchParams.get('account'),64),
@@ -160,7 +186,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
               if(!inbox.outgoing(d.id).some(m=>m.id===form.replyId))throw fail(404,'Ответ не найден в этом диалоге.');
               await inbox.send(form.replyId,replyAdapter(d),s.role);
             }else throw fail(405,'Метод не поддерживается.');
-            return redirect(res,`/crm/inbox/${d.id}`);
+            return redirect(res,`/crm/desk?dialog=${d.id}`);
           }
           if(inboxPath[2])throw fail(405,'Метод не поддерживается.');
           const linked=store.db.prepare('SELECT customer_id FROM dialog_customers WHERE dialog_id=?').get(d.id);
@@ -292,8 +318,8 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
   const loginForm=s=>`<h2>Вход для сотрудников</h2><form action="/crm/login" method="post">${csrf(s)}<label>Пароль<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><button class="primary">Войти</button></form>`;
   const timers=[],pending=new Set();
   const background=fn=>{const task=Promise.resolve().then(fn).catch(()=>{store.setSetting('worker_error',{at:now(),message:'Фоновое обновление не завершено. Проверьте обмен.'});}).finally(()=>pending.delete(task));pending.add(task);};
-  if(runWorkers){background(syncPrices);background(dataSync.sync);timers.push(setInterval(()=>background(dataSync.sync),Math.max(60000,Number(env.STORE_DATA_SYNC_INTERVAL_MS)||60000)));timers.push(setInterval(()=>background(accounts.dispatchMail),15000));timers.push(setInterval(()=>background(syncPrices),Number(env.STORE_SYNC_INTERVAL_MS)||60000));timers.push(setInterval(()=>background(dispatcher.dispatch),15000));for(const t of timers)t.unref();}
-  return {server,store,inbox,retail,accounts,dataSync,origin,syncPrices,dispatch:dispatcher.dispatch,close:async()=>{for(const t of timers)clearInterval(t);await new Promise(r=>server.listening?server.close(r):r());await Promise.allSettled([...pending]);store.close();}};
+  if(runWorkers){background(syncPrices);background(dataSync.sync);background(telegramCrm.poll);timers.push(setInterval(()=>background(telegramCrm.poll),5000));timers.push(setInterval(()=>background(async()=>desk.reconcileDialogs()),60000));timers.push(setInterval(()=>background(dataSync.sync),Math.max(60000,Number(env.STORE_DATA_SYNC_INTERVAL_MS)||60000)));timers.push(setInterval(()=>background(accounts.dispatchMail),15000));timers.push(setInterval(()=>background(syncPrices),Number(env.STORE_SYNC_INTERVAL_MS)||60000));timers.push(setInterval(()=>background(dispatcher.dispatch),15000));for(const t of timers)t.unref();}
+  return {server,store,inbox,retail,desk,telegramCrm,accounts,dataSync,origin,syncPrices,dispatch:dispatcher.dispatch,close:async()=>{for(const t of timers)clearInterval(t);await new Promise(r=>server.listening?server.close(r):r());await Promise.allSettled([...pending]);store.close();}};
 }
 
 if(process.argv[1]&&resolve(process.argv[1])===fileURLToPath(import.meta.url)){
