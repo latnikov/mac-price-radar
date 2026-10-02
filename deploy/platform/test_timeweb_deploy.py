@@ -1,6 +1,7 @@
 """Release gates, WAL snapshot preservation, and atomic code rollback."""
 import gzip
 import importlib.util
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -72,6 +73,34 @@ class TimewebDeploymentTests(unittest.TestCase):
             self.assertEqual(data.read_text(), 'accepted after deploy')
             with self.assertRaises(RuntimeError):
                 deploy.replace_link(old, new)
+
+    def test_private_unit_umask_does_not_hide_code_or_expose_linked_runtime_data(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            release, private = root / 'release', root / 'private'
+            private.mkdir(mode=0o700)
+            secret = private / 'orders.sqlite'
+            secret.write_bytes(b'private')
+            secret.chmod(0o600)
+            previous = os.umask(0o077)
+            try:
+                code = release / 'order-site'
+                code.mkdir(parents=True)
+                entry = code / 'server.mjs'
+                entry.write_text('export const ok = true')
+                executable = code / 'start.sh'
+                executable.write_text('#!/bin/sh\n')
+                executable.chmod(0o700)
+                (release / 'data').symlink_to(private, target_is_directory=True)
+                deploy.make_release_readable(release)
+            finally:
+                os.umask(previous)
+            self.assertEqual(release.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(code.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(entry.stat().st_mode & 0o777, 0o644)
+            self.assertEqual(executable.stat().st_mode & 0o777, 0o755)
+            self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(secret.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == '__main__':

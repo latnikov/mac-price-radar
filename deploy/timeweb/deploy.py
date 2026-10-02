@@ -153,6 +153,19 @@ def health():
             raise RuntimeError('Public application did not return HTML')
 
 
+def make_release_readable(release):
+    # Python's safe tar filter can inherit the unit's private umask for directories.
+    # This tree contains public Git files only. Never follow the runtime data link.
+    for parent, directories, files in os.walk(release, followlinks=False):
+        Path(parent).chmod(0o755)
+        for name in directories + files:
+            path = Path(parent) / name
+            if path.is_symlink():
+                continue
+            mode = path.stat().st_mode
+            path.chmod(0o755 if path.is_dir() or mode & 0o111 else 0o644)
+
+
 def prepare_release(commit):
     release = ROOT / commit
     if (release / '.ready').exists():
@@ -188,9 +201,7 @@ def prepare_release(commit):
     (release / 'order-site/platform-release.json').write_text((release / 'platform-release.json').read_text())
     (release / '.ready').touch()
     command('chown', '-R', 'root:root', str(release))
-    # The systemd deployment unit uses UMask=0077. After ownership changes back
-    # to root, radar still needs to traverse the immutable release directory.
-    release.chmod(0o755)
+    make_release_readable(release)
     return release
 
 
