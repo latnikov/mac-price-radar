@@ -13,8 +13,8 @@ async function setup(t) {
   await new Promise(resolve => service.server.listen(0, '127.0.0.1', resolve));
   t.after(async () => { await service.close(); rmSync(dir, { recursive: true, force: true }); });
   const cookies = new Map();
-  const call = (path, form) => new Promise((resolve, reject) => {
-    const req = request({ hostname: '127.0.0.1', port: service.server.address().port, path, method: form ? 'POST' : 'GET', headers: {
+  const call = (path, form, method = form ? 'POST' : 'GET') => new Promise((resolve, reject) => {
+    const req = request({ hostname: '127.0.0.1', port: service.server.address().port, path, method, headers: {
       Host: 'catalog.test', Cookie: [...cookies].map(([key, value]) => `${key}=${value}`).join('; '),
       ...(form ? { Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded' } : {}),
     } }, res => {
@@ -41,14 +41,16 @@ async function setup(t) {
 const decode = text => text.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 const plain = html => decode(html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
 const productIds = html => [...new Set([...html.matchAll(/href="\/p\/([a-f0-9-]{36})"/g)].map(match => match[1]))];
-const linkFor = (html, label) => decode([...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g)].find(match => plain(match[2]) === label)?.[1] || '');
+const linkFor = (html, label) => decode([...html.matchAll(/<a\b[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g)].find(match => plain(match[2]) === label || decode(match[2].match(/<img\b[^>]*alt="([^"]*)"/)?.[1] || '') === label)?.[1] || '');
 const lightPage = response => {
   assert.equal(response.status, 200);
-  assert.ok(response.bytes < 14000, `HTML, inline styles and illustrations: ${response.bytes} bytes`);
-  assert.doesNotMatch(response.html, /<script\b|<img\b|<iframe\b|<object\b|<embed\b|rel=["']stylesheet["']|@import\b|url\(\s*["']?(?:https?:|\/)/i);
+  assert.ok(response.bytes < 14000, `HTML and inline styles: ${response.bytes} bytes`);
+  assert.doesNotMatch(response.html, /<script\b|<iframe\b|<object\b|<embed\b|rel=["']stylesheet["']|@import\b/i);
+  for (const match of response.html.matchAll(/<img\b[^>]*src="([^"]+)"/g)) assert.match(match[1], /^\/brands\/[a-z-]+\.svg$/);
+  for (const match of response.html.matchAll(/url\(([^)]+)\)/g)) assert.ok(['https://www.apple.com','https://store.storeimages.cdn-apple.com'].includes(new URL(match[1]).origin));
 };
 
-test('catalogue serves the requested story order, shop actions and footer within the complete 14 KB budget', async t => {
+test('catalogue serves the requested story order, shop actions and footer within the 14 KB HTML budget', async t => {
   const { call, publish } = await setup(t);
   for (let i = 0; i < 4; i++) publish({ title: `MacBook Air fixture ${i}` });
   const response = await call('/');
@@ -61,7 +63,7 @@ test('catalogue serves the requested story order, shop actions and footer within
   ]);
   assert.equal(linkFor(stories, 'Войти'), '/account/login');
   assert.equal(linkFor(stories, 'Мои заказы'), '/account');
-  assert.match(stories, /href="\/order\/"/);
+  assert.match(stories, /href="https:\/\/macbookbro\.ru\/order"/);
   const header = response.html.match(/<header\b[^>]*>([\s\S]*?)<\/header>/)?.[1] || '';
   for (const path of ['/cart', '/account']) assert.ok(header.includes(`href="${path}"`));
   assert.doesNotMatch(response.html, /Избранное|favorites/);
@@ -78,6 +80,35 @@ test('catalogue serves the requested story order, shop actions and footer within
   assert.match(plain(footer), /Грузинская, 41а/);
   assert.doesNotMatch(footer, /<h3>Каталог<\/h3>/);
   lightPage(response);
+});
+
+test('reviewed brand SVGs load without sessions and cannot expose arbitrary files or accept writes', async t => {
+  const { call, service } = await setup(t);
+  for (const name of ['apple', 'anker', 'ugreen', 'logitech', 'rayban-meta']) {
+    const asset = await call(`/brands/${name}.svg`);
+    assert.equal(asset.status, 200);
+    assert.equal(asset.headers['content-type'], 'image/svg+xml');
+    assert.match(asset.headers['cache-control'], /max-age/);
+    assert.equal(asset.headers['set-cookie'], undefined);
+    assert.match(asset.html, /<svg\b/);
+    assert.doesNotMatch(asset.html, /<(?:script|style|foreignObject|image)\b|\bon\w+=|\b(?:href|src)=|url\((?!#)/i);
+  }
+  assert.equal(service.store.db.prepare('SELECT COUNT(*) n FROM sessions').get().n, 0);
+  const head = await call('/brands/apple.svg', undefined, 'HEAD');
+  assert.equal(head.status, 200); assert.equal(head.bytes, 0); assert.ok(Number(head.headers['content-length']) > 0);
+  assert.equal((await call('/brands/apple.svg', {}, 'POST')).status, 405);
+  for (const path of ['/brands/server.mjs', '/brands/%2fetc%2fpasswd.svg']) assert.equal((await call(path)).status, 404);
+});
+
+test('MacBook photographs match family and diagonal and their URLs survive CSS compaction', async () => {
+  const { macbookPhotoClass, page, catalogue } = await import('../views.mjs');
+  for (const [family, size] of [['air', 13], ['air', 15], ['pro', 14], ['pro', 16], ['neo', 13]])
+    assert.equal(macbookPhotoClass({ family, configuration: { screenIn: size } }), family + size);
+  assert.equal(macbookPhotoClass({ title: 'USB-C charger' }), '');
+  const html = page('Каталог', catalogue([['air',13],['air',15],['pro',14],['pro',16],['neo',13]].map(([family,size])=>({family,configuration:{screenIn:size},id:'photo',title:'MacBook',specification:'',priceRub:0}))));
+  const urls = [...html.matchAll(/url\(([^)]+)\)/g)].map(m => m[1]);
+  assert.equal(urls.length, 5);
+  for (const url of urls) { assert.ok(['https://www.apple.com','https://store.storeimages.cdn-apple.com'].includes(new URL(url).origin)); assert.ok(url.endsWith('.jpg') || new URL(url).searchParams.get('fmt') === 'png-alpha'); }
 });
 
 test('family, brand, category and search filters select real products and survive pagination', async t => {

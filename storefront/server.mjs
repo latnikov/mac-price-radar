@@ -28,6 +28,7 @@ import { syncLegacyOrders } from './legacy-orders.mjs';
 import { systemView } from './system-view.mjs';
 import { parserOrigin, parserRoutes, staffDestination } from './parser-routes.mjs';
 import { icon } from './design-system.mjs';
+import { serveBrandAsset } from './brand-assets.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const equal=(a,b)=>{const x=Buffer.from(String(a)),y=Buffer.from(String(b));return x.length===y.length&&timingSafeEqual(x,y);};
@@ -122,7 +123,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
   }
   const server=http.createServer(async(req,res)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('X-Frame-Options','DENY');
-    res.setHeader('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
+    res.setHeader('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data: https://www.apple.com https://store.storeimages.cdn-apple.com; form-action 'self'; base-uri 'none'; frame-ancestors 'none'");
     let s,url;
     try{
       const requestOrigin=req.headers.host===crmUrl.host?crmOrigin:origin;
@@ -133,6 +134,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
         if(!path.startsWith('/crm')&&!path.startsWith('/media/')&&path!=='/healthz')throw fail(404,'Страница не найдена.');
       }
       if(!['GET','HEAD','POST'].includes(req.method))throw fail(405,'Метод не поддерживается.');
+      if(serveBrandAsset(req,res,path,send))return;
       const peer=req.socket.remoteAddress||'';
       const trusted=env.STORE_TRUST_PROXY==='loopback'&&['127.0.0.1','::1','::ffff:127.0.0.1'].includes(peer);
       const ip=trusted?String(req.headers['x-forwarded-for']||peer).split(',').at(-1).trim():peer;

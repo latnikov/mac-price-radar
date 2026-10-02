@@ -1,0 +1,739 @@
+{
+  "sizes": {
+    "catalog": {
+      "raw": 13532,
+      "gzip": 4846
+    },
+    "product": {
+      "raw": 6759,
+      "gzip": 3012
+    },
+    "cart": {
+      "raw": 7735,
+      "gzip": 3292
+    },
+    "checkout": {
+      "raw": 9399,
+      "gzip": 3917
+    }
+  },
+  "browser": [
+    {
+      "photos": [
+        {
+          "src": "https://www.apple.com/v/macbook-air/specs/c/images/specs/13-inch/mba_13_hero__c067qisf51oy_large.jpg",
+          "width": 236,
+          "height": 144
+        },
+        {
+          "src": "https://store.storeimages.cdn-apple.com/1/as-images.apple.com/is/mbp14-spaceblack-cto-hero-202410?wid=400&fmt=png-alpha",
+          "width": 400,
+          "height": 400
+        },
+        {
+          "src": "https://www.apple.com/v/macbook-neo/c/images/specs/hero__cp2jyjh3uumq_large.jpg",
+          "width": 226,
+          "height": 138
+        },
+        {
+          "src": "https://www.apple.com/v/macbook-air/specs/c/images/specs/15-inch/mba_15_hero__gkshp5bw2f6m_large.jpg",
+          "width": 252,
+          "height": 154
+        }
+      ]
+    },
+    {
+      "brands": [
+        {
+          "name": "Apple",
+          "loaded": true
+        },
+        {
+          "name": "Anker",
+          "loaded": true
+        },
+        {
+          "name": "UGREEN",
+          "loaded": true
+        },
+        {
+          "name": "Logitech",
+          "loaded": true
+        },
+        {
+          "name": "Ray-Ban Meta",
+          "loaded": true
+        }
+      ]
+    },
+    {
+      "menu": "open, Escape, Air navigation OK"
+    },
+    {
+      "name": "CRM login → parser",
+      "rows": 2
+    },
+    {
+      "name": "catalog",
+      "width": 320,
+      "scroll": 320
+    },
+    {
+      "name": "brands",
+      "width": 320,
+      "cards": [
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 320,
+      "box": {
+        "x": 16,
+        "y": 145,
+        "width": 288,
+        "height": 509.046875
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 390,
+      "scroll": 390
+    },
+    {
+      "name": "brands",
+      "width": 390,
+      "cards": [
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 390,
+      "box": {
+        "x": 16,
+        "y": 145,
+        "width": 358,
+        "height": 509.046875
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 602,
+      "scroll": 602
+    },
+    {
+      "name": "brands",
+      "width": 602,
+      "cards": [
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 602,
+      "box": {
+        "x": 20,
+        "y": 178,
+        "width": 562,
+        "height": 285.84375
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 638,
+      "scroll": 638
+    },
+    {
+      "name": "brands",
+      "width": 638,
+      "cards": [
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 638,
+      "box": {
+        "x": 20,
+        "y": 178,
+        "width": 598,
+        "height": 285.84375
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 667,
+      "scroll": 667
+    },
+    {
+      "name": "brands",
+      "width": 667,
+      "cards": [
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 667,
+      "box": {
+        "x": 20,
+        "y": 178,
+        "width": 620,
+        "height": 181
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 768,
+      "scroll": 768
+    },
+    {
+      "name": "brands",
+      "width": 768,
+      "cards": [
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 768,
+      "box": {
+        "x": 20,
+        "y": 178,
+        "width": 620,
+        "height": 285.84375
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 1024,
+      "scroll": 1024
+    },
+    {
+      "name": "brands",
+      "width": 1024,
+      "cards": [
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 1024,
+      "box": {
+        "x": 20,
+        "y": 178,
+        "width": 620,
+        "height": 285.84375
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 1440,
+      "scroll": 1440
+    },
+    {
+      "name": "brands",
+      "width": 1440,
+      "cards": [
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 58,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 1440,
+      "box": {
+        "x": 160,
+        "y": 178,
+        "width": 620,
+        "height": 285.84375
+      }
+    },
+    {
+      "name": "/account/login",
+      "width": 320,
+      "scroll": 320,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/register",
+      "width": 320,
+      "scroll": 320,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/forgot",
+      "width": 320,
+      "scroll": 320,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/delivery",
+      "width": 320,
+      "scroll": 320,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/contacts",
+      "width": 320,
+      "scroll": 320,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/privacy",
+      "width": 320,
+      "scroll": 320,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/terms",
+      "width": 320,
+      "scroll": 320,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/request",
+      "width": 320,
+      "scroll": 320,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/cart",
+      "width": 320,
+      "scroll": 320,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/login",
+      "width": 390,
+      "scroll": 390,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/register",
+      "width": 390,
+      "scroll": 390,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/forgot",
+      "width": 390,
+      "scroll": 390,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/delivery",
+      "width": 390,
+      "scroll": 390,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/contacts",
+      "width": 390,
+      "scroll": 390,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/privacy",
+      "width": 390,
+      "scroll": 390,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/terms",
+      "width": 390,
+      "scroll": 390,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/request",
+      "width": 390,
+      "scroll": 390,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/cart",
+      "width": 390,
+      "scroll": 390,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/login",
+      "width": 638,
+      "scroll": 638,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/register",
+      "width": 638,
+      "scroll": 638,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/forgot",
+      "width": 638,
+      "scroll": 638,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/delivery",
+      "width": 638,
+      "scroll": 638,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/contacts",
+      "width": 638,
+      "scroll": 638,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/privacy",
+      "width": 638,
+      "scroll": 638,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/terms",
+      "width": 638,
+      "scroll": 638,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/request",
+      "width": 638,
+      "scroll": 638,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/cart",
+      "width": 638,
+      "scroll": 638,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/login",
+      "width": 1273,
+      "scroll": 1273,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/register",
+      "width": 1273,
+      "scroll": 1273,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/account/forgot",
+      "width": 1273,
+      "scroll": 1273,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/delivery",
+      "width": 1273,
+      "scroll": 1273,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/contacts",
+      "width": 1273,
+      "scroll": 1273,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/privacy",
+      "width": 1273,
+      "scroll": 1273,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/terms",
+      "width": 1273,
+      "scroll": 1273,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/request",
+      "width": 1273,
+      "scroll": 1273,
+      "font": "\"Times New Roman\", Times, serif"
+    },
+    {
+      "name": "/cart",
+      "width": 1273,
+      "scroll": 1273,
+      "font": "\"Times New Roman\", Times, serif"
+    }
+  ],
+  "errors": [],
+  "resources": [
+    "/",
+    "/brands/apple.svg",
+    "/brands/anker.svg",
+    "/brands/ugreen.svg",
+    "/brands/logitech.svg",
+    "/brands/rayban-meta.svg",
+    "/v/macbook-air/specs/c/images/specs/13-inch/mba_13_hero__c067qisf51oy_large.jpg",
+    "/1/as-images.apple.com/is/mbp14-spaceblack-cto-hero-202410",
+    "/v/macbook-neo/c/images/specs/hero__cp2jyjh3uumq_large.jpg",
+    "/v/macbook-air/specs/c/images/specs/15-inch/mba_15_hero__gkshp5bw2f6m_large.jpg",
+    "/",
+    "/brands/apple.svg",
+    "/brands/anker.svg",
+    "/brands/ugreen.svg",
+    "/brands/logitech.svg",
+    "/brands/rayban-meta.svg",
+    "/v/macbook-air/specs/c/images/specs/13-inch/mba_13_hero__c067qisf51oy_large.jpg",
+    "/v/macbook-air/specs/c/images/specs/15-inch/mba_15_hero__gkshp5bw2f6m_large.jpg",
+    "/",
+    "/brands/apple.svg",
+    "/brands/anker.svg",
+    "/brands/ugreen.svg",
+    "/brands/logitech.svg",
+    "/brands/rayban-meta.svg",
+    "/v/macbook-air/specs/c/images/specs/13-inch/mba_13_hero__c067qisf51oy_large.jpg",
+    "/1/as-images.apple.com/is/mbp14-spaceblack-cto-hero-202410",
+    "/v/macbook-neo/c/images/specs/hero__cp2jyjh3uumq_large.jpg",
+    "/v/macbook-air/specs/c/images/specs/15-inch/mba_15_hero__gkshp5bw2f6m_large.jpg",
+    "/p/2312acdb-540d-40ff-8548-e71afb9e10da",
+    "/v/macbook-neo/c/images/specs/hero__cp2jyjh3uumq_large.jpg",
+    "/p/2312acdb-540d-40ff-8548-e71afb9e10da",
+    "/v/macbook-neo/c/images/specs/hero__cp2jyjh3uumq_large.jpg",
+    "/",
+    "/brands/apple.svg",
+    "/brands/anker.svg",
+    "/brands/ugreen.svg",
+    "/brands/logitech.svg",
+    "/brands/rayban-meta.svg",
+    "/1/as-images.apple.com/is/mbp14-spaceblack-cto-hero-202410",
+    "/p/b2e92ae7-9d28-45c6-bdbb-980f29f7a283",
+    "/1/as-images.apple.com/is/mbp14-spaceblack-cto-hero-202410",
+    "/cart/add",
+    "/cart",
+    "/cart",
+    "/checkout",
+    "/checkout",
+    "/account/login",
+    "/crm/login",
+    "/crm/login",
+    "/crm/parser/",
+    "/crm/parser/web/styles.css",
+    "/crm/parser/web/app.js",
+    "/crm/parser/web/price-status.js",
+    "/crm/parser/web/retail-analytics.js",
+    "/crm/parser/web/avito-columns.js",
+    "/crm/parser/web/avito-status.js",
+    "/crm/parser/web/view-state.js",
+    "/crm/parser/web/price-table.js",
+    "/crm/parser/web/product-families.js",
+    "/crm/parser/public-config.json",
+    "/crm/parser/api/session",
+    "/crm/parser/api/table",
+    "/crm/parser/api/status",
+    "/crm/parser/api/analytics",
+    "/crm/parser/api/analytics",
+    "/crm"
+  ],
+  "failedResources": []
+}

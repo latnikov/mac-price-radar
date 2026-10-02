@@ -84,11 +84,11 @@ test('outgoing ambiguous creation is not automatically repeated, including new r
   await dispatcher.dispatch();assert.equal(calls,1);assert.equal(store.db.prepare('SELECT state FROM jobs ORDER BY id DESC').get().state,'blocked');
 });
 
-test('ordinary public pages stay below 14,000 bytes with full permitted content and no auto-loaded assets',()=>{
+test('ordinary public HTML and inline styles stay below 14,000 bytes with full permitted content',()=>{
   const s={csrf:'x'.repeat(43)},p={id:'a'.repeat(36),title:'Я'.repeat(120),specification:'Я'.repeat(200),description:'Я'.repeat(1700),warranty:'Я'.repeat(250),photos:['a.jpg'],priceRub:119500};
   const lines=Array.from({length:4},(_,i)=>({id:String(i),title:p.title,qty:10,priceRub:119500,active:true}));
   const cases={product:productView(p,s),catalog:catalogue(Array(4).fill(p),{total:10}),cart:cartView(lines,s),checkout:checkoutView({id:'q',lines},s)};
-  for(const [name,body]of Object.entries(cases)){const html=page('Магазин',body);assert.ok(Buffer.byteLength(html)<14000,`${name}: ${Buffer.byteLength(html)} bytes`);assert.doesNotMatch(html,/<script|<img|rel="stylesheet"/);}
+  for(const [name,body]of Object.entries(cases)){const html=page('Магазин',body);assert.ok(Buffer.byteLength(html)<14000,`${name}: ${Buffer.byteLength(html)} bytes`);assert.doesNotMatch(html,/<script|rel="stylesheet"/);}
 });
 
 test('HTTP checkout without JS; receipt isolation, CSRF, CRM auth and rate limits',async t=>{
