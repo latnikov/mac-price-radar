@@ -195,7 +195,7 @@ function renderRanked(data) {
   drawRanked();
 }
 function exportRanked() {
-  const a=node('a');a.href=`/api/avito-monitor.csv?q=${encodeURIComponent(document.getElementById('avito-ranked-search').value)}`;
+  const a=node('a');a.href=new URL(`../api/avito-monitor.csv?q=${encodeURIComponent(document.getElementById('avito-ranked-search').value)}`,import.meta.url).href;
   a.download='avito-nn-russian-procurement.csv';document.body.append(a);a.click();a.remove();
 }
 
@@ -209,7 +209,7 @@ function startMonitor(root) {
     if (pending || document.hidden) return;
     pending = true;
     try {
-      const response = await fetch('/api/avito-monitor', { cache: 'no-store', signal: AbortSignal.timeout(20000) });
+      const response = await fetch(new URL('../api/avito-monitor', import.meta.url), { cache: 'no-store', signal: AbortSignal.timeout(20000) });
       if (!response.ok) throw new Error('Monitor unavailable');
       const data = await response.json();
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Monitor unavailable');

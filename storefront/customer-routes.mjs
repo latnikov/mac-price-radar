@@ -49,8 +49,8 @@ export async function customerRoutes({ path, req, res, url, s, form, store, acco
       if (form.consent !== 'on') throw Object.assign(new Error('Подтвердите согласие на обработку данных.'), { status: 400 });
       store.tx(()=>{const c = retail.saveCustomer({ name: form.name, phone });
       retail.saveDeal({ customerId: c.id, title: form.description, note: 'Запрос конфигурации с сайта' }, 'customer');});
-      render('Запрос получен', '<h2>Спасибо! Запрос получен.</h2><p>Менеджер свяжется с вами, чтобы подобрать MacBook и согласовать цену.</p>');
-    } else render('Подобрать MacBook', `<h2>Какой MacBook вы ищете?</h2><form method="post">${csrf(s)}<label>Модель и конфигурация<textarea name="description" maxlength="250" required>${esc(String(url.searchParams.get('model') || '').slice(0, 100))}</textarea></label><label>Телефон<input type="tel" name="phone" maxlength="24" required></label><label>Имя<input name="name" maxlength="100"></label><label><input type="checkbox" name="consent" required> Согласен на <a href="/privacy">обработку данных</a>.</label><button class="primary">Отправить запрос</button></form>`);
+      render('Запрос получен', '<h2>Спасибо! Запрос получен.</h2><p>Менеджер свяжется с вами, чтобы подобрать нужную модель и согласовать цену.</p>');
+    } else render('Подобрать технику', `<h2>Что вы ищете?</h2><form method="post">${csrf(s)}<label>Модель и конфигурация<textarea name="description" maxlength="250" required>${esc(String(url.searchParams.get('model') || '').slice(0, 100))}</textarea></label><label>Телефон<input type="tel" name="phone" maxlength="24" required></label><label>Имя<input name="name" maxlength="100"></label><label><input type="checkbox" name="consent" required> Согласен на <a href="/privacy">обработку данных</a>.</label><button class="primary">Отправить запрос</button></form>`);
     return true;
   }
   return false;

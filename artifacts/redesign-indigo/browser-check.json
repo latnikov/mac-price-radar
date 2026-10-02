@@ -1,0 +1,428 @@
+{
+  "sizes": {
+    "catalog": {
+      "raw": 13283,
+      "gzip": 4604
+    },
+    "product": {
+      "raw": 7160,
+      "gzip": 3026
+    }
+  },
+  "browser": [
+    {
+      "brands": "Apple\nAnker\nUGREEN\nLogitech\nRay-Ban Meta"
+    },
+    {
+      "menu": "open, Escape, Air navigation OK"
+    },
+    {
+      "name": "CRM login → parser",
+      "rows": 2
+    },
+    {
+      "name": "catalog",
+      "width": 320,
+      "scroll": 320
+    },
+    {
+      "name": "brands",
+      "width": 320,
+      "cards": [
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 320,
+      "box": {
+        "x": 20,
+        "y": 86,
+        "width": 288,
+        "height": 485
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 390,
+      "scroll": 390
+    },
+    {
+      "name": "brands",
+      "width": 390,
+      "cards": [
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 390,
+      "box": {
+        "x": 20,
+        "y": 86,
+        "width": 351,
+        "height": 485
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 602,
+      "scroll": 602
+    },
+    {
+      "name": "brands",
+      "width": 602,
+      "cards": [
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 602,
+      "box": {
+        "x": 28,
+        "y": 108,
+        "width": 541.796875,
+        "height": 272
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 638,
+      "scroll": 638
+    },
+    {
+      "name": "brands",
+      "width": 638,
+      "cards": [
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 638,
+      "box": {
+        "x": 28,
+        "y": 108,
+        "width": 574.1875,
+        "height": 272
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 667,
+      "scroll": 667
+    },
+    {
+      "name": "brands",
+      "width": 667,
+      "cards": [
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 667,
+      "box": {
+        "x": 28,
+        "y": 108,
+        "width": 600.296875,
+        "height": 251
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 768,
+      "scroll": 768
+    },
+    {
+      "name": "brands",
+      "width": 768,
+      "cards": [
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 768,
+      "box": {
+        "x": 28,
+        "y": 108,
+        "width": 620,
+        "height": 272
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 1024,
+      "scroll": 1024
+    },
+    {
+      "name": "brands",
+      "width": 1024,
+      "cards": [
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 1024,
+      "box": {
+        "x": 28,
+        "y": 108,
+        "width": 620,
+        "height": 272
+      }
+    },
+    {
+      "name": "catalog",
+      "width": 1440,
+      "scroll": 1440
+    },
+    {
+      "name": "brands",
+      "width": 1440,
+      "cards": [
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        },
+        {
+          "width": 184,
+          "height": 56,
+          "nowrap": "nowrap"
+        }
+      ],
+      "bar": "none"
+    },
+    {
+      "name": "menu",
+      "width": 1440,
+      "box": {
+        "x": 28,
+        "y": 108,
+        "width": 620,
+        "height": 272
+      }
+    }
+  ],
+  "errors": [],
+  "resources": [
+    "/",
+    "/",
+    "/",
+    "/p/15b2826d-26c0-4ae8-b320-fdd44747e45b",
+    "/p/15b2826d-26c0-4ae8-b320-fdd44747e45b",
+    "/account/login",
+    "/crm/login",
+    "/crm/login",
+    "/crm/parser/",
+    "/crm/parser/web/styles.css",
+    "/crm/parser/web/app.js",
+    "/crm/parser/web/price-status.js",
+    "/crm/parser/web/retail-analytics.js",
+    "/crm/parser/web/avito-columns.js",
+    "/crm/parser/web/avito-status.js",
+    "/crm/parser/web/view-state.js",
+    "/crm/parser/web/price-table.js",
+    "/crm/parser/web/product-families.js",
+    "/crm/parser/public-config.json",
+    "/crm/parser/api/session",
+    "/crm/parser/api/table",
+    "/crm/parser/api/status",
+    "/crm/parser/api/analytics",
+    "/crm/parser/api/analytics",
+    "/crm"
+  ]
+}

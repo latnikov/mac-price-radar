@@ -14,6 +14,7 @@ import sys
 import time
 from pathlib import Path
 from parser_access import public_parser_routing
+from redesign_routing import migrate as redesign_parser_routing
 
 def run(*args, **options):
     return subprocess.run(args, check=True, **options)
@@ -168,6 +169,7 @@ order.macbookbro.ru {
     }
 }
 '''
+    caddy = redesign_parser_routing(caddy)
     caddy = public_parser_routing(caddy)
     candidate = backup / 'Caddyfile.candidate'
     candidate.write_text(caddy)

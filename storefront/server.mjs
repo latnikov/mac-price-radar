@@ -26,6 +26,8 @@ import { createStaffAuth } from './staff-auth.mjs';
 import { maintainShop } from './maintenance.mjs';
 import { syncLegacyOrders } from './legacy-orders.mjs';
 import { systemView } from './system-view.mjs';
+import { parserOrigin, parserRoutes, staffDestination } from './parser-routes.mjs';
+import { icon } from './design-system.mjs';
 
 const root=dirname(fileURLToPath(import.meta.url));
 const equal=(a,b)=>{const x=Buffer.from(String(a)),y=Buffer.from(String(b));return x.length===y.length&&timingSafeEqual(x,y);};
@@ -50,6 +52,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
   const telegramCrm=createTelegramBusinessCrm(store,inbox,desk,{env,fetchImpl});
   const accounts=openAccounts(store,{env,fetchImpl,origin});
   const staffAuth=createStaffAuth(env);
+  const parserTarget=parserOrigin(env);
   const dataSync=createDataSync(store,inbox,{env,fetchImpl});
   const ingestTelegram=telegramIngest(store,dataSync,configuredSecret(env,'STORE_TELEGRAM_INGEST_TOKEN'));
   const avitoApis=new Map();
@@ -110,10 +113,11 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
   const publicCatalogueCache=new Map();
   let catalogueRevision;
   function catalogueBody(url){
+    const vendor=textField(url.searchParams.get('vendor'),50);
     const q=textField(url.searchParams.get('q')),family=textField(url.searchParams.get('family'),10),category=textField(url.searchParams.get('category'),40),p=Math.max(1,Math.min(10000,Math.trunc(Number(url.searchParams.get('p')))||1));
     const products=store.products(),all=products.map(store.publicProduct).filter(Boolean);
-    const selected=all.filter(o=>(!family||o.family===family)&&(!category||o.category===category)&&`${o.title} ${o.specification} ${o.configuration.color}`.toLowerCase().includes(q.toLowerCase()));
-    return {body:catalogue(selected.slice((p-1)*4,p*4),{q,category,family,p,total:selected.length,categories:[...new Set(all.map(p=>p.category))].slice(0,10)}),
+    const selected=all.filter(o=>(!vendor||o.vendor===vendor)&&(!family||o.family===family)&&(!category||o.category===category)&&`${o.title} ${o.specification} ${o.configuration.color}`.toLowerCase().includes(q.toLowerCase()));
+    return {body:catalogue(selected.slice((p-1)*4,p*4),{q,category,family,vendor,p,total:selected.length,brands:[...new Set(all.map(p=>p.vendor).filter(Boolean))],categories:[...new Set(all.map(p=>p.category))].slice(0,10)}),
       expires:Math.min(now()+5000,...products.map(p=>p.published?.priceExpiresAt).filter(x=>x>now()))};
   }
   const server=http.createServer(async(req,res)=>{
@@ -138,7 +142,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
         const token=tokenFrom(req,'mb_staff_session');
         const allowed=token&&store.db.prepare('SELECT 1 FROM sessions s JOIN staff_sessions f ON f.session_id=s.id WHERE s.id=? AND s.expires>? AND s.auth_until>? AND s.role IS NOT NULL').get(hash(token),now(),now());
         if(allowed){res.writeHead(204);return res.end();}
-        return redirect(res,crmOrigin+'/crm/login?next=dev');
+        return redirect(res,crmOrigin+'/crm/login?next='+encodeURIComponent('/crm/parser/'));
       }
       if(path==='/internal/inbox/telegram'&&req.method==='POST')return await ingestTelegram(req,res);
       if(path==='/healthz'){store.db.prepare('SELECT 1').get();return send(req,res,200,'{"ok":true}','application/json');}
@@ -165,7 +169,7 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
         if(catalogueRevision!==revision){publicCatalogueCache.clear();catalogueRevision=revision;}
         const key=hash(url.search);let saved=publicCatalogueCache.get(key);
         if(!saved||saved.expires<=now()){
-          const value=catalogueBody(url),html=page('Компьютеры',value.body);
+          const value=catalogueBody(url),html=page('Компьютеры',value.body,{path,q:textField(url.searchParams.get('q'))});
           saved={html,expires:value.expires,etag:`W/"${hash(html)}"`};
           if(publicCatalogueCache.size>=100)publicCatalogueCache.delete(publicCatalogueCache.keys().next().value);
           publicCatalogueCache.set(key,saved);
@@ -178,8 +182,13 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
       const employeeExists=employeeToken&&store.db.prepare('SELECT 1 FROM sessions WHERE id=? AND expires>?').get(hash(employeeToken),now());
       s=store.session(employeeExists?employeeToken:tokenFrom(req));s.ipKey=ipKey;cookie(res,s);
       const cartCount=Object.values(s.cart).reduce((a,b)=>a+b,0);
-      const render=(title,content,options={})=>send(req,res,options.status||200,page(title,content,{cart:cartCount,...options}));
-      const adminRender=(title,content,options={})=>render(title,content,{admin:true,role:s.role,username:s.username,shopOrigin:origin,...options});
+      const render=(title,content,options={})=>send(req,res,options.status||200,page(title,content,{cart:cartCount,path,q:textField(url.searchParams.get('q')),...options}));
+      const adminRender=(title,content,options={})=>render(title,content,{admin:true,role:s.role,username:s.username,session:s,shopOrigin:origin,...options});
+      if(path==='/crm/parser'||path.startsWith('/crm/parser/')){
+        res.setHeader('X-Robots-Tag','noindex, nofollow');
+        if(req.method==='POST'&&!store.limit(`write:${ipKey}`,30,60000))throw fail(429,'Подождите минуту перед повтором.');
+        return await parserRoutes({req,res,url,session:s,requestOrigin,target:parserTarget,fetchImpl,adminRender,send,redirect,shopOrigin:origin});
+      }
       let form;
       if(req.method==='POST'){
         if(req.headers.origin!==requestOrigin)throw fail(403,'Отправьте форму с сайта магазина.');
@@ -199,8 +208,9 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
             user=role?{role,username:null}:null;
           }
           if(!user)return render('Вход',loginForm(s,form.next),{auth:true,shopOrigin:origin,status:401,notice:staffAuth.configured||ownerHash||managerHash?'Имя пользователя или пароль не подошли.':'Доступ CRM ещё не настроен на сервере.',error:true});
-          s=store.rotateSession(s,user.role,user.username);cookie(res,s);store.audit(s.actor,'login','crm');return redirect(res,form.next==='dev'?'https://dev.macbookbro.ru/':'/crm');
+          s=store.rotateSession(s,user.role,user.username);cookie(res,s);store.audit(s.actor,'login','crm');return redirect(res,staffDestination(form.next));
         }
+        if(s.role)return redirect(res,staffDestination(url.searchParams.get('next')));
         return render('Вход',loginForm(s,url.searchParams.get('next')),{auth:true,shopOrigin:origin});
       }
       if(path.startsWith('/crm')){
@@ -255,10 +265,11 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
           const problemJobs=store.db.prepare("SELECT COUNT(*) AS n FROM jobs WHERE state IN ('blocked','unknown','retry')").get().n;
           const priceSync=store.setting('price_sync');
           const oldestWaitMinutes=counts.oldest_new==null?null:Math.max(0,Math.floor((now()-counts.oldest_new)/60000));
-          return adminRender('Обзор',`<h2>Рабочий стол</h2><div class="row"><div class="box"><b>${counts.fresh||0}</b> новых заказов<br><a href="/crm/orders">Открыть заказы →</a></div><div class="box"><b>${store.products().filter(p=>p.published).length}</b> опубликованных товаров<br><a href="/crm/products">Управлять каталогом →</a></div></div>${oldestWaitMinutes!==null?`<p class="notice">Старейший новый заказ ожидает ${oldestWaitMinutes} мин.</p>`:''}${problemJobs?`<p class="notice">Операций обмена требуют проверки: ${problemJobs}. <a href="/crm/channels">Открыть обмен →</a></p>`:''}<p class="notice">${priceSync?.ok?`Прайс dev получен ${when(priceSync.at)}. Конфигураций: ${priceSync.count}.`:priceSync?.message||'Подключите прайс dev, затем добавьте свои компьютеры.'}</p><p>Порядок работы: карточка → рекомендованная цена → сайт → выбранные каналы.</p><p><a href="/crm/customers">Клиенты</a> · <a href="/crm/integrations">Проверить получение данных</a> · <a href="/crm/requests">Обращения из кабинета</a></p><form action="/crm/logout" method="post">${csrf(s)}<button>Выйти</button></form>`);
+          const pendingTasks=store.db.prepare("SELECT COUNT(*) AS n FROM tasks WHERE state='open'").get().n;
+          return adminRender('Обзор',`<div class="dashboard-lead"><div><span class="eyebrow">Макбучная · CRM</span><h2>Рабочий стол</h2><p>Заказы, клиенты и цены. Всё под рукой.</p></div><a class="button primary" href="/crm/desk">Открыть переписку →</a></div><div class="crm-metrics"><a class="box dashboard-stat" href="/crm/orders"><span class="eyebrow">Заказы</span><strong>${counts.fresh||0}</strong><small>новых заказов</small>Открыть заказы →</a><a class="box dashboard-stat" href="/crm/products"><span class="eyebrow">Каталог</span><strong>${store.products().filter(p=>p.published).length}</strong><small>опубликованных товаров</small>Управлять каталогом →</a><a class="box dashboard-stat" href="/crm/tasks"><span class="eyebrow">Задачи</span><strong>${pendingTasks}</strong><small>открытых задач</small>План на день →</a></div>${oldestWaitMinutes!==null?`<p class="notice">Старейший новый заказ ожидает ${oldestWaitMinutes} мин.</p>`:''}${problemJobs?`<p class="notice">Операций обмена требуют проверки: ${problemJobs}. <a href="/crm/channels">Открыть обмен →</a></p>`:''}<div class="dashboard-actions"><a href="/crm/parser/">${icon('parser')}<strong>Парсер цен</strong><small>Закупка, магазины, зарубежные цены и Авито.</small></a><a href="/crm/contacts">${icon('people')}<strong>Клиенты</strong><small>Контакты, история общения и следующие действия.</small></a><a href="/crm/integrations">${icon('integrations')}<strong>Подключения</strong><small>Получение данных и состояние синхронизации.</small></a></div><h3>Источник цен</h3><p class="notice">${priceSync?.ok?`Прайс получен ${when(priceSync.at)}. Конфигураций: ${priceSync.count}.`:priceSync?.message||'Подключите источник цен, затем добавьте компьютеры в каталог.'}</p><p><a href="/crm/requests">Обращения из личного кабинета →</a></p>`);
         }
         if(path==='/crm/products'&&req.method!=='POST'){
-          return adminRender('Товары',`<h2>Каталог новых MacBook</h2>${s.role==='owner'?`<form method="post" action="/crm/products/import">${csrf(s)}<label><input type="checkbox" name="publish" checked> Публиковать и обновлять актуальные конфигурации из цен dev</label><button>Загрузить каталог из ценников</button></form><p class="muted">${store.setting('catalog_import')?`Последний импорт: создано ${store.setting('catalog_import').created}, обновлено ${store.setting('catalog_import').updated}, пропущено ${store.setting('catalog_import').skipped}.`: 'Публикуются только новые модели актуальной линейки с проверенной свежей ценой.'}</p>`:''}<p><a class="button primary" href="/crm/products/new">Добавить компьютер</a></p>${store.products().map(p=>`<div class="box"><a href="/crm/products/${p.id}">${esc(p.draft.title)}</a><p>${p.published?'Опубликован на сайте':'Черновик'} · ${rub(store.publicProduct(p)?.priceRub)}</p></div>`).join('')||'<p>Создайте первую карточку. Цены конкурентов сами по себе не создают товары магазина.</p>'}`);
+          return adminRender('Товары',`<h2>Каталог новых MacBook</h2>${s.role==='owner'?`<form method="post" action="/crm/products/import">${csrf(s)}<label><input type="checkbox" name="publish" checked> Публиковать и обновлять актуальные конфигурации из цен dev</label><button>Загрузить каталог из ценников</button></form><p class="muted">${store.setting('catalog_import')?`Последний импорт: создано ${store.setting('catalog_import').created}, обновлено ${store.setting('catalog_import').updated}, пропущено ${store.setting('catalog_import').skipped}.`: 'Публикуются только новые модели актуальной линейки с проверенной свежей ценой.'}</p>`:''}${s.role==='owner'?'<p><a class="button primary" href="/crm/products/new">Добавить компьютер</a></p>':''}<div class="crm-products">${store.products().map(p=>`<div class="box"><a href="/crm/products/${p.id}">${esc(p.draft.title)}</a><p>${p.published?'Опубликован на сайте':'Черновик'} · ${rub(store.publicProduct(p)?.priceRub)}</p></div>`).join('')||'<p>Создайте первую карточку. Цены конкурентов сами по себе не создают товары магазина.</p>'}</div>`);
         }
         if(path==='/crm/products/new'&&req.method!=='POST')return adminRender('Новый компьютер',editor(null,allRecommendations(),s));
         if(path==='/crm/products/save'&&req.method==='POST'){
@@ -366,11 +377,13 @@ export function createShopService({env=process.env,dbPath=env.STORE_DB||resolve(
     }catch(e){
       const status=e.status||500;
       if(status===429)res.setHeader('Retry-After','60');
-      send(req,res,status,page(status===404?'Не найдено':'Не удалось выполнить действие',`<h2>${status===404?'Страница не найдена':'Проверьте действие'}</h2><p>${esc(status<500?e.message:'Не удалось выполнить действие. Попробуйте ещё раз.')}</p><p><a href="${url?.pathname.startsWith('/crm')?'/crm':'/'}">Вернуться →</a></p>`));
+      if(res.headersSent){res.destroy();return;}
+      const inCrm=Boolean(url?.pathname.startsWith('/crm')&&s?.role);
+      send(req,res,status,page(status===404?'Не найдено':'Не удалось выполнить действие',`<h2>${status===404?'Страница не найдена':'Проверьте действие'}</h2><p>${esc(status<500?e.message:'Не удалось выполнить действие. Попробуйте ещё раз.')}</p><p><a href="${url?.pathname.startsWith('/crm')?'/crm':'/'}">Вернуться →</a></p>`,{admin:inCrm,auth:url?.pathname==='/crm/login',path:url?.pathname||'',session:s,role:s?.role,username:s?.username,shopOrigin:origin}));
     }
   });
   function allRecommendations(){return store.db.prepare('SELECT data FROM recommendations ORDER BY key').all().map(r=>JSON.parse(r.data)).sort((a,b)=>a.label.localeCompare(b.label,'ru',{numeric:true}));}
-  const loginForm=(s,next)=>`<div class="auth"><h2>Вход для сотрудников</h2><form action="/crm/login" method="post">${csrf(s)}${next==='dev'?hidden('next','dev'):''}<label>Имя пользователя<input name="username" autocomplete="username" required maxlength="32" autofocus></label><label>Пароль<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><button class="primary">Войти</button></form></div>`;
+  const loginForm=(s,next)=>`<div class="auth"><span class="eyebrow">Рабочее место</span><h2>Вход для сотрудников</h2><p class="access-note">Клиенты, заказы, переписка и цены — в одном месте.</p><form action="/crm/login" method="post">${csrf(s)}${hidden('next',staffDestination(next))}${staffAuth.configured?'<label>Имя пользователя<input name="username" autocomplete="username" required maxlength="32" autofocus placeholder="Ваш логин"></label>':''}<label>Пароль<input type="password" name="password" autocomplete="current-password" required maxlength="256" placeholder="Введите пароль"></label><button class="primary">Войти в CRM →</button></form></div>`;
   const timers=[],pending=new Set(),running=new Set();
   const background=fn=>{if(running.has(fn))return;running.add(fn);const task=Promise.resolve().then(fn).catch(()=>{store.setSetting('worker_error',{at:now(),message:'Фоновое обновление не завершено. Проверьте обмен.'});}).finally(()=>{pending.delete(task);running.delete(fn);});pending.add(task);};
   if(runWorkers){background(importLegacy);timers.push(setInterval(()=>background(importLegacy),15000));background(syncPrices);background(dataSync.sync);background(telegramCrm.poll);background(async()=>maintainShop(store));timers.push(setInterval(()=>background(async()=>maintainShop(store)),3600000));timers.push(setInterval(()=>background(telegramCrm.poll),5000));timers.push(setInterval(()=>background(async()=>desk.reconcileDialogs()),60000));timers.push(setInterval(()=>background(dataSync.sync),Math.max(60000,Number(env.STORE_DATA_SYNC_INTERVAL_MS)||60000)));timers.push(setInterval(()=>background(accounts.dispatchMail),15000));timers.push(setInterval(()=>background(syncPrices),Number(env.STORE_SYNC_INTERVAL_MS)||60000));timers.push(setInterval(()=>background(dispatcher.dispatch),15000));for(const t of timers)t.unref();}
