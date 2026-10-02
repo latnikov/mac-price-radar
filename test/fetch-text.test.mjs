@@ -44,3 +44,42 @@ test('aborted collection starts no new request and terminal errors release the r
   await assert.rejects(fetchTextWithRetry('https://shop.test', { fetchImpl: async () => ({ ok: false, status: 404, body: { cancel: async () => { cancelled = true; } } }) }), /404/);
   assert.equal(cancelled, true);
 });
+
+test('catalogue reads recover from connection timeouts within the retry budget', async () => {
+  const timeout = new TypeError('fetch failed', { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } });
+  let calls = 0;
+  const delays = [];
+  const result = await fetchTextWithRetry('https://store.test/catalogue', {
+    attempts: 2, baseDelayMs: 500,
+    fetchImpl: async () => { if (++calls === 1) throw timeout; return new Response('complete catalogue'); },
+    sleep: async ms => delays.push(ms),
+  });
+  assert.equal(result, 'complete catalogue');
+  assert.deepEqual(delays, [500]);
+  calls = 0;
+  await assert.rejects(fetchTextWithRetry('https://store.test/catalogue', {
+    attempts: 2, fetchImpl: async () => { calls++; throw timeout; }, sleep: async () => {},
+  }), error => error === timeout);
+  assert.equal(calls, 2);
+});
+
+test('network retries preserve cancellation, TLS errors, and unreplayable writes', async () => {
+  const timeout = new TypeError('fetch failed', { cause: { code: 'UND_ERR_CONNECT_TIMEOUT' } });
+  const certificate = new TypeError('fetch failed', { cause: { code: 'CERT_HAS_EXPIRED' } });
+  for (const [method, error] of [['POST', timeout], ['GET', certificate]]) {
+    let calls = 0;
+    await assert.rejects(fetchTextWithRetry('https://store.test', {
+      attempts: 3, method, fetchImpl: async () => { calls++; throw error; },
+      sleep: async () => assert.fail('must not retry'),
+    }), actual => actual === error);
+    assert.equal(calls, 1);
+  }
+  const controller = new AbortController();
+  let calls = 0;
+  await assert.rejects(fetchTextWithRetry('https://store.test', {
+    attempts: 3, signal: controller.signal,
+    fetchImpl: async () => { calls++; controller.abort(); throw timeout; },
+    sleep: async () => assert.fail('must not retry after cancellation'),
+  }), { name: 'AbortError' });
+  assert.equal(calls, 1);
+});

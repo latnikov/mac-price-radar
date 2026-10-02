@@ -26,9 +26,10 @@ test('request timeout covers stalled response bodies and abort starts no request
     text: () => new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })),
   }) });
   const keepAlive = setInterval(() => {}, 20);
-  try { await assert.rejects(client.fetchPage('https://slow.test'), { name: 'TimeoutError' }); }
+  try { await assert.rejects(client.fetchPage('https://slow.test', { baseDelayMs: 0 }), { name: 'TimeoutError' }); }
   finally { clearInterval(keepAlive); }
-  assert.equal(client.metrics.failedRequests, 1);
+  assert.equal(client.metrics.failedRequests, 2);
+  assert.equal(client.metrics.retries, 1);
   const stopped = createCollectorFetch({ signal: AbortSignal.abort(), fetchImpl: async () => assert.fail('no request') });
   await assert.rejects(stopped.fetchPage('https://slow.test'), { name: 'AbortError' });
   assert.equal(stopped.metrics.requests, 0);
