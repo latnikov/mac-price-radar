@@ -20,6 +20,10 @@ to that directory. Shop/orders databases and media remain in
 under `/etc/mac-price-radar`, `/etc/macbookbro-shop`, and the two application
 env files. Never overwrite these paths with files from GitHub.
 
+The shop and order service use the checked-in `release.conf` drop-ins with
+Node's `--preserve-symlinks-main`. This keeps their main-entry checks correct
+when systemd invokes an immutable release through an application symlink.
+
 ## Automatic deployment
 
 `macbookbro-deploy.timer` polls the public GitHub `dev` branch every two minutes
