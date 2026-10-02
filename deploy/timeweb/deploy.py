@@ -188,6 +188,9 @@ def prepare_release(commit):
     (release / 'order-site/platform-release.json').write_text((release / 'platform-release.json').read_text())
     (release / '.ready').touch()
     command('chown', '-R', 'root:root', str(release))
+    # The systemd deployment unit uses UMask=0077. After ownership changes back
+    # to root, radar still needs to traverse the immutable release directory.
+    release.chmod(0o755)
     return release
 
 
