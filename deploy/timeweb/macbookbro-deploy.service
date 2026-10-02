@@ -1,0 +1,13 @@
+[Unit]
+Description=Publish the successful GitHub dev release on Timeweb
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/macbookbro-deploy/deploy.py poll
+TimeoutStartSec=25min
+UMask=0077
+Nice=10
+CPUWeight=10
+MemoryMax=1200M

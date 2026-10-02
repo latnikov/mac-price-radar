@@ -1,0 +1,11 @@
+[Unit]
+Description=Check GitHub for a verified MacBookBro release every two minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=2min
+RandomizedDelaySec=15s
+Unit=macbookbro-deploy.service
+
+[Install]
+WantedBy=timers.target
