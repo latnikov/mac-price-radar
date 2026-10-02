@@ -33,8 +33,8 @@ The server installs dependencies with scripts disabled and runs the parser,
 order, shop, type, and Python operations checks under `radar` before linking
 any production data into the candidate. It then rechecks the branch and CI.
 A host lock prevents overlapping deployments; active collectors defer the
-update. During publication the worker and three HTTP services stop, consistent
-compressed SQLite snapshots are saved, and all application symlinks switch.
+update. Consistent online SQLite snapshots are saved while HTTP still serves
+traffic; the worker and three HTTP services then stop briefly for the symlink switch.
 Health checks validate databases and public HTML before Caddy reload and
 worker restart. `X-MacBookBro-Commit` reports the published SHA.
 

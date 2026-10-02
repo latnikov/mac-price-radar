@@ -173,11 +173,15 @@ def prepare_release(commit):
         source.extractall(release, filter='data')
     archive.unlink()
     command('chown', '-R', 'radar:radar', str(release))
+    cache = Path('/var/cache/macbookbro-npm')
+    cache.mkdir(parents=True, exist_ok=True)
+    command('chown', 'radar:radar', str(cache))
     # The test tree has only public seed data; no production database is linked yet.
     for args in [('npm', 'ci', '--ignore-scripts'), ('npm', 'test'), ('npm', 'run', 'test:orders'),
                  ('npm', 'run', 'test:shop'), ('npm', 'run', 'typecheck'),
                  ('python3', '-m', 'unittest', 'discover', '-s', 'deploy/platform', '-p', 'test_*.py')]:
-        command('runuser', '-u', 'radar', '--', *args, cwd=release, timeout=900)
+        command('runuser', '-u', 'radar', '--', *args, cwd=release, timeout=900,
+                env={**os.environ, 'npm_config_cache': str(cache)})
     shutil.rmtree(release / 'data')
     (release / 'data').symlink_to(DATA)
     (release / 'platform-release.json').write_text(json.dumps({'commit': commit, 'deployed_at': time.time()}))
@@ -204,10 +208,12 @@ def install_release(commit, release, verified):
         # Recheck after stopping timers to close the timer/start race.
         if any(active(s) for s in ['mac-price-radar-collect.service', 'mac-price-radar-apify.service']):
             raise RuntimeError('Collection started concurrently; deployment deferred')
+        # Online backups are consistent snapshots; take them while HTTP is still
+        # serving, then stop writers for the brief atomic code switch.
+        for label, path in DATABASES.items():
+            snapshot_database(path, backup / (label + '.sqlite.gz'))
         command('systemctl', 'stop', *SERVICES)
         try:
-            for label, path in DATABASES.items():
-                snapshot_database(path, backup / (label + '.sqlite.gz'))
             for link, relative in LINKS.items():
                 replace_link(link, release / relative)
             command('systemctl', 'start', *SERVICES[1:])
@@ -225,10 +231,10 @@ def install_release(commit, release, verified):
             command('systemctl', 'reload', 'caddy')
             if worker_active:
                 command('systemctl', 'start', 'macbookbro-worker')
-            atomic_json(STATE, {'commit': commit, 'previous': previous, 'deployed_at': time.time(),
-                                'ci_run': verified['html_url'], 'backup': str(backup), 'status': 'deployed'})
             # Upgrade the timer implementation only after the application passes health.
             shutil.copy2(release / 'deploy/timeweb/deploy.py', '/usr/local/lib/macbookbro-deploy/deploy.py')
+            atomic_json(STATE, {'commit': commit, 'previous': previous, 'deployed_at': time.time(),
+                                'ci_run': verified['html_url'], 'backup': str(backup), 'status': 'deployed'})
             (backup / '.complete').touch()
         except Exception:
             command('systemctl', 'stop', *SERVICES)
